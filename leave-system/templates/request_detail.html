@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}假單 #{{ req.id }} · 線上請假系統{% endblock %}
+{% block content %}
+<h1>假單 #{{ req.id }}
+  <span class="tag {{ STATUS_TONE[req.status] }}" style="font-size:14px">{{ status_view(req) }}</span>
+</h1>
+
+<div class="grid g2">
+  <div class="card">
+    <h3>申請資料</h3>
+    <table>
+      <tr><th style="width:38%">申請人</th><td>{{ req.student_name }}
+        <div class="muted">{{ req.student_no }} · {{ req.class_name }} · {{ req.department }}</div></td></tr>
+      <tr><th>假別</th><td>{{ req.type_name }}</td></tr>
+      <tr><th>起訖</th><td class="tnum">{{ req.start_date }}
+        {{ '上午' if req.start_period=='AM' else '下午' }} →
+        {{ req.end_date }} {{ '上午' if req.end_period=='AM' else '下午' }}</td></tr>
+      <tr><th>天數</th><td class="tnum"><strong>{{ req.days }}</strong> 天</td></tr>
+      <tr><th>事由</th><td>{{ req.reason }}</td></tr>
+      <tr><th>聯絡電話</th><td>{{ req.contact_phone or '—' }}</td></tr>
+      <tr><th>證明文件</th><td>
+        {% if req.attachment %}
+          <a href="{{ url_for('uploaded_file', filename=req.attachment) }}" target="_blank">查看附件</a>
+        {% else %}—{% endif %}</td></tr>
+      <tr><th>提交時間</th><td class="tnum muted">{{ req.created_at }}</td></tr>
+      <tr><th>導師</th><td>{{ req.advisor_name or '（未指派）' }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>審批進度</h3>
+    <ul class="timeline">
+      {% for a in approvals %}
+        {% set cls = 'done' if a.action=='approve' else ('rejected' if a.action=='reject' else ('active' if req.current_level == a.level and req.status=='pending' else '')) %}
+        <li class="{{ cls }}">
+          <strong>{{ '導師審批' if a.level==1 else '院系複核' }}</strong>
+          <span class="tag {{ 'green' if a.action=='approve' else ('red' if a.action=='reject' else 'amber') }}">
+            {{ '核准' if a.action=='approve' else ('駁回' if a.action=='reject' else '待處理') }}</span>
+          <div class="muted">
+            {{ a.approver_name or '—' }}
+            {% if a.acted_at %}· {{ a.acted_at }}{% endif %}
+          </div>
+          {% if a.comment %}<div style="margin-top:4px">{{ a.comment }}</div>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+{% if can_approve %}
+<div class="card">
+  <h3>審批操作</h3>
+  <form method="post" action="{{ url_for('decide', rid=req.id) }}">
+    <label>審批意見（駁回時必填）</label>
+    <textarea name="comment" placeholder="請填寫意見"></textarea>
+    <div class="actions">
+      <button class="btn ok" type="submit" name="action" value="approve">核准</button>
+      <button class="btn danger" type="submit" name="action" value="reject">駁回</button>
+      <a class="btn ghost" href="{{ url_for('approvals') }}">稍後處理</a>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% if current_user.role == 'student' and req.student_id == current_user.id and req.status == 'pending' %}
+<div class="card">
+  <h3>撤回</h3>
+  <form method="post" action="{{ url_for('withdraw', rid=req.id) }}"
+        onsubmit="return confirm('確定撤回這張假單？');">
+    <div class="actions" style="margin:0">
+      <button class="btn danger" type="submit">撤回假單</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>操作日誌</h3>
+  {% if logs %}
+  <table>
+    <thead><tr><th class="tnum">時間</th><th>操作人</th><th>動作</th><th>說明</th></tr></thead>
+    <tbody>
+    {% for l in logs %}
+      <tr><td class="tnum muted">{{ l.created_at }}</td><td>{{ l.actor_name or '—' }}</td>
+        <td>{{ l.action }}</td><td>{{ l.detail }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">暫無日誌。</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 本地資料庫與上傳檔案（含個資，勿入版本控制）
+leave-system/leave_system.db
+leave-system/uploads/*
+!leave-system/uploads/.gitkeep
+*.log
+
+# 編輯器 / 系統
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Agent 工作資料
+.workbuddy-ai/

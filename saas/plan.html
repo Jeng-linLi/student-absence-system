@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Roadmap &amp; Cost · SAAS</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top"><div class="in">
+  <div class="logo"><span class="mk">SA</span>SAAS<span class="zh" style="margin:0">學生請假與學業便利支援系統</span></div>
+  <nav class="nav">
+    <a href="index.html">Executive Summary<span class="zh">執行摘要</span></a>
+    <a href="prd.html">PRD &amp; Use Cases<span class="zh">需求與用例</span></a>
+    <a href="architecture.html">Architecture &amp; API<span class="zh">架構與 API</span></a>
+    <a href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
+    <a href="design.html">UI Design<span class="zh">介面設計</span></a>
+    <a class="on" href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+  </nav>
+  <span class="lang">EN / 中文</span>
+</div></header>
+
+<div class="wrap">
+
+<div class="pagehead"><h1>MVP Roadmap, Timeline &amp; Cost Estimation
+  <span class="zh">MVP 路線圖、時程與成本估算</span></h1>
+  <p style="color:var(--ink-2)">Three phases over 12 months, then steady-state enhancement.
+    <span class="zh">十二個月內分三期推進，其後進入常態優化。</span></p>
+</div>
+
+<!-- 路線圖 -->
+<div class="card">
+  <h2>1. Roadmap<span class="zh">路線圖</span></h2>
+  <div class="grid g3">
+    <div class="card" style="margin:0;box-shadow:none;background:var(--brand-soft);border-color:#B6D4F5">
+      <h4>Phase 1 · MVP<span class="zh">第一期 · 最小可用產品</span></h4>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 8px">12 weeks · pilot with 2 programmes
+        <span class="zh">12 週 · 兩個項目試點</span></p>
+      <ul class="tick" style="font-size:13px;margin:0">
+        <li>Entra ID SSO + RBAC (9 roles)<span class="zh">單一登入與角色權限</span></li>
+        <li>Request submission + documents<span class="zh">申請提交與文件上傳</span></li>
+        <li>Workflow engine (Cases A/B/C)<span class="zh">工作流引擎（A／B／C 案）</span></li>
+        <li>Instructor queue + 5 accommodations<span class="zh">教師佇列與五種便利方案</span></li>
+        <li>Official activity module<span class="zh">官方活動模組</span></li>
+        <li>Email + Teams + in-app notifications<span class="zh">電郵／Teams／站內通知</span></li>
+        <li>3 dashboards + 5 reports<span class="zh">三個看板與五份報表</span></li>
+        <li>Audit log, encryption, WCAG 2.1 AA<span class="zh">審計、加密、無障礙</span></li>
+      </ul>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--info-soft);border-color:#D6C9F2">
+      <h4>Phase 2 · Scale<span class="zh">第二期 · 擴展</span></h4>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 8px">16 weeks · university-wide rollout
+        <span class="zh">16 週 · 全校推行</span></p>
+      <ul class="tick" style="font-size:13px;margin:0">
+        <li>Native mobile app (iOS/Android)<span class="zh">原生流動應用</span></li>
+        <li>WeChat Work + SMS channels<span class="zh">企業微信與短信渠道</span></li>
+        <li>Early-warning rules EW-1…EW-4<span class="zh">預警規則 EW-1 至 EW-4</span></li>
+        <li>Advanced analytics &amp; exports<span class="zh">進階分析與匯出</span></li>
+        <li>Attendance sync with Canvas<span class="zh">與 Canvas 出席同步</span></li>
+        <li>Delegation &amp; out-of-office routing<span class="zh">代理人與休假轉派</span></li>
+        <li>Bulk actions, saved filters<span class="zh">批量操作與篩選儲存</span></li>
+      </ul>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+      <h4>Phase 3 · Intelligence<span class="zh">第三期 · 智能化</span></h4>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 8px">12 weeks · optimisation
+        <span class="zh">12 週 · 優化</span></p>
+      <ul class="tick" style="font-size:13px;margin:0">
+        <li>Composite risk scoring (EW-5)<span class="zh">綜合風險評分</span></li>
+        <li>Document OCR &amp; authenticity assist<span class="zh">文件辨識與真偽輔助判定</span></li>
+        <li>AI reason triage &amp; auto-routing<span class="zh">事由智能分流與自動路由</span></li>
+        <li>Multi-campus deployment (HK / SZ)<span class="zh">多校區部署（香港／深圳）</span></li>
+        <li>Policy simulation sandbox<span class="zh">政策模擬沙盒</span></li>
+        <li>Public API for partner systems<span class="zh">對外 API 供夥伴系統</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 甘特 -->
+<div class="card">
+  <h2>2. Delivery Timeline<span class="zh">交付時程</span></h2>
+  <div class="gantt">
+    <div class="row head">
+      <div class="lbl">Workstream<span class="zh">工作線</span></div>
+      <div class="track"><span>M1</span><span>M2</span><span>M3</span><span>M4</span><span>M5</span><span>M6</span></div>
+    </div>
+    <div class="row"><div class="lbl">Discovery &amp; policy sign-off<span class="zh">需求確認與政策核定</span></div>
+      <div class="track"><div class="bar" style="left:0%;width:16.6%;background:#6C4AB6">W1–W2</div></div></div>
+    <div class="row"><div class="lbl">Foundation: SSO, RBAC, DB<span class="zh">基礎：單一登入、權限、資料庫</span></div>
+      <div class="track"><div class="bar" style="left:8.3%;width:25%;background:#0F6CBD">W2–W5</div></div></div>
+    <div class="row"><div class="lbl">Request &amp; document core<span class="zh">申請與文件核心</span></div>
+      <div class="track"><div class="bar" style="left:16.6%;width:25%;background:#0F6CBD">W4–W7</div></div></div>
+    <div class="row"><div class="lbl">Workflow engine + SLA<span class="zh">工作流引擎與 SLA</span></div>
+      <div class="track"><div class="bar" style="left:25%;width:25%;background:#0F6CBD">W5–W8</div></div></div>
+    <div class="row"><div class="lbl">Conflict detection<span class="zh">衝突偵測</span></div>
+      <div class="track"><div class="bar" style="left:33.3%;width:16.6%;background:#0F6CBD">W7–W9</div></div></div>
+    <div class="row"><div class="lbl">Official activity module<span class="zh">官方活動模組</span></div>
+      <div class="track"><div class="bar" style="left:41.6%;width:16.6%;background:#0F6CBD">W8–W10</div></div></div>
+    <div class="row"><div class="lbl">Notifications<span class="zh">通知</span></div>
+      <div class="track"><div class="bar" style="left:41.6%;width:16.6%;background:#0F6CBD">W8–W10</div></div></div>
+    <div class="row"><div class="lbl">Dashboards &amp; reports<span class="zh">看板與報表</span></div>
+      <div class="track"><div class="bar" style="left:41.6%;width:25%;background:#0F6CBD">W8–W11</div></div></div>
+    <div class="row"><div class="lbl">Security hardening &amp; a11y audit<span class="zh">安全強化與無障礙檢測</span></div>
+      <div class="track"><div class="bar" style="left:50%;width:16.6%;background:#B8860B">W10–W12</div></div></div>
+    <div class="row"><div class="lbl">UAT &amp; pilot (2 programmes)<span class="zh">驗收與試點（兩個項目）</span></div>
+      <div class="track"><div class="bar" style="left:58.3%;width:16.6%;background:#0E7A3D">W11–W13</div></div></div>
+    <div class="row"><div class="lbl">Phase 2 · Mobile app<span class="zh">第二期 · 流動應用</span></div>
+      <div class="track"><div class="bar" style="left:66.6%;width:25%;background:#6C4AB6">M4–M5</div></div></div>
+    <div class="row"><div class="lbl">Phase 2 · Early warning<span class="zh">第二期 · 預警系統</span></div>
+      <div class="track"><div class="bar" style="left:75%;width:16.6%;background:#6C4AB6">M5</div></div></div>
+    <div class="row"><div class="lbl">Phase 2 · Analytics &amp; WeChat/SMS<span class="zh">第二期 · 分析與微信／短信</span></div>
+      <div class="track"><div class="bar" style="left:83.3%;width:16.6%;background:#6C4AB6">M6</div></div></div>
+  </div>
+  <p class="mcap" style="margin-top:12px">MVP ships at end of week 12; pilot runs weeks 11–13 with a rollback plan
+    (email process remains available) before university-wide rollout in Phase 2.
+    <span class="zh">MVP 於第 12 週末交付；第 11–13 週以兩個項目試點，並保留回退方案（電郵流程仍然可用），第二期才全校推行。</span></p>
+</div>
+
+<!-- 團隊 -->
+<div class="card">
+  <h2>3. Team &amp; Cost Model<span class="zh">團隊與成本模型</span></h2>
+  <h3>3.1 MVP team (12 weeks)<span class="zh">MVP 團隊（12 週）</span></h3>
+  <table>
+    <thead><tr><th>Role<span class="zh">崗位</span></th><th>FTE</th><th>Monthly rate (¥)<span class="zh">月薪（人民幣）</span></th>
+      <th>Subtotal (¥/month)<span class="zh">小計</span></th></tr></thead>
+    <tbody>
+      <tr><td>Product Manager<span class="zh">產品經理</span></td><td>1.0</td><td>45,000</td><td>45,000</td></tr>
+      <tr><td>UX Designer<span class="zh">體驗設計師</span></td><td>1.0</td><td>35,000</td><td>35,000</td></tr>
+      <tr><td>Frontend Engineer (Next.js)<span class="zh">前端工程師</span></td><td>2.0</td><td>35,000</td><td>70,000</td></tr>
+      <tr><td>Backend Engineer (NestJS)<span class="zh">後端工程師</span></td><td>3.0</td><td>40,000</td><td>120,000</td></tr>
+      <tr><td>QA Engineer<span class="zh">測試工程師</span></td><td>1.0</td><td>28,000</td><td>28,000</td></tr>
+      <tr><td>DevOps / Cloud<span class="zh">運維／雲端</span></td><td>0.5</td><td>40,000</td><td>20,000</td></tr>
+      <tr><td><b>Total 合計</b></td><td><b>8.5</b></td><td>—</td><td><b>318,000</b></td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--muted)">12 weeks ≈ 2.8 months × ¥318,000 ≈ ¥890,000; with 12% contingency
+    → <b>¥1.0M</b>. University-side roles (Registry policy owner, 2 Program Office leads, ITO security reviewer) are
+    assumed in-kind at ~0.5 FTE and are not costed here.
+    <span class="zh">12 週 ≈2.8 個月 × 31.8 萬 ≈ 89 萬；加 12% 備用金 → <b>100 萬</b>。校方投入（教務處政策負責人、兩位項目辦公室代表、資訊科技處安全審查）約 0.5 人，視為內部資源，未計入。</span></p>
+
+  <h3 style="margin-top:22px">3.2 Azure run cost (steady state)<span class="zh">Azure 常態運維成本</span></h3>
+  <table class="tight">
+    <thead><tr><th>Item<span class="zh">項目</span></th><th>Configuration<span class="zh">配置</span></th><th>¥ / month</th></tr></thead>
+    <tbody>
+      <tr><td>App Service (front end)</td><td>P1v3 × 2, zone-redundant</td><td>3,200</td></tr>
+      <tr><td>Container Apps (7 services)</td><td>3 vCPU / 6 GB, autoscale 2–10</td><td>6,000</td></tr>
+      <tr><td>PostgreSQL Flexible Server</td><td>D4ds_v5, zone-redundant HA + 1 replica</td><td>7,500</td></tr>
+      <tr><td>Azure Cache for Redis</td><td>Premium P1 with persistence</td><td>3,600</td></tr>
+      <tr><td>Blob Storage</td><td>Hot tier + lifecycle to archive, ZRS</td><td>1,200</td></tr>
+      <tr><td>Service Bus</td><td>Standard tier</td><td>800</td></tr>
+      <tr><td>Front Door + WAF + CDN</td><td>Standard + managed rule set</td><td>3,500</td></tr>
+      <tr><td>Key Vault, App Insights, Log Analytics, Defender</td><td>90-day retention</td><td>4,000</td></tr>
+      <tr><td>Backup &amp; geo-DR</td><td>Geo-redundant, quarterly restore test</td><td>2,500</td></tr>
+      <tr><td><b>Production subtotal<span class="zh">生產環境小計</span></b></td><td></td><td><b>32,300</b></td></tr>
+      <tr><td>Non-production (dev/staging/UAT)</td><td>≈ 30% of production</td><td>9,700</td></tr>
+      <tr><td><b>Total<span class="zh">合計</span></b></td><td></td><td><b>≈ 42,000</b></td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px">≈ ¥0.5M per year. Entra ID P1/P2, Exchange Online, Teams and most Blob capacity are typically
+    already covered by the campus Microsoft education agreement; reserved instances can reduce compute by a further
+    30–40%. <span class="zh">每年約 50 萬。Entra ID、Exchange Online、Teams 與大部分儲存容量通常已包含在校園 Microsoft 教育授權內；採用保留執行個體可再降三至四成運算費用。</span></p>
+
+  <h3 style="margin-top:22px">3.3 Three-year TCO<span class="zh">三年總擁有成本</span></h3>
+  <table>
+    <thead><tr><th>Year<span class="zh">年度</span></th><th>Build / enhancement<span class="zh">開發與優化</span></th>
+      <th>Run (Azure + support)<span class="zh">運維</span></th><th>Year total<span class="zh">年度小計</span></th></tr></thead>
+    <tbody>
+      <tr><td>Year 1<span class="zh">第一年</span></td><td>MVP ¥1.0M + Phase 2 ¥1.0M</td><td>¥0.45M</td><td><b>¥2.45M</b></td></tr>
+      <tr><td>Year 2<span class="zh">第二年</span></td><td>Phase 3 + enhancements ¥0.7M</td><td>¥0.45M</td><td><b>¥1.15M</b></td></tr>
+      <tr><td>Year 3<span class="zh">第三年</span></td><td>Enhancements ¥0.5M</td><td>¥0.45M</td><td><b>¥0.95M</b></td></tr>
+      <tr><td colspan="3"><b>Subtotal 小計</b></td><td><b>¥4.55M</b></td></tr>
+      <tr><td colspan="3">Contingency @ 10%<span class="zh">備用金 10%</span></td><td>¥0.46M</td></tr>
+      <tr><td colspan="3"><b>3-year TCO 三年總擁有成本</b></td><td><b>≈ ¥5.0M</b> (range ¥4.2M–¥5.8M)</td></tr>
+    </tbody>
+  </table>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="kpi"><div class="n">≈ ¥1.7M</div><div class="l">Average per year<span class="zh">年均成本</span></div></div>
+    <div class="kpi"><div class="n">≈ ¥280</div><div class="l">Per student per year (6,000 students)<span class="zh">每名學生每年（6,000 人）</span></div></div>
+    <div class="kpi"><div class="n">¥0</div><div class="l">Incremental licence cost if Azure/M365 edu agreement applies<span class="zh">若適用教育授權，額外授權費為零</span></div></div>
+  </div>
+  <p class="note">Assumptions 估算假設: outsourced delivery at Guangzhou market rates; 6,000 students &amp; 450
+    instructors; scope as defined in this PRD; excludes network, endpoint and internal staff time. If delivered
+    wholly by internal IT staff, Year-1 build cost falls to roughly ¥0.4–0.6M (opportunity cost only).
+    <span class="zh">假設：按廣州市場費率外購開發；6,000 名學生、450 名教師；範圍依本建議書定義；不含網路、終端設備與校內人員工時。若完全由校內資訊科技處交付，第一年開發成本約降至 40–60 萬（僅機會成本）。</span></p>
+</div>
+
+<!-- 風險 -->
+<div class="card">
+  <h2>4. Risk Register<span class="zh">風險登記表</span></h2>
+  <table>
+    <thead><tr><th style="width:32px">#</th><th>Risk<span class="zh">風險</span></th>
+      <th style="width:60px">L</th><th style="width:60px">I</th><th>Mitigation<span class="zh">緩解措施</span></th></tr></thead>
+    <tbody>
+      <tr><td>R1</td><td>Assessment calendar unavailable from SIS/Canvas<span class="zh">無法自教務系統／Canvas 取得考評行事曆</span></td>
+        <td><span class="tag t-warn">M</span></td><td><span class="tag t-err">H</span></td>
+        <td>Ship with instructor-declared assessment dates (manual entry, bulk CSV); upgrade to automated feed in Phase 2<span class="zh">先以教師申報（手動／CSV 批量）上線，第二期改為自動匯入</span></td></tr>
+      <tr><td>R2</td><td>Policy parameters not agreed by Registry before build<span class="zh">開發前教務處未敲定政策參數</span></td>
+        <td><span class="tag t-err">H</span></td><td><span class="tag t-warn">M</span></td>
+        <td>Week-1 policy workshop with default values pre-loaded in <code class="inl">policy_config</code>; changes are config, not code<span class="zh">第一週召開政策工作坊，預載預設值；後續調整屬配置而非改碼</span></td></tr>
+      <tr><td>R3</td><td>Low instructor adoption; email habit persists<span class="zh">教師採用率低，沿用電郵習慣</span></td>
+        <td><span class="tag t-err">H</span></td><td><span class="tag t-err">H</span></td>
+        <td>Teams adaptive cards let instructors decide without opening the app; programme-level adoption KPI; departmental champions<span class="zh">以 Teams 卡片讓教師毋須開系統即可決策；設定項目層級採用率指標；院系推廣大使</span></td></tr>
+      <tr><td>R4</td><td>Data residency / cross-border compliance<span class="zh">資料存放地與跨境合規</span></td>
+        <td><span class="tag t-warn">M</span></td><td><span class="tag t-err">H</span></td>
+        <td>Region decision in Week 2 with DPO; SCCs prepared if HK⇄mainland sync is required<span class="zh">第二週會同資料保護負責人決定區域；如需港陸同步則預備標準合約條款</span></td></tr>
+      <tr><td>R5</td><td>Forged medical certificates<span class="zh">偽造醫療證明</span></td>
+        <td><span class="tag t-warn">M</span></td><td><span class="tag t-warn">M</span></td>
+        <td>SHA-256 dedup, pattern detection (EW-3), confidential review channel, spot checks by Student Affairs<span class="zh">雜湊去重、模式偵測、保密複查管道、學生事務處抽檢</span></td></tr>
+      <tr><td>R6</td><td>Peak load during exam week<span class="zh">考試週流量峰值</span></td>
+        <td><span class="tag t-warn">M</span></td><td><span class="tag t-warn">M</span></td>
+        <td>Autoscale 2–10 replicas; load test at 2,000 submissions/hour in week 10; queue-based notification delivery<span class="zh">自動擴展 2–10 個實例；第 10 週以每小時 2,000 份作壓力測試；通知採佇列投遞</span></td></tr>
+      <tr><td>R7</td><td>Scope creep from stakeholder requests<span class="zh">利害關係人要求導致範圍蔓延</span></td>
+        <td><span class="tag t-err">H</span></td><td><span class="tag t-warn">M</span></td>
+        <td>Frozen MVP scope; change requests enter the Phase 2/3 backlog with MoSCoW ranking<span class="zh">MVP 範圍凍結；新增需求進入第二／三期待辦清單並以 MoSCoW 排序</span></td></tr>
+      <tr><td>R8</td><td>Key-person dependency on a single backend engineer<span class="zh">關鍵人員依賴單一後端工程師</span></td>
+        <td><span class="tag t-warn">M</span></td><td><span class="tag t-warn">M</span></td>
+        <td>Pair rotation on workflow engine; ADRs for every architectural decision; 100% IaC<span class="zh">工作流引擎採配對輪替；每項架構決策均撰 ADR；全部基礎設施即程式碼</span></td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12.5px;color:var(--muted)">L = likelihood 可能性 · I = impact 影響程度</p>
+</div>
+
+<!-- AI -->
+<div class="card">
+  <h2>5. Future AI Features<span class="zh">未來 AI 功能</span></h2>
+  <table>
+    <thead><tr><th>Feature<span class="zh">功能</span></th><th>Value<span class="zh">價值</span></th>
+      <th>Dependency<span class="zh">前置條件</span></th><th style="width:70px">Phase</th></tr></thead>
+    <tbody>
+      <tr><td><b>AI reason triage</b><span class="zh">事由智能分流</span></td>
+        <td>Reads the free-text reason and suggests category, required documents, and route — cutting mis-routed
+          requests<span class="zh">讀取事由文字，建議類別、所需文件與路由，減少錯分派</span></td>
+        <td>Azure OpenAI with no student PII leaving the tenancy<span class="zh">Azure OpenAI，學生個資不離開租戶</span></td>
+        <td><span class="tag t-info">P3</span></td></tr>
+      <tr><td><b>Document OCR &amp; authenticity assist</b><span class="zh">文件辨識與真偽輔助</span></td>
+        <td>Extracts date/issuer from a certificate and flags anomalies for human review (never auto-decides)<span class="zh">擷取證明的日期與簽發機構，標記異常交人工複查（永不自動判定）</span></td>
+        <td>Document Intelligence; human-in-the-loop required<span class="zh">文件智慧服務；必須保留人工覆核</span></td>
+        <td><span class="tag t-info">P3</span></td></tr>
+      <tr><td><b>Predictive risk scoring</b><span class="zh">風險預測評分</span></td>
+        <td>EW-5 composite score predicts attrition/academic risk earlier than threshold rules<span class="zh">EW-5 綜合評分，較門檻規則更早預測退學／學業風險</span></td>
+        <td>≥ 2 terms of clean data; bias review by Student Affairs<span class="zh">需至少兩學期乾淨資料；由學生事務處作偏差審查</span></td>
+        <td><span class="tag t-info">P3</span></td></tr>
+      <tr><td><b>Smart make-up scheduling</b><span class="zh">補考智能排程</span></td>
+        <td>Proposes make-up slots that avoid clashes with the student's and instructor's calendars<span class="zh">自動建議不與學生及教師行事曆衝突的補考時段</span></td>
+        <td>Graph calendar read permission<span class="zh">需 Graph 行事曆讀取權限</span></td>
+        <td><span class="tag t-info">P3</span></td></tr>
+      <tr><td><b>Policy simulation sandbox</b><span class="zh">政策模擬沙盒</span></td>
+        <td>Registry can model "what if we lower the threshold to 7 days?" against historical data before changing policy<span class="zh">教務處可在歷史資料上模擬「門檻降至 7 天會如何」，再決定是否改政策</span></td>
+        <td>Read replica + analytics layer<span class="zh">唯讀副本與分析層</span></td>
+        <td><span class="tag t-info">P3</span></td></tr>
+      <tr><td><b>Conversational assistant</b><span class="zh">對話式助理</span></td>
+        <td>Student asks "can I miss Thursday's lab?" and receives policy + impact in plain language<span class="zh">學生直接詢問「星期四實驗課可以請假嗎？」，即時獲得政策與影響說明</span></td>
+        <td>Retrieval over approved policy text only; no free generation of decisions<span class="zh">僅就核定政策文本檢索，決策不得由模型自由生成</span></td>
+        <td><span class="tag t-grey">P4</span></td></tr>
+      <tr><td><b>Anomaly detection on approvals</b><span class="zh">審批異常偵測</span></td>
+        <td>Flags inconsistent decisions across sections (e.g. same course, opposite outcomes) for programme review<span class="zh">標記不同班級間不一致的決策（同一課程卻結果相反）供項目複核</span></td>
+        <td>≥ 1 term of decision data<span class="zh">需至少一學期決策資料</span></td>
+        <td><span class="tag t-grey">P4</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note err"><b>Governance principle（治理原則）:</b> AI may <i>assist</i> but never <i>decide</i> an absence
+    outcome. Every AI suggestion is logged with model version, input hash, and the human decision that followed;
+    students may always request human-only handling.
+    <span class="zh">AI 只能<b>輔助</b>，不得<b>決定</b>請假結果。每項 AI 建議均記錄模型版本、輸入雜湊與其後的人工決定；學生可隨時要求全程人工處理。</span></p>
+</div>
+
+<!-- 下一步 -->
+<div class="card">
+  <h2>6. Recommended Next Steps<span class="zh">建議後續行動</span></h2>
+  <ol class="dot" style="font-size:14px">
+    <li><b>Week 0 — Approve.</b> Steering committee approves MVP budget (¥1.0M) and names the product owner.
+      <span class="zh"><b>第 0 週 — 核准。</b>指導委員會批准 MVP 預算（100 萬）並指定產品負責人。</span></li>
+    <li><b>Week 1 — Policy workshop.</b> Registry confirms thresholds, SLA, routing; ITO provisions Azure
+      subscription and Entra ID app registration.
+      <span class="zh"><b>第 1 週 — 政策工作坊。</b>教務處確認門檻、SLA 與路由；資訊科技處開通 Azure 訂閱與 Entra ID 應用註冊。</span></li>
+    <li><b>Week 2 — Data &amp; security review.</b> DPO approves classification, retention and region.
+      <span class="zh"><b>第 2 週 — 資料與安全評審。</b>資料保護負責人核准資料分級、保存期與存放區域。</span></li>
+    <li><b>Week 3 — Build starts.</b> Two-week sprints with a fortnightly demo to the steering committee.
+      <span class="zh"><b>第 3 週 — 開發啟動。</b>以兩週為一個衝刺，每兩週向指導委員會展示成果。</span></li>
+    <li><b>Week 11 — Pilot.</b> Two programmes (~600 students) go live in parallel with the existing email process.
+      <span class="zh"><b>第 11 週 — 試點。</b>兩個項目（約 600 名學生）上線，與現行電郵流程並行。</span></li>
+    <li><b>Week 14 — Go / no-go.</b> Adoption and CSAT thresholds decide university-wide rollout.
+      <span class="zh"><b>第 14 週 — 推行決策。</b>以採用率與滿意度門檻決定是否全校推行。</span></li>
+  </ol>
+</div>
+
+</div>
+
+<div class="foot"><div class="in">
+  <span>SAAS Roadmap &amp; Cost v1.0 · estimates only, ±20% · HKUST(GZ) · Confidential</span>
+  <span>路線圖與成本 v1.0 · 估算值，誤差約 ±20% · 僅供校內評審</span>
+</div></div>
+</body>
+</html>

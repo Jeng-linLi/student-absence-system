@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}線上請假系統{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<script>
+  (function(){ var t = localStorage.getItem('theme'); if(t) document.documentElement.dataset.theme = t; })();
+</script>
+
+{% if current_user %}
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">假</span>
+    <div>
+      <strong>線上請假系統</strong>
+      <small>Leave Management System</small>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <a href="{{ url_for('dashboard') }}">儀表板</a>
+    {% if current_user.role == 'student' %}
+      <a href="{{ url_for('new_request') }}">提交假單</a>
+      <a href="{{ url_for('my_requests') }}">我的假單</a>
+    {% else %}
+      <a href="{{ url_for('approvals') }}">待我審批
+        {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('approvals', scope='all') }}">全部假單</a>
+      <a href="{{ url_for('stats') }}">統計</a>
+    {% endif %}
+    {% if current_user.role == 'admin' %}
+      <a href="{{ url_for('admin_users') }}">帳號管理</a>
+      <a href="{{ url_for('admin_types') }}">假別管理</a>
+    {% endif %}
+    <a href="{{ url_for('notifications') }}">通知
+      {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}</a>
+  </nav>
+
+  <div class="userbox">
+    <button class="theme-btn" onclick="toggleTheme()" title="切換主題">◐</button>
+    <div class="who">
+      <span>{{ current_user.name }}</span>
+      <small>{{ {'student':'學生','advisor':'導師','faculty':'院系','admin':'管理員'}[current_user.role] }}
+        {% if current_user.department %}· {{ current_user.department }}{% endif %}</small>
+    </div>
+    <a class="logout" href="{{ url_for('logout') }}">登出</a>
+  </div>
+</header>
+{% endif %}
+
+<main class="container">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}<div class="flashes">
+      {% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}
+    </div>{% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="foot">線上請假系統 · 原型 v0.1 · 僅供校內演示</footer>
+
+<script>
+function toggleTheme(){
+  var el = document.documentElement;
+  el.dataset.theme = el.dataset.theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', el.dataset.theme);
+}
+</script>
+</body>
+</html>

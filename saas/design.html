@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI Design · SAAS</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top"><div class="in">
+  <div class="logo"><span class="mk">SA</span>SAAS<span class="zh" style="margin:0">學生請假與學業便利支援系統</span></div>
+  <nav class="nav">
+    <a href="index.html">Executive Summary<span class="zh">執行摘要</span></a>
+    <a href="prd.html">PRD &amp; Use Cases<span class="zh">需求與用例</span></a>
+    <a href="architecture.html">Architecture &amp; API<span class="zh">架構與 API</span></a>
+    <a href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
+    <a class="on" href="design.html">UI Design<span class="zh">介面設計</span></a>
+    <a href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+  </nav>
+  <span class="lang">EN / 中文</span>
+</div></header>
+
+<div class="wrap">
+
+<div class="pagehead"><h1>UI / UX Design<span class="zh">介面與體驗設計</span></h1>
+  <p style="color:var(--ink-2)">Microsoft Fluent Design · responsive · WCAG 2.1 AA · bilingual (zh-CN / en).
+    <span class="zh">Microsoft Fluent 設計語言 · 響應式 · WCAG 2.1 AA 無障礙 · 中英雙語。</span></p>
+</div>
+
+<!-- 設計系統 -->
+<div class="card">
+  <h2>Design System<span class="zh">設計系統</span></h2>
+  <div class="grid g2">
+    <div>
+      <h4>Colour tokens<span class="zh">色彩變數</span></h4>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:90px"><div style="height:38px;background:#0F6CBD;border-radius:6px"></div><small>#0F6CBD Brand</small></div>
+        <div style="flex:1;min-width:90px"><div style="height:38px;background:#0E7A3D;border-radius:6px"></div><small>#0E7A3D Success</small></div>
+        <div style="flex:1;min-width:90px"><div style="height:38px;background:#B8860B;border-radius:6px"></div><small>#B8860B Warning</small></div>
+        <div style="flex:1;min-width:90px"><div style="height:38px;background:#B10E1C;border-radius:6px"></div><small>#B10E1C Danger</small></div>
+        <div style="flex:1;min-width:90px"><div style="height:38px;background:#6C4AB6;border-radius:6px"></div><small>#6C4AB6 Info</small></div>
+      </div>
+      <p style="font-size:13px"><b>Status semantics（狀態語義）</b><span class="zh">—</span>
+        <span class="tag t-warn">Pending 待審</span>
+        <span class="tag t-ok">Approved 核准</span>
+        <span class="tag t-err">Rejected 駁回</span>
+        <span class="tag t-info">Info requested 待補件</span>
+        <span class="tag t-grey">Withdrawn 撤回</span></p>
+      <p class="note" style="font-size:13px">Status is never conveyed by colour alone — every tag pairs colour with an
+        icon and text label (WCAG 1.4.1).
+        <span class="zh">狀態絕不單靠顏色傳達——每個標籤均同時具備顏色、圖示與文字（WCAG 1.4.1）。</span></p>
+    </div>
+    <div>
+      <h4>Type &amp; spacing<span class="zh">字體與間距</span></h4>
+      <table class="tight">
+        <tbody>
+          <tr><td>Font<span class="zh">字體</span></td><td>Segoe UI Variable / PingFang SC / Microsoft YaHei<span class="zh">介面字體</span></td></tr>
+          <tr><td>Base<span class="zh">正文</span></td><td>15 px / 1.65 line-height</td></tr>
+          <tr><td>Scale<span class="zh">級距</span></td><td>12 · 13 · 15 · 19 · 23 · 30 px</td></tr>
+          <tr><td>Radius<span class="zh">圓角</span></td><td>6 px control / 8 px card / 14 px surface</td></tr>
+          <tr><td>Elevation<span class="zh">陰影</span></td><td>Fluent shadow 4 / 8 / 16 — depth signals modality only</td></tr>
+          <tr><td>Grid<span class="zh">柵格</span></td><td>12-column, 24 px gutter, max 1200 px content</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 1 Login -->
+<h2 style="margin-top:26px">1. Login Page<span class="zh">登入頁</span></h2>
+<div class="mock">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span class="url">saas.hkust-gz.edu.cn/login</span></div>
+  <div class="body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;min-height:420px">
+      <div style="background:linear-gradient(150deg,#0F6CBD,#2FA4FF);color:#fff;padding:44px 38px;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:20px;font-weight:600;margin-bottom:6px">SAAS</div>
+        <div style="font-size:13px;opacity:.9;margin-bottom:22px">Student Absence &amp; Academic Accommodation System<br>學生請假與學業便利支援系統</div>
+        <div style="font-size:13px;line-height:1.9;opacity:.95">
+          ✓ One form for every absence<br>
+          ✓ Automatic assessment conflict detection<br>
+          ✓ Official activities auto-verified<br>
+          ✓ Full approval visibility
+        </div>
+        <div style="margin-top:22px;font-size:11.5px;opacity:.8">香港科技大學（廣州）· HKUST(GZ)</div>
+      </div>
+      <div style="padding:44px 40px;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:19px;font-weight:600;margin-bottom:4px">Sign in<span class="zh" style="color:var(--muted);font-size:15px">登入</span></div>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:22px">Use your HKUST(GZ) account · 請使用校園帳號</div>
+        <button style="width:100%;padding:11px;border:1px solid var(--line);background:#fff;border-radius:6px;
+          font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:9px;cursor:pointer">
+          <span style="width:16px;height:16px;background:#0F6CBD;display:inline-block;border-radius:3px"></span>
+          Sign in with Microsoft · 以 Microsoft 帳號登入
+        </button>
+        <div style="text-align:center;font-size:11.5px;color:var(--muted);margin:16px 0">or 或</div>
+        <div class="u-field"><label>Student / Staff number<span class="zh">學號／教職員編號</span></label>
+          <div class="in mut">2024012345</div></div>
+        <div class="u-field"><label>Password<span class="zh">密碼</span></label>
+          <div class="in mut">••••••••</div></div>
+        <button class="u-btn" style="width:100%;padding:11px;margin-top:6px">Sign in · 登入</button>
+        <div style="margin-top:18px;font-size:11.5px;color:var(--muted);text-align:center">
+          Forgot password? · 忘記密碼 &nbsp;·&nbsp; IT Helpdesk 服務台
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="mcap">SSO-first: the Microsoft button is primary; local credentials exist only for break-glass and visiting users.
+  <span class="zh">以單一登入為主：Microsoft 按鈕為主要入口；本地帳密僅供緊急與訪客使用。</span></p>
+
+<!-- 2 Student Dashboard -->
+<h2>2. Student Dashboard<span class="zh">學生看板</span></h2>
+<div class="mock">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span class="url">saas.hkust-gz.edu.cn/dashboard</span></div>
+  <div class="body">
+    <div class="u-top">
+      <span class="u-brand">SAAS</span>
+      <span class="u-nav"><b>Dashboard</b> My Requests New Request Calendar Notifications</span>
+      <span class="u-av">JL</span>
+    </div>
+    <div class="u-body">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <div class="u-h">Good morning, Johnny</div>
+        <span style="font-size:12px;color:var(--muted)">AI Thrust · Cohort 2024 · 12 Oct 2026</span>
+      </div>
+      <div class="u-s">2 requests in progress · 1 upcoming deadline ·  absence rate 4.2% (threshold 10%)
+        <span class="zh">2 宗進行中 · 1 項即將到期 · 缺席率 4.2%（門檻 10%）</span></div>
+
+      <div class="u-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+        <div class="u-card"><div class="n" style="color:var(--warn)">2</div><div class="l">Active requests<span class="zh">進行中</span></div></div>
+        <div class="u-card"><div class="n" style="color:var(--ok)">5</div><div class="l">Approved this term<span class="zh">本學期核准</span></div></div>
+        <div class="u-card"><div class="n" style="color:var(--err)">1</div><div class="l">Denied<span class="zh">已駁回</span></div></div>
+        <div class="u-card"><div class="n" style="color:var(--brand)">2</div><div class="l">Missed assessments<span class="zh">錯過考評</span></div></div>
+      </div>
+
+      <div class="u-grid" style="grid-template-columns:2fr 1fr">
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Active requests<span class="zh">進行中的申請</span></div>
+          <div class="u-list">
+            <div class="u-item">
+              <div class="grow"><div class="t">Medical Leave · 3 days · 12–14 Oct</div>
+                <div class="m">Waiting on: Prof. Chen (AIAA 1010) · due in 6 h</div></div>
+              <span class="tag t-warn">Pending 待審</span></div>
+            <div class="u-item">
+              <div class="grow"><div class="t">Conference · 2 days · 20–21 Oct</div>
+                <div class="m">Waiting on: Academic Advisor</div></div>
+              <span class="tag t-warn">Pending 待審</span></div>
+            <div class="u-item">
+              <div class="grow"><div class="t">Sports Competition · 1 day · 5 Oct</div>
+                <div class="m">Auto-verified · HKUST Soccer Festival</div></div>
+              <span class="tag t-ok">Approved 核准</span></div>
+          </div>
+
+          <div style="font-size:13px;font-weight:600;margin:16px 0 8px">Upcoming deadlines &amp; make-ups<span class="zh">即將到期與補考安排</span></div>
+          <div class="u-list">
+            <div class="u-item"><div class="grow"><div class="t">AIAA 1010 — Problem Set 3</div>
+              <div class="m">Extended to 22 Oct (was 15 Oct) · granted by Prof. Chen</div></div>
+              <span class="tag t-ok">Extended 已延期</span></div>
+            <div class="u-item"><div class="grow"><div class="t">DSAA 2005 — Midterm make-up</div>
+              <div class="m">24 Oct · 14:00 · E3-201 · in person</div></div>
+              <span class="tag t-brand">Make-up 補考</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="u-card" style="margin-bottom:12px">
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">Absence rate<span class="zh">缺席率</span></div>
+            <div style="background:var(--surface-2);height:8px;border-radius:4px;overflow:hidden">
+              <div style="width:42%;height:100%;background:var(--ok)"></div></div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:6px">4.2% of 10% threshold · 門檻 10%</div>
+          </div>
+          <div class="u-card" style="margin-bottom:12px">
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">Affected courses<span class="zh">受影響課程</span></div>
+            <div style="font-size:12.5px;line-height:1.9">
+              AIAA 1010 · 2 sessions<br>DSAA 2005 · 1 midterm<br>MATH 1020 · 1 lab
+            </div>
+          </div>
+          <button class="u-btn" style="width:100%">＋ New request<span class="zh">新增申請</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="mcap">Progressive disclosure: numbers first, detail on demand. The deadline panel is what students check most,
+  so it sits at eye level. <span class="zh">漸進式呈現：先看數字，細節按需展開。學生最常查的是期限，故置於視線水平。</span></p>
+
+<!-- 3 New request -->
+<h2>3. New Leave Request Form<span class="zh">新增請假申請</span></h2>
+<div class="mock">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span class="url">saas.hkust-gz.edu.cn/requests/new</span></div>
+  <div class="body">
+    <div class="u-top"><span class="u-brand">SAAS</span>
+      <span class="u-nav">Dashboard <b>New Request</b> My Requests</span><span class="u-av">JL</span></div>
+    <div class="u-body" style="max-width:720px">
+      <div class="u-h">New absence request<span class="zh">新增請假申請</span></div>
+      <div class="u-s">Step 2 of 3 — details &amp; documents<span class="zh">第 2 步／3 — 詳情與證明</span></div>
+
+      <div class="u-card" style="margin-bottom:14px;background:var(--brand-soft);border-color:#B6D4F5">
+        <div style="font-size:12.5px"><b>Official activity detected</b> · 偵測到官方活動<br>
+          You are on the roster for <b>HKUST Soccer Festival (12–14 Oct)</b>. Selecting it removes the document
+          requirement and speeds up approval — instructors are notified only.</div>
+      </div>
+
+      <div class="u-field"><label>Category<span class="zh">請假類別</span></label>
+        <div class="in">Medical Leave 病假 ▾</div></div>
+      <div class="u-row">
+        <div class="u-field"><label>Start date<span class="zh">開始日期</span></label><div class="in">2026-10-12 ▾</div></div>
+        <div class="u-field"><label>Start period<span class="zh">開始時段</span></label><div class="in">AM 上午 ▾</div></div>
+      </div>
+      <div class="u-row">
+        <div class="u-field"><label>End date<span class="zh">結束日期</span></label><div class="in">2026-10-14 ▾</div></div>
+        <div class="u-field"><label>End period<span class="zh">結束時段</span></label><div class="in">PM 下午 ▾</div></div>
+      </div>
+      <div class="u-field"><label>Reason<span class="zh">請假事由</span></label>
+        <div class="in" style="min-height:58px;color:var(--muted)">Influenza with fever; medical certificate attached…</div></div>
+      <div class="u-field"><label>Supporting document (required for medical)<span class="zh">證明文件（病假必填）</span></label>
+        <div class="in" style="display:flex;justify-content:space-between;align-items:center">
+          <span>📄 medical_cert_1012.pdf · 240 KB</span><span style="color:var(--ok);font-size:12px">✓ scanned 已掃描</span></div></div>
+      <div class="u-field"><label>Contact phone<span class="zh">聯絡電話</span></label><div class="in">+86 138 0000 0000</div></div>
+
+      <div class="u-card" style="margin:14px 0;background:var(--surface-2)">
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">Affected sessions &amp; assessments (auto-detected)<span class="zh">受影響課節與考評（自動偵測）</span></div>
+        <div style="font-size:12.5px;line-height:2">
+          <span class="tag t-err">Conflict 衝突</span> AIAA 1010 — Midterm, 13 Oct<br>
+          <span class="tag t-grey">Session 課節</span> DSAA 2005 — Lecture, 12 Oct<br>
+          <span class="tag t-err">Conflict 衝突</span> MATH 1020 — Laboratory, 14 Oct
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="u-btn">Submit request<span class="zh">提交申請</span></button>
+        <button class="u-btn gh">Save draft<span class="zh">儲存草稿</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="mcap">The system shows consequences <i>before</i> submission — students stop worrying about "did I tell everyone?".
+  <span class="zh">系統在提交<i>前</i>即顯示後果，學生毋須再擔心「是否已通知所有人」。</span></p>
+
+<!-- 4 Instructor review -->
+<h2>4. Instructor Review Interface<span class="zh">教師審核介面</span></h2>
+<div class="mock">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span class="url">saas.hkust-gz.edu.cn/instructor/queue/cf_31</span></div>
+  <div class="body">
+    <div class="u-top"><span class="u-brand">SAAS</span>
+      <span class="u-nav"><b>Queue (4)</b> My Courses Schedule Reports</span><span class="u-av">PC</span></div>
+    <div class="u-side">
+      <div class="u-sidenav">
+        <div class="on">Pending 待處理 (4)</div>
+        <div>Overdue 逾期 (1)</div>
+        <div>Info requested 待補件 (2)</div>
+        <div>Decided 已處理 (38)</div>
+        <div style="margin-top:14px;font-size:11.5px;color:var(--muted)">Filters 篩選</div>
+        <div style="font-size:12px">AIAA 1010 · DSAA 2005 · All courses</div>
+      </div>
+      <div style="padding:18px">
+        <div class="u-h">AIAA 1010 — Midterm conflict<span class="zh">期中考評衝突</span></div>
+        <div class="u-s">Request SAAS-2026-001234 · submitted 11 Oct 09:14 · SLA due in 6 h<span class="zh">逾時尚餘 6 小時</span></div>
+
+        <div class="u-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+          <div class="u-card"><div class="l">Student<span class="zh">學生</span></div>
+            <div style="font-size:13.5px;font-weight:600">Li, Zheng-lin (2024012345)</div>
+            <div class="l">AI Thrust · Cohort 2024</div></div>
+          <div class="u-card"><div class="l">Absence<span class="zh">請假</span></div>
+            <div style="font-size:13.5px;font-weight:600">12–14 Oct · 3 days</div>
+            <div class="l">Category withheld — excused<span class="zh">類別保密 — 已豁免</span></div></div>
+        </div>
+
+        <div class="u-card" style="margin-bottom:14px;border-color:#F0D8A8;background:var(--warn-soft)">
+          <div style="font-size:12.5px"><b>Privacy notice 私隱提示：</b>The category and supporting evidence are not
+            disclosed to instructors. Decide on the accommodation only.
+            <span class="zh">類別與證明文件不會向教師揭露，請僅就學業便利安排作出決定。</span></div>
+        </div>
+
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Choose an accommodation<span class="zh">選擇學業便利方案</span></div>
+        <div class="u-list" style="margin-bottom:14px">
+          <div class="u-item"><div class="grow"><div class="t">Excused absence</div><div class="m">No penalty, no make-up required<span class="zh">不扣分，毋須補做</span></div></div><span class="u-btn sm gh">Select</span></div>
+          <div class="u-item" style="background:var(--brand-soft)"><div class="grow"><div class="t">Make-up assessment</div><div class="m">Schedule a new date and venue<span class="zh">安排新日期與地點</span></div></div><span class="u-btn sm">Selected</span></div>
+          <div class="u-item"><div class="grow"><div class="t">Alternative assignment</div><div class="m">Substitute task with extended deadline<span class="zh">替代作業並延長期限</span></div></div><span class="u-btn sm gh">Select</span></div>
+          <div class="u-item"><div class="grow"><div class="t">Weight redistribution</div><div class="m">Move 30% weight to final project<span class="zh">將 30% 權重移至期末專題</span></div></div><span class="u-btn sm gh">Select</span></div>
+          <div class="u-item"><div class="grow"><div class="t">Reject</div><div class="m">Reason required; student &amp; office notified<span class="zh">須填理由，通知學生與辦公室</span></div></div><span class="u-btn sm gh">Select</span></div>
+        </div>
+
+        <div class="u-row">
+          <div class="u-field"><label>Make-up date<span class="zh">補考日期</span></label><div class="in">2026-10-20 ▾</div></div>
+          <div class="u-field"><label>Venue<span class="zh">地點</span></label><div class="in">E3-201 ▾</div></div>
+        </div>
+        <div class="u-field"><label>Comment to student (optional)<span class="zh">給學生的備註（選填）</span></label>
+          <div class="in" style="min-height:44px;color:var(--muted)">Make-up paper of equal weight and duration…</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="u-btn">Confirm decision<span class="zh">確認決定</span></button>
+          <button class="u-btn gh">Request more info<span class="zh">要求補充資料</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="mcap">Context on the left, decision on the right. The privacy notice is deliberate: instructors decide
+  accommodations, never diagnose. <span class="zh">左側給脈絡、右側做決策。私隱提示是刻意的設計：教師決定便利安排，而非判斷病情。</span></p>
+
+<!-- 5 Event management -->
+<h2>5. Event Management Interface<span class="zh">活動管理介面</span></h2>
+<div class="mock">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span class="url">saas.hkust-gz.edu.cn/events/evt_88</span></div>
+  <div class="body">
+    <div class="u-top"><span class="u-brand">SAAS</span>
+      <span class="u-nav"><b>Activities</b> Rosters Participation Reports</span><span class="u-av">SC</span></div>
+    <div class="u-body">
+      <div class="u-h">HKUST Soccer Festival<span class="zh">科大足球節</span></div>
+      <div class="u-s">Sports · Student Affairs Office · 12–14 Oct 2026 ·
+        <span class="tag t-ok">Endorsed 已核准</span></div>
+
+      <div class="u-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+        <div class="u-card"><div class="n">48</div><div class="l">Participants<span class="zh">參與人數</span></div></div>
+        <div class="u-card"><div class="n">126</div><div class="l">Student-days excused<span class="zh">豁免學生天數</span></div></div>
+        <div class="u-card"><div class="n">31</div><div class="l">Requests auto-verified<span class="zh">自動核實申請</span></div></div>
+        <div class="u-card"><div class="n">0</div><div class="l">Documents required<span class="zh">需附證明</span></div></div>
+      </div>
+
+      <div class="u-grid" style="grid-template-columns:2fr 1fr">
+        <div class="u-list">
+          <div class="u-item" style="background:var(--surface-2);font-size:12px;color:var(--muted)">
+            <div style="flex:2">Student<span class="zh">學生</span></div>
+            <div style="flex:1">Programme<span class="zh">項目</span></div>
+            <div style="flex:1">Added<span class="zh">加入時間</span></div>
+            <div style="flex:1">Status<span class="zh">狀態</span></div></div>
+          <div class="u-item"><div style="flex:2">Li, Zheng-lin (2024012345)</div><div style="flex:1">AI</div>
+            <div style="flex:1" class="m">12 Sep 09:02</div><div style="flex:1"><span class="tag t-ok">Verified</span></div></div>
+          <div class="u-item"><div style="flex:2">Zhang, Z. (2024011988)</div><div style="flex:1">DS</div>
+            <div style="flex:1" class="m">12 Sep 09:02</div><div style="flex:1"><span class="tag t-ok">Verified</span></div></div>
+          <div class="u-item"><div style="flex:2">Wong, H. (2023011777)</div><div style="flex:1">ROAS</div>
+            <div style="flex:1" class="m">13 Sep 14:40</div><div style="flex:1"><span class="tag t-warn">Late add</span></div></div>
+        </div>
+        <div>
+          <div class="u-card" style="margin-bottom:12px">
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">Roster actions<span class="zh">名單操作</span></div>
+            <button class="u-btn gh sm" style="width:100%;margin-bottom:8px">Upload roster (CSV)<span class="zh">上傳名單</span></button>
+            <button class="u-btn gh sm" style="width:100%;margin-bottom:8px">Add student<span class="zh">新增學生</span></button>
+            <button class="u-btn gh sm" style="width:100%">Download template<span class="zh">下載範本</span></button>
+          </div>
+          <div class="u-card" style="background:var(--warn-soft);border-color:#F0D8A8">
+            <div style="font-size:12px"><b>Late additions 遲加入：</b>students added after the activity dates cannot be
+              auto-verified retroactively. Their requests fall back to the standard route.
+              <span class="zh">於活動日期後才加入的學生不得作追溯核實，其申請將退回標準路由。</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="mcap">Roster transparency prevents the main abuse vector — retroactive self-addition.
+  <span class="zh">名單透明化可堵住最主要的濫用途徑：事後自行加入名單。</span></p>
+
+<!-- 6 Analytics -->
+<h2>6. Analytics Dashboard<span class="zh">分析看板</span></h2>
+<div class="mock">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span class="url">saas.hkust-gz.edu.cn/analytics/program-office</span></div>
+  <div class="body">
+    <div class="u-top"><span class="u-brand">SAAS</span>
+      <span class="u-nav"><b>Overview</b> Trends Risk Alerts Reports Export</span><span class="u-av">PO</span></div>
+    <div class="u-body">
+      <div class="u-h">Programme overview — AI Thrust<span class="zh">人工智能學域總覽</span></div>
+      <div class="u-s">Term 2026-27 Fall · updated 12 Oct 09:00 · 1,240 students<span class="zh">1,240 名學生</span></div>
+
+      <div class="u-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+        <div class="u-card"><div class="n">318</div><div class="l">Requests this term<span class="zh">本學期申請</span></div></div>
+        <div class="u-card"><div class="n" style="color:var(--ok)">91%</div><div class="l">Approval rate<span class="zh">核准率</span></div></div>
+        <div class="u-card"><div class="n" style="color:var(--brand)">18 h</div><div class="l">Median turnaround<span class="zh">中位處理時長</span></div></div>
+        <div class="u-card"><div class="n" style="color:var(--err)">7</div><div class="l">At-risk students<span class="zh">風險學生</span></div></div>
+      </div>
+
+      <div class="u-grid" style="grid-template-columns:2fr 1fr">
+        <div class="u-card">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">Absence trend (weekly)<span class="zh">缺席趨勢（按週）</span></div>
+          <svg viewBox="0 0 520 170" style="width:100%;height:auto">
+            <g stroke="#E1DFDD"><line x1="40" y1="20" x2="510" y2="20"/><line x1="40" y1="60" x2="510" y2="60"/>
+              <line x1="40" y1="100" x2="510" y2="100"/><line x1="40" y1="140" x2="510" y2="140"/></g>
+            <g fill="#6B6B6B" font-size="10"><text x="6" y="24">40</text><text x="6" y="64">30</text>
+              <text x="6" y="104">20</text><text x="6" y="144">10</text></g>
+            <polyline fill="none" stroke="#0F6CBD" stroke-width="2.5"
+              points="60,110 118,96 176,72 234,58 292,80 350,52 408,44 466,30"/>
+            <g fill="#0F6CBD">
+              <circle cx="60" cy="110" r="3.5"/><circle cx="118" cy="96" r="3.5"/><circle cx="176" cy="72" r="3.5"/>
+              <circle cx="234" cy="58" r="3.5"/><circle cx="292" cy="80" r="3.5"/><circle cx="350" cy="52" r="3.5"/>
+              <circle cx="408" cy="44" r="3.5"/><circle cx="466" cy="30" r="3.5"/></g>
+            <g fill="#6B6B6B" font-size="10"><text x="50" y="158">W1</text><text x="108" y="158">W2</text>
+              <text x="166" y="158">W3</text><text x="224" y="158">W4</text><text x="282" y="158">W5</text>
+              <text x="340" y="158">W6</text><text x="398" y="158">W7</text><text x="456" y="158">W8</text></g>
+          </svg>
+        </div>
+        <div class="u-card">
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">Top categories<span class="zh">主要類別</span></div>
+          <svg viewBox="0 0 240 170" style="width:100%;height:auto">
+            <g font-size="11" fill="#424242">
+              <text x="0" y="20">Medical 病假</text><rect x="86" y="10" width="118" height="14" rx="3" fill="#0F6CBD"/>
+              <text x="0" y="48">Activity 活動</text><rect x="86" y="38" width="82" height="14" rx="3" fill="#2FA4FF"/>
+              <text x="0" y="76">Conference 會議</text><rect x="86" y="66" width="54" height="14" rx="3" fill="#6C4AB6"/>
+              <text x="0" y="104">Personal 個人</text><rect x="86" y="94" width="42" height="14" rx="3" fill="#B8860B"/>
+              <text x="0" y="132">Bereavement 喪假</text><rect x="86" y="122" width="20" height="14" rx="3" fill="#8A8886"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="u-card" style="margin-top:14px">
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">Risk alerts<span class="zh">風險預警</span></div>
+        <div class="u-list">
+          <div class="u-item"><div class="grow"><div class="t">Ng, K. (2023011455)</div>
+            <div class="m">EW-1 · absence rate 14.2% in DSAA 2005</div></div><span class="tag t-err">High 高</span></div>
+          <div class="u-item"><div class="grow"><div class="t">Chen, Y. (2024012001)</div>
+            <div class="m">EW-2 · 4 consecutive sessions missed in MATH 1020</div></div><span class="tag t-warn">Medium 中</span></div>
+          <div class="u-item"><div class="grow"><div class="t">Lin, T. (2024012119)</div>
+            <div class="m">EW-4 · 3 assessment conflicts this term</div></div><span class="tag t-warn">Medium 中</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="mcap">Reports render from the read replica; every chart states its filter set and last-updated time.
+  <span class="zh">報表由唯讀副本產出；每個圖表均標明篩選條件與更新時間。</span></p>
+
+<!-- 7 Mobile -->
+<h2>7. Mobile App<span class="zh">流動應用程式</span></h2>
+<div class="grid g3">
+  <div>
+    <div class="phone">
+      <div class="pbar"><span>9:41</span><span>SAAS ▮▮</span></div>
+      <div class="pbody">
+        <div class="ptitle">Dashboard<span class="zh">看板</span></div>
+        <div class="pcard">
+          <div style="font-size:11px;color:var(--muted)">Active request<span class="zh">進行中</span></div>
+          <div style="font-size:13px;font-weight:600;margin:4px 0">Medical · 3 days</div>
+          <div style="font-size:11px;color:var(--muted)">Waiting on Prof. Chen · 6 h left</div>
+          <div style="background:var(--surface-2);height:6px;border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="width:70%;height:100%;background:var(--warn)"></div></div>
+        </div>
+        <div class="pcard">
+          <div style="font-size:11px;color:var(--muted)">Next deadline<span class="zh">下一期限</span></div>
+          <div style="font-size:13px;font-weight:600;margin:4px 0">Problem Set 3</div>
+          <div style="font-size:11px;color:var(--muted)">22 Oct · extended 已延期</div>
+        </div>
+        <div class="pcard">
+          <div style="font-size:11px;color:var(--muted)">Make-up<span class="zh">補考</span></div>
+          <div style="font-size:13px;font-weight:600;margin:4px 0">DSAA 2005 Midterm</div>
+          <div style="font-size:11px;color:var(--muted)">24 Oct 14:00 · E3-201</div>
+        </div>
+      </div>
+      <div style="display:flex;border-top:1px solid var(--line);background:#fff;font-size:10px;text-align:center">
+        <div style="flex:1;padding:8px 0;color:var(--brand);font-weight:600">Home</div>
+        <div style="flex:1;padding:8px 0;color:var(--muted)">Requests</div>
+        <div style="flex:1;padding:8px 0;color:var(--muted)">＋ New</div>
+        <div style="flex:1;padding:8px 0;color:var(--muted)">Alerts</div>
+      </div>
+    </div>
+    <p class="mcap" style="text-align:center">Dashboard<span class="zh">看板</span></p>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="pbar"><span>9:41</span><span>SAAS ▮▮</span></div>
+      <div class="pbody">
+        <div class="ptitle">New request<span class="zh">新增申請</span></div>
+        <div class="pcard">
+          <div style="font-size:11px;color:var(--muted)">Category<span class="zh">類別</span></div>
+          <div style="font-size:13px;margin:4px 0">Medical Leave 病假 ▾</div>
+        </div>
+        <div class="pcard">
+          <div style="font-size:11px;color:var(--muted)">Dates<span class="zh">日期</span></div>
+          <div style="font-size:13px;margin:4px 0">12 Oct AM → 14 Oct PM</div>
+          <div style="font-size:11px;color:var(--muted)">3 days · 3 天</div>
+        </div>
+        <div class="pcard" style="border-color:#F0D8A8;background:var(--warn-soft)">
+          <div style="font-size:11.5px"><b>1 conflict detected</b><br>AIAA 1010 Midterm, 13 Oct
+            <span class="zh">偵測到 1 項衝突</span></div>
+        </div>
+        <div class="pcard">
+          <div style="font-size:11px;color:var(--muted)">Document<span class="zh">證明</span></div>
+          <div style="font-size:12.5px;margin:4px 0">📄 cert.pdf ✓</div>
+        </div>
+        <div style="background:var(--brand);color:#fff;text-align:center;padding:11px;border-radius:8px;font-size:13px;font-weight:600">
+          Submit<span class="zh">提交</span></div>
+      </div>
+      <div style="display:flex;border-top:1px solid var(--line);background:#fff;font-size:10px;text-align:center">
+        <div style="flex:1;padding:8px 0;color:var(--muted)">Home</div>
+        <div style="flex:1;padding:8px 0;color:var(--brand);font-weight:600">Requests</div>
+        <div style="flex:1;padding:8px 0;color:var(--muted)">＋ New</div>
+        <div style="flex:1;padding:8px 0;color:var(--muted)">Alerts</div>
+      </div>
+    </div>
+    <p class="mcap" style="text-align:center">New request<span class="zh">新增申請</span></p>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="pbar"><span>9:41</span><span>SAAS ▮▮</span></div>
+      <div class="pbody">
+        <div class="ptitle">Approvals<span class="zh">審批</span></div>
+        <div class="pcard">
+          <div style="font-size:12px;font-weight:600">Li, Zheng-lin</div>
+          <div style="font-size:11px;color:var(--muted)">Medical · 3 days · 12–14 Oct</div>
+          <div style="display:flex;gap:6px;margin-top:9px">
+            <span style="flex:1;background:var(--ok);color:#fff;text-align:center;padding:7px;border-radius:6px;font-size:12px">Approve</span>
+            <span style="flex:1;background:#fff;border:1px solid var(--line);text-align:center;padding:7px;border-radius:6px;font-size:12px">Reject</span>
+          </div>
+        </div>
+        <div class="pcard">
+          <div style="font-size:12px;font-weight:600">Zhang, Z.</div>
+          <div style="font-size:11px;color:var(--muted)">Conference · 2 days · 20–21 Oct</div>
+          <div style="display:flex;gap:6px;margin-top:9px">
+            <span style="flex:1;background:var(--ok);color:#fff;text-align:center;padding:7px;border-radius:6px;font-size:12px">Approve</span>
+            <span style="flex:1;background:#fff;border:1px solid var(--line);text-align:center;padding:7px;border-radius:6px;font-size:12px">Reject</span>
+          </div>
+        </div>
+        <div class="pcard" style="background:var(--err-soft);border-color:#F0C0C0">
+          <div style="font-size:11.5px"><b>Overdue 逾期</b><br>Wong, H. · Personal · 2 days</div>
+        </div>
+      </div>
+      <div style="display:flex;border-top:1px solid var(--line);background:#fff;font-size:10px;text-align:center">
+        <div style="flex:1;padding:8px 0;color:var(--muted)">Home</div>
+        <div style="flex:1;padding:8px 0;color:var(--muted)">Requests</div>
+        <div style="flex:1;padding:8px 0;color:var(--muted)">＋ New</div>
+        <div style="flex:1;padding:8px 0;color:var(--brand);font-weight:600">Alerts</div>
+      </div>
+    </div>
+    <p class="mcap" style="text-align:center">Instructor approvals<span class="zh">教師審批</span></p>
+  </div>
+</div>
+
+<!-- 無障礙 -->
+<div class="card">
+  <h2>Accessibility &amp; Responsive Rules<span class="zh">無障礙與響應式規則</span></h2>
+  <div class="grid g2">
+    <div>
+      <h4>WCAG 2.1 AA<span class="zh">無障礙</span></h4>
+      <ul class="tick" style="font-size:13.5px">
+        <li>Contrast ≥ 4.5:1 for all text; ≥ 3:1 for UI components<span class="zh">文字對比 ≥4.5:1，元件 ≥3:1</span></li>
+        <li>Full keyboard navigation with visible focus rings<span class="zh">完整鍵盤操作與可見焦點框</span></li>
+        <li>Status conveyed by colour + icon + text<span class="zh">狀態以色＋圖示＋文字並行表達</span></li>
+        <li>Every form field has a persistent visible label<span class="zh">所有欄位具持續可見標籤</span></li>
+        <li>Error messages identify the field and how to fix it<span class="zh">錯誤訊息指明欄位與修正方式</span></li>
+        <li>Screen-reader announcements for async status changes<span class="zh">非同步狀態變更會向螢幕閱讀器播報</span></li>
+        <li>Target size ≥ 44×44 px on touch<span class="zh">觸控目標 ≥44×44 px</span></li>
+        <li>No content flashes more than 3 times per second<span class="zh">內容每秒閃爍不超過三次</span></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Breakpoints<span class="zh">斷點</span></h4>
+      <table class="tight">
+        <tbody>
+          <tr><td>≥ 1280 px</td><td>Full 3-column workspace; persistent side nav<span class="zh">三欄工作區，側欄常駐</span></td></tr>
+          <tr><td>1024–1279 px</td><td>2-column; navigation collapses to icons<span class="zh">雙欄，導覽收合為圖示</span></td></tr>
+          <tr><td>768–1023 px</td><td>Single column; nav becomes a drawer<span class="zh">單欄，導覽改為抽屜式</span></td></tr>
+          <tr><td>&lt; 768 px</td><td>Mobile layout = native app parity; bottom tab bar<span class="zh">手機版面，與原生應用一致，底部頁籤</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="font-size:13px;margin-top:12px">Bilingual layout: Chinese strings are typically 40–60%
+        shorter than English, so buttons use min-width with wrapping rather than fixed width; date and number formats
+        follow locale. <span class="zh">雙語版面：中文通常較英文短 40–60%，故按鈕採最小寬度＋換行，而非固定寬度；日期與數字格式依語系顯示。</span></p>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="foot"><div class="in">
+  <span>SAAS UI Design v1.0 · Fluent Design · WCAG 2.1 AA · HKUST(GZ) · Confidential</span>
+  <span>介面設計 v1.0 · 僅供校內評審</span>
+</div></div>
+</body>
+</html>

@@ -1,0 +1,127 @@
+/* 線上請假系統 · 樣式 */
+:root{
+  --bg:#f5f7fa; --surface:#ffffff; --surface-2:#f0f3f8;
+  --text:#1b2430; --muted:#6b7785; --line:#e2e8f0;
+  --brand:#1f5fbf; --brand-soft:#e8f0fd;
+  --green:#1a8a5a; --green-soft:#e3f6ec;
+  --amber:#b7791f; --amber-soft:#fdf3e0;
+  --red:#c0392b; --red-soft:#fdecea;
+  --grey:#6b7785; --grey-soft:#eef1f5;
+  --shadow:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.04);
+  --radius:10px;
+}
+[data-theme="dark"]{
+  --bg:#12161c; --surface:#1a2027; --surface-2:#222a33;
+  --text:#e6edf3; --muted:#9aa7b5; --line:#2c3540;
+  --brand:#5b9bf8; --brand-soft:#1c2b45;
+  --green:#4cc38a; --green-soft:#16332a;
+  --amber:#f0b429; --amber-soft:#3a2c11;
+  --red:#f87171; --red-soft:#3b1c1c;
+  --grey:#9aa7b5; --grey-soft:#262f38;
+  --shadow:0 1px 3px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.6 "PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;}
+a{color:var(--brand);text-decoration:none}
+h1,h2,h3{margin:0 0 12px;font-weight:650}
+
+/* 頂欄 */
+.topbar{display:flex;align-items:center;gap:20px;padding:12px 24px;
+  background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;border-radius:8px;background:var(--brand);color:#fff;
+  display:grid;place-items:center;font-weight:700}
+.brand strong{display:block;font-size:15px}
+.brand small{color:var(--muted);font-size:11px}
+.nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.nav a{padding:6px 12px;border-radius:8px;color:var(--text);opacity:.8;font-size:13px}
+.nav a:hover{background:var(--surface-2);opacity:1}
+.badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;
+  background:var(--red);color:#fff;font-size:11px;text-align:center;line-height:18px}
+.userbox{display:flex;align-items:center;gap:12px}
+.who{text-align:right;line-height:1.3}
+.who span{font-weight:600;font-size:13px}
+.who small{display:block;color:var(--muted);font-size:11px}
+.theme-btn{border:1px solid var(--line);background:var(--surface-2);color:var(--text);
+  border-radius:8px;width:32px;height:32px;cursor:pointer}
+.logout{font-size:13px;color:var(--muted)}
+
+.container{max-width:1140px;margin:24px auto;padding:0 20px;min-height:60vh}
+.foot{text-align:center;color:var(--muted);font-size:12px;padding:24px}
+
+/* 卡片 */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow);margin-bottom:18px}
+.card h3{border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:14px}
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:860px){.g4,.g3,.g2{grid-template-columns:1fr}}
+
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 18px;box-shadow:var(--shadow)}
+.stat .n{font-size:26px;font-weight:700;line-height:1.2}
+.stat .l{color:var(--muted);font-size:12px}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;background:var(--surface-2)}
+tbody tr:hover{background:var(--surface-2)}
+.tnum{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* 標籤 */
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;white-space:nowrap}
+.tag.green{background:var(--green-soft);color:var(--green)}
+.tag.amber{background:var(--amber-soft);color:var(--amber)}
+.tag.red{background:var(--red-soft);color:var(--red)}
+.tag.grey{background:var(--grey-soft);color:var(--grey)}
+.tag.brand{background:var(--brand-soft);color:var(--brand)}
+
+/* 表單 */
+label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
+input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);
+  border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+textarea{min-height:88px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.row{grid-template-columns:1fr}}
+.btn{display:inline-block;padding:9px 18px;border:1px solid var(--brand);
+  background:var(--brand);color:#fff;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--brand)}
+.btn.danger{background:var(--red);border-color:var(--red)}
+.btn.ok{background:var(--green);border-color:var(--green)}
+.btn.sm{padding:5px 12px;font-size:12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+
+/* 提示 */
+.flashes{margin-bottom:16px}
+.flash{padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px}
+.flash.success{background:var(--green-soft);color:var(--green)}
+.flash.error{background:var(--red-soft);color:var(--red)}
+
+.empty{color:var(--muted);padding:28px;text-align:center;font-size:13px}
+.muted{color:var(--muted);font-size:12px}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+
+/* 審批時間軸 */
+.timeline{list-style:none;padding:0;margin:0}
+.timeline li{position:relative;padding:0 0 18px 24px;border-left:2px solid var(--line);margin-left:6px}
+.timeline li:last-child{border-left-color:transparent}
+.timeline li::before{content:'';position:absolute;left:-7px;top:2px;width:12px;height:12px;
+  border-radius:50%;background:var(--grey);border:2px solid var(--surface)}
+.timeline li.done::before{background:var(--green)}
+.timeline li.rejected::before{background:var(--red)}
+.timeline li.active::before{background:var(--amber)}
+.timeline .t{font-size:12px;color:var(--muted)}
+
+/* 登入頁 */
+.login-wrap{max-width:380px;margin:8vh auto}
+.login-wrap .brand{justify-content:center;margin-bottom:18px}
+.login-wrap .logo{width:44px;height:44px;font-size:18px}
+.demo{background:var(--surface-2);border-radius:8px;padding:12px 14px;margin-top:16px;font-size:12px}
+.demo table{margin-top:6px}
+.demo td,.demo th{padding:3px 6px;border:none;background:transparent}

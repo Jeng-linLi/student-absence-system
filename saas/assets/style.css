@@ -1,0 +1,194 @@
+/* SAAS Design Package — Microsoft Fluent inspired */
+:root{
+  --brand:#0F6CBD; --brand-2:#115EA3; --brand-soft:#E8F1FB;
+  --ink:#201F1E; --ink-2:#424242; --muted:#6B6B6B; --line:#E1DFDD;
+  --bg:#FAFAFA; --surface:#FFFFFF; --surface-2:#F5F5F5;
+  --ok:#0E7A3D; --ok-soft:#E7F5EC;
+  --warn:#B8860B; --warn-soft:#FDF5E3;
+  --err:#B10E1C; --err-soft:#FBE9EA;
+  --info:#6C4AB6; --info-soft:#F0EBFA;
+  --radius:8px; --radius-lg:14px;
+  --shadow:0 1.6px 3.6px rgba(0,0,0,.08),0 .3px .9px rgba(0,0,0,.06);
+  --shadow-lg:0 6.4px 14.4px rgba(0,0,0,.10),0 1.2px 3.6px rgba(0,0,0,.06);
+  --mono:"Cascadia Mono",Consolas,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.65 "Segoe UI","PingFang SC","Microsoft YaHei",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0 0 .5em;font-weight:600;letter-spacing:-.01em}
+h1{font-size:30px}h2{font-size:23px}h3{font-size:18px}h4{font-size:15px}
+p{margin:0 0 12px}
+a{color:var(--brand);text-decoration:none}
+a:hover{text-decoration:underline}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+small{color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+
+/* 頂欄 */
+.top{position:sticky;top:0;z-index:50;background:var(--surface);
+  border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+.top .in{max-width:1200px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;color:var(--ink)}
+.logo .mk{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--brand),#2FA4FF);
+  color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+.nav{display:flex;gap:2px;flex-wrap:wrap;flex:1}
+.nav a{padding:6px 12px;border-radius:6px;color:var(--ink-2);font-size:13.5px;font-weight:500}
+.nav a:hover{background:var(--surface-2);text-decoration:none}
+.nav a.on{background:var(--brand-soft);color:var(--brand)}
+.lang{font-size:12px;color:var(--muted);border:1px solid var(--line);
+  padding:4px 10px;border-radius:20px;white-space:nowrap}
+
+.wrap{max-width:1200px;margin:0 auto;padding:28px 24px 80px}
+.lead{max-width:900px}
+
+/* 頁首 */
+.pagehead{padding:30px 0 8px}
+.pagehead h1{margin-bottom:6px}
+.zh{display:block;color:var(--muted);font-size:.86em;font-weight:400;margin-top:2px;line-height:1.6}
+p .zh{margin-top:1px}
+
+/* 卡片 */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);
+  padding:22px 24px;box-shadow:var(--shadow);margin-bottom:20px}
+.card>h2:first-child,.card>h3:first-child{margin-top:0}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.g3,.g4{grid-template-columns:repeat(2,1fr)}.g2{grid-template-columns:1fr}}
+@media(max-width:620px){.g3,.g4{grid-template-columns:1fr}}
+
+/* KPI */
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.kpi .n{font-size:26px;font-weight:700;color:var(--brand);line-height:1.2}
+.kpi .l{font-size:12.5px;color:var(--muted)}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0 4px}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:var(--surface-2);font-weight:600;font-size:12px;color:var(--ink-2);
+  text-transform:uppercase;letter-spacing:.03em}
+tbody tr:hover{background:#FCFCFC}
+td p{margin:0 0 4px}
+.tight td,.tight th{padding:6px 10px}
+.nowrap{white-space:nowrap}
+
+/* 標籤 */
+.tag{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.t-ok{background:var(--ok-soft);color:var(--ok)}
+.t-warn{background:var(--warn-soft);color:var(--warn)}
+.t-err{background:var(--err-soft);color:var(--err)}
+.t-info{background:var(--info-soft);color:var(--info)}
+.t-brand{background:var(--brand-soft);color:var(--brand)}
+.t-grey{background:var(--surface-2);color:var(--muted)}
+.must{color:var(--err);font-weight:600}
+.should{color:var(--warn);font-weight:600}
+.could{color:var(--brand);font-weight:600}
+
+/* 程式碼 */
+pre{background:#1B1A19;color:#E6E6E6;padding:16px 18px;border-radius:var(--radius);
+  overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.55;margin:12px 0;max-height:620px}
+pre.light{background:var(--surface-2);color:var(--ink);border:1px solid var(--line);max-height:none}
+code.inl{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12.5px}
+
+/* 提示 */
+.note{border-left:3px solid var(--brand);background:var(--brand-soft);padding:12px 16px;
+  border-radius:0 var(--radius) var(--radius) 0;margin:14px 0;font-size:14px}
+.note.warn{border-color:var(--warn);background:var(--warn-soft)}
+.note.err{border-color:var(--err);background:var(--err-soft)}
+
+/* 列表 */
+ul.tick{list-style:none;padding-left:0;margin:8px 0}
+ul.tick li{position:relative;padding:3px 0 3px 22px}
+ul.tick li::before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:700}
+ul.dot li{margin-bottom:5px}
+
+/* 用戶故事 */
+.story{border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:10px;background:var(--surface)}
+.story .id{font-family:var(--mono);font-size:11.5px;color:var(--brand);font-weight:700}
+.story .ac{margin:8px 0 0;font-size:13px;color:var(--ink-2)}
+
+/* 甘特圖 */
+.gantt{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.gantt .row{display:grid;grid-template-columns:210px 1fr;border-bottom:1px solid var(--line);align-items:center}
+.gantt .row:last-child{border-bottom:0}
+.gantt .row.head{background:var(--surface-2);font-size:11.5px;font-weight:600;color:var(--ink-2)}
+.gantt .lbl{padding:8px 12px;font-size:13px;border-right:1px solid var(--line)}
+.gantt .track{position:relative;height:38px;background:
+  repeating-linear-gradient(90deg,transparent 0 83px,var(--line) 83px 84px)}
+.gantt .bar{position:absolute;top:9px;height:20px;border-radius:4px;color:#fff;font-size:11px;
+  display:flex;align-items:center;padding:0 8px;white-space:nowrap;box-shadow:var(--shadow)}
+.gantt .head .track{height:auto;padding:6px 0;background:none;display:flex}
+.gantt .head .track span{flex:1;text-align:center;border-right:1px solid var(--line);font-size:11px}
+.gantt .head .track span:last-child{border-right:0}
+
+/* UI 稿外框 */
+.mock{border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;
+  box-shadow:var(--shadow-lg);background:var(--surface);margin-bottom:8px}
+.mock .bar{background:var(--surface-2);border-bottom:1px solid var(--line);padding:7px 12px;
+  display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.mock .bar .d{width:10px;height:10px;border-radius:50%;background:#D2D0CE}
+.mock .bar .url{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;
+  padding:2px 10px;font-size:11.5px;color:var(--ink-2)}
+.mock .body{padding:0}
+.mcap{font-size:12.5px;color:var(--muted);margin:0 0 22px}
+
+/* 元件（UI 稿用） */
+.u-top{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--line)}
+.u-brand{font-weight:600;font-size:14px}
+.u-nav{display:flex;gap:14px;font-size:12.5px;color:var(--muted)}
+.u-nav b{color:var(--brand)}
+.u-av{width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;
+  display:grid;place-items:center;font-size:11.5px;margin-left:auto}
+.u-body{padding:18px}
+.u-h{font-size:19px;font-weight:600;margin:0 0 2px}
+.u-s{font-size:12.5px;color:var(--muted);margin:0 0 16px}
+.u-grid{display:grid;gap:12px}
+.u-card{border:1px solid var(--line);border-radius:var(--radius);padding:13px 15px;background:var(--surface)}
+.u-card .n{font-size:22px;font-weight:700;line-height:1.2}
+.u-card .l{font-size:11.5px;color:var(--muted)}
+.u-list{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.u-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.u-item:last-child{border-bottom:0}
+.u-item .grow{flex:1;min-width:0}
+.u-item .t{font-weight:600;font-size:13px}
+.u-item .m{font-size:11.5px;color:var(--muted)}
+.u-btn{background:var(--brand);color:#fff;border:0;border-radius:6px;padding:7px 16px;font-size:12.5px;font-weight:600}
+.u-btn.gh{background:#fff;color:var(--brand);border:1px solid var(--line)}
+.u-btn.sm{padding:4px 11px;font-size:11.5px}
+.u-field{margin-bottom:11px}
+.u-field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+.u-field .in{border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-size:12.5px;background:#fff;color:var(--ink)}
+.u-field .in.mut{color:#A19F9D}
+.u-row{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media(max-width:640px){.u-row{grid-template-columns:1fr}}
+.u-side{display:grid;grid-template-columns:200px 1fr;min-height:400px}
+@media(max-width:700px){.u-side{grid-template-columns:1fr}}
+.u-sidenav{background:var(--surface-2);border-right:1px solid var(--line);padding:14px 10px;font-size:12.5px}
+.u-sidenav div{padding:7px 12px;border-radius:6px;color:var(--ink-2)}
+.u-sidenav div.on{background:#fff;color:var(--brand);font-weight:600;box-shadow:var(--shadow)}
+
+/* 手機框 */
+.phone{width:330px;border:9px solid #201F1E;border-radius:34px;background:#fff;
+  box-shadow:var(--shadow-lg);overflow:hidden;margin:0 auto}
+.phone .pbar{background:#000;color:#fff;font-size:11px;padding:5px 14px;display:flex;justify-content:space-between}
+.phone .pbody{padding:12px 14px;min-height:520px;background:var(--bg)}
+.pcard{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px;box-shadow:var(--shadow)}
+.ptitle{font-size:15px;font-weight:600;margin:2px 0 8px}
+
+/* 頁尾 */
+.foot{border-top:1px solid var(--line);margin-top:40px;padding:22px 0;color:var(--muted);font-size:12.5px}
+.foot .in{max-width:1200px;margin:0 auto;padding:0 24px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+/* 錨點目錄 */
+.toc{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px}
+.toc ol{margin:6px 0 0;padding-left:20px;font-size:13.5px}
+.toc li{margin:3px 0}
+
+@media print{
+  .top{position:static}.nav,.lang{display:none}
+  .card{break-inside:avoid;box-shadow:none}
+  body{font-size:12px}
+}

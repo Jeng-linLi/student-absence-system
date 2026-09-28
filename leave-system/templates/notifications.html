@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}通知 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>通知中心</h1>
+<div class="card">
+  {% if items %}
+  <table>
+    <thead><tr><th class="tnum">時間</th><th>內容</th><th></th></tr></thead>
+    <tbody>
+    {% for n in items %}
+      <tr>
+        <td class="tnum muted">{{ n.created_at[:16] }}</td>
+        <td>{{ n.message }}</td>
+        <td>{% if n.request_id %}
+          <a class="btn sm ghost" href="{{ url_for('detail', rid=n.request_id) }}">查看</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">暫無通知。</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}假別管理 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>假別管理</h1>
+
+<div class="card">
+  <h3>新增假別</h3>
+  <form method="post" action="{{ url_for('admin_add_type') }}">
+    <div class="row" style="grid-template-columns:1fr 2fr">
+      <div><label>代號 *</label><input name="code" placeholder="personal" required></div>
+      <div><label>名稱 *</label><input name="name" placeholder="事假" required></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
+      <input type="checkbox" name="requires_attachment" style="width:auto">
+      <span style="font-size:13px">必須上傳證明文件</span>
+    </label>
+    <label style="display:flex;gap:8px;align-items:center">
+      <input type="checkbox" name="needs_faculty" style="width:auto">
+      <span style="font-size:13px">無論天數都需院系複核</span>
+    </label>
+    <div class="actions"><button class="btn" type="submit">新增</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>現有假別</h3>
+  <table>
+    <thead><tr><th>代號</th><th>名稱</th><th>需證明</th><th>需院系</th><th>狀態</th></tr></thead>
+    <tbody>
+    {% for t in types %}
+      <tr><td class="mono">{{ t.code }}</td><td>{{ t.name }}</td>
+        <td>{{ '是' if t.requires_attachment else '—' }}</td>
+        <td>{{ '是' if t.needs_faculty else '—' }}</td>
+        <td>{% if t.active %}<span class="tag green">啟用</span>
+            {% else %}<span class="tag grey">停用</span>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

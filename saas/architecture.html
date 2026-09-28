@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture &amp; API · SAAS</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top"><div class="in">
+  <div class="logo"><span class="mk">SA</span>SAAS<span class="zh" style="margin:0">學生請假與學業便利支援系統</span></div>
+  <nav class="nav">
+    <a href="index.html">Executive Summary<span class="zh">執行摘要</span></a>
+    <a href="prd.html">PRD &amp; Use Cases<span class="zh">需求與用例</span></a>
+    <a class="on" href="architecture.html">Architecture &amp; API<span class="zh">架構與 API</span></a>
+    <a href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
+    <a href="design.html">UI Design<span class="zh">介面設計</span></a>
+    <a href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+  </nav>
+  <span class="lang">EN / 中文</span>
+</div></header>
+
+<div class="wrap">
+
+<div class="pagehead"><h1>System Architecture &amp; API Design
+  <span class="zh">系統架構與 API 設計</span></h1>
+  <p style="color:var(--ink-2)">Cloud-native on Azure: Next.js front end, NestJS microservices, PostgreSQL,
+    Redis, Blob Storage, Microsoft Entra ID SSO.
+    <span class="zh">雲原生架構，部署於 Azure：Next.js 前端、NestJS 微服務、PostgreSQL、Redis、Blob 儲存，並以 Microsoft Entra ID 單一登入。</span></p>
+</div>
+
+<!-- 架構圖 -->
+<div class="card">
+  <h2>1. System Architecture<span class="zh">系統架構圖</span></h2>
+  <svg viewBox="0 0 1000 660" style="width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:8px" role="img" aria-label="SAAS system architecture diagram">
+    <defs>
+      <marker id="ar" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#6B6B6B"/>
+      </marker>
+    </defs>
+
+    <!-- 標題帶 -->
+    <text x="30" y="26" font-size="12" fill="#6B6B6B" font-weight="600">CLIENTS 客戶端</text>
+
+    <!-- Row1 Clients -->
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="30" y="40" width="220" height="54" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="140" y="63" fill="#0F6CBD" font-weight="600">Web App (Next.js)</text>
+      <text x="140" y="81" fill="#424242">響應式網頁 · SSR</text>
+
+      <rect x="270" y="40" width="220" height="54" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="380" y="63" fill="#0F6CBD" font-weight="600">Mobile App</text>
+      <text x="380" y="81" fill="#424242">iOS / Android · P2</text>
+
+      <rect x="510" y="40" width="220" height="54" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="620" y="63" fill="#0F6CBD" font-weight="600">Microsoft Teams</text>
+      <text x="620" y="81" fill="#424242">Adaptive Cards</text>
+
+      <rect x="750" y="40" width="220" height="54" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="860" y="63" fill="#0F6CBD" font-weight="600">WeChat / 企業微信</text>
+      <text x="860" y="81" fill="#424242">P2</text>
+    </g>
+
+    <line x1="500" y1="94" x2="500" y2="126" stroke="#6B6B6B" marker-end="url(#ar)"/>
+
+    <!-- Row2 Edge -->
+    <text x="30" y="122" font-size="12" fill="#6B6B6B" font-weight="600">EDGE 邊緣</text>
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="30" y="130" width="460" height="48" rx="6" fill="#F0EBFA" stroke="#6C4AB6"/>
+      <text x="260" y="151" fill="#6C4AB6" font-weight="600">Azure Front Door + WAF</text>
+      <text x="260" y="168" fill="#424242">TLS 終止 · DDoS 防護 · OWASP 規則集</text>
+      <rect x="510" y="130" width="460" height="48" rx="6" fill="#F0EBFA" stroke="#6C4AB6"/>
+      <text x="740" y="151" fill="#6C4AB6" font-weight="600">Azure CDN</text>
+      <text x="740" y="168" fill="#424242">靜態資源 · 前端快取</text>
+    </g>
+    <line x1="500" y1="178" x2="500" y2="206" stroke="#6B6B6B" marker-end="url(#ar)"/>
+
+    <!-- Row3 BFF -->
+    <text x="30" y="202" font-size="12" fill="#6B6B6B" font-weight="600">PRESENTATION 呈現層</text>
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="30" y="210" width="940" height="54" rx="6" fill="#E7F5EC" stroke="#0E7A3D"/>
+      <text x="500" y="232" fill="#0E7A3D" font-weight="600">Next.js 14 · TypeScript · Tailwind · Fluent UI v9 (BFF / SSR)</text>
+      <text x="500" y="250" fill="#424242">伺服器端渲染 · 語系切換（zh-CN / en）· 無障礙 WCAG 2.1 AA</text>
+    </g>
+    <line x1="500" y1="264" x2="500" y2="296" stroke="#6B6B6B" marker-end="url(#ar)"/>
+
+    <!-- Row4 Gateway -->
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="30" y="300" width="940" height="46" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="500" y="320" fill="#201F1E" font-weight="600">API Gateway（NestJS）· JWT 驗證 · RBAC 攔截 · 限流 · 關聯 ID 追蹤</text>
+      <text x="500" y="337" fill="#424242">Rate limit 120 req/min/user · Correlation-ID 全鏈路傳遞</text>
+    </g>
+    <line x1="300" y1="346" x2="300" y2="371" stroke="#6B6B6B" marker-end="url(#ar)"/>
+
+    <!-- Row5 Services -->
+    <text x="30" y="368" font-size="12" fill="#6B6B6B" font-weight="600">MICROSERVICES 微服務（NestJS）</text>
+    <g font-size="11.5" text-anchor="middle">
+      <rect x="30" y="375" width="124" height="62" rx="6" fill="#FFF" stroke="#0F6CBD"/>
+      <text x="92" y="397" fill="#0F6CBD" font-weight="600">auth-svc</text>
+      <text x="92" y="414" fill="#424242">SSO/RBAC</text>
+      <text x="92" y="428" fill="#6B6B6B">登入授權</text>
+
+      <rect x="166" y="375" width="124" height="62" rx="6" fill="#FFF" stroke="#0F6CBD"/>
+      <text x="228" y="397" fill="#0F6CBD" font-weight="600">request-svc</text>
+      <text x="228" y="414" fill="#424242">假單核心</text>
+      <text x="228" y="428" fill="#6B6B6B">文件上傳</text>
+
+      <rect x="302" y="375" width="124" height="62" rx="6" fill="#FFF" stroke="#0F6CBD"/>
+      <text x="364" y="397" fill="#0F6CBD" font-weight="600">workflow-svc</text>
+      <text x="364" y="414" fill="#424242">路由引擎</text>
+      <text x="364" y="428" fill="#6B6B6B">SLA/升級</text>
+
+      <rect x="438" y="375" width="124" height="62" rx="6" fill="#FFF" stroke="#0F6CBD"/>
+      <text x="500" y="397" fill="#0F6CBD" font-weight="600">conflict-svc</text>
+      <text x="500" y="414" fill="#424242">衝突偵測</text>
+      <text x="500" y="428" fill="#6B6B6B">便利安排</text>
+
+      <rect x="574" y="375" width="124" height="62" rx="6" fill="#FFF" stroke="#0F6CBD"/>
+      <text x="636" y="397" fill="#0F6CBD" font-weight="600">event-svc</text>
+      <text x="636" y="414" fill="#424242">官方活動</text>
+      <text x="636" y="428" fill="#6B6B6B">名單核實</text>
+
+      <rect x="710" y="375" width="124" height="62" rx="6" fill="#FFF" stroke="#0F6CBD"/>
+      <text x="772" y="397" fill="#0F6CBD" font-weight="600">notify-svc</text>
+      <text x="772" y="414" fill="#424242">通知總線</text>
+      <text x="772" y="428" fill="#6B6B6B">多通道</text>
+
+      <rect x="846" y="375" width="124" height="62" rx="6" fill="#FFF" stroke="#0F6CBD"/>
+      <text x="908" y="397" fill="#0F6CBD" font-weight="600">analytics-svc</text>
+      <text x="908" y="414" fill="#424242">報表</text>
+      <text x="908" y="428" fill="#6B6B6B">預警</text>
+    </g>
+    <line x1="300" y1="437" x2="300" y2="466" stroke="#6B6B6B" marker-end="url(#ar)"/>
+
+    <!-- Row6 Data -->
+    <text x="30" y="463" font-size="12" fill="#6B6B6B" font-weight="600">DATA 資料層</text>
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="30" y="470" width="220" height="54" rx="6" fill="#FDF5E3" stroke="#B8860B"/>
+      <text x="140" y="493" fill="#B8860B" font-weight="600">PostgreSQL 15</text>
+      <text x="140" y="511" fill="#424242">主庫 + 唯讀副本 · TDE 加密</text>
+
+      <rect x="270" y="470" width="220" height="54" rx="6" fill="#FDF5E3" stroke="#B8860B"/>
+      <text x="380" y="493" fill="#B8860B" font-weight="600">Azure Cache for Redis</text>
+      <text x="380" y="511" fill="#424242">Session · 佇列 · 快取</text>
+
+      <rect x="510" y="470" width="220" height="54" rx="6" fill="#FDF5E3" stroke="#B8860B"/>
+      <text x="620" y="493" fill="#B8860B" font-weight="600">Azure Blob Storage</text>
+      <text x="620" y="511" fill="#424242">證明文件 · SSE + 私有端點</text>
+
+      <rect x="750" y="470" width="220" height="54" rx="6" fill="#FDF5E3" stroke="#B8860B"/>
+      <text x="860" y="493" fill="#B8860B" font-weight="600">Azure Cognitive Search</text>
+      <text x="860" y="511" fill="#424242">假單全文檢索（P2）</text>
+    </g>
+
+    <!-- Row7 External -->
+    <text x="30" y="566" font-size="12" fill="#6B6B6B" font-weight="600">INTEGRATIONS 外部整合</text>
+    <g font-size="11.5" text-anchor="middle">
+      <rect x="30" y="576" width="178" height="54" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="119" y="598" fill="#201F1E" font-weight="600">Microsoft Entra ID</text>
+      <text x="119" y="615" fill="#424242">SSO · OIDC</text>
+      <rect x="220" y="576" width="178" height="54" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="309" y="598" fill="#201F1E" font-weight="600">Graph / Exchange</text>
+      <text x="309" y="615" fill="#424242">電郵 · Teams · 行事曆</text>
+      <rect x="410" y="576" width="178" height="54" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="499" y="598" fill="#201F1E" font-weight="600">SIS / Banner</text>
+      <text x="499" y="615" fill="#424242">學籍 · 修讀 · 校曆</text>
+      <rect x="600" y="576" width="178" height="54" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="689" y="598" fill="#201F1E" font-weight="600">Canvas LMS</text>
+      <text x="689" y="615" fill="#424242">考評行事曆</text>
+      <rect x="790" y="576" width="178" height="54" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="879" y="598" fill="#201F1E" font-weight="600">Azure Comm. Services</text>
+      <text x="879" y="615" fill="#424242">短信 · 推送</text>
+    </g>
+    <path d="M 908 437 L 908 560" stroke="#6B6B6B" stroke-dasharray="5 4" fill="none" marker-end="url(#ar)"/>
+  </svg>
+  <p class="mcap">Figure 1 — Layered architecture: clients → edge → BFF → gateway → 7 microservices → data → external integrations.
+    <span class="zh">圖一 — 分層架構：客戶端 → 邊緣 → 前端 BFF → 閘道 → 七個微服務 → 資料層 → 外部整合。</span></p>
+</div>
+
+<!-- 微服務 -->
+<div class="card">
+  <h2>2. Microservice Responsibilities<span class="zh">微服務職責</span></h2>
+  <table>
+    <thead><tr><th>Service<span class="zh">服務</span></th><th>Responsibility<span class="zh">職責</span></th>
+      <th>Owns data<span class="zh">資料所有權</span></th><th>Notes<span class="zh">備註</span></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">auth-svc</td><td>Entra ID OIDC, token exchange, session, RBAC resolution, delegation<span class="zh">Entra ID 登入、憑證交換、工作階段、權限解析、代理設定</span></td><td>users, roles, permissions, delegations</td><td>Stateless; JWT 15 min + refresh<span class="zh">無狀態；JWT 15 分鐘＋刷新</span></td></tr>
+      <tr><td class="mono">request-svc</td><td>Absence request CRUD, documents, withdrawal, student timeline<span class="zh">請假申請增刪查改、文件、撤回、學生時間軸</span></td><td>absence_requests, documents</td><td>Emits RequestSubmitted event<span class="zh">發出「申請已提交」事件</span></td></tr>
+      <tr><td class="mono">workflow-svc</td><td>Route resolution, step orchestration, SLA timers, escalation<span class="zh">路由解析、步驟編排、SLA 計時、升級</span></td><td>approvals, workflow_routes, sla_config</td><td>Saga pattern for multi-step rollback<span class="zh">多步驟回滾採 Saga 模式</span></td></tr>
+      <tr><td class="mono">conflict-svc</td><td>Assessment conflict detection &amp; instructor accommodation decisions<span class="zh">考評衝突偵測與教師便利決策</span></td><td>assessment_conflicts, accommodations</td><td>Nightly sync from SIS/Canvas<span class="zh">每晚自 SIS／Canvas 同步</span></td></tr>
+      <tr><td class="mono">event-svc</td><td>Official activities, roster upload/matching, auto-verification<span class="zh">官方活動、名單上傳比對、自動核實</span></td><td>events, event_participants</td><td>Roster snapshot is immutable<span class="zh">名單快照不可修改</span></td></tr>
+      <tr><td class="mono">notify-svc</td><td>Templates, channel routing, preferences, delivery retries<span class="zh">範本、渠道路由、偏好設定、投遞重試</span></td><td>notifications, notification_prefs</td><td>Idempotent; dead-letter queue<span class="zh">冪等設計，附死信佇列</span></td></tr>
+      <tr><td class="mono">analytics-svc</td><td>Reports, dashboards, early-warning rules, exports<span class="zh">報表、看板、預警規則、匯出</span></td><td>read replica + materialised views</td><td>Never writes to operational tables<span class="zh">永不寫入作業資料表</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note">Event backbone: Azure Service Bus (topics/subscriptions) for cross-service events; Redis Streams for
+    SLA timers and short-lived jobs. Every event carries a <code class="inl">correlation_id</code>.
+    <span class="zh">事件骨幹：跨服務事件用 Azure Service Bus（主題／訂閱）；SLA 計時與短任務用 Redis Streams。每個事件均帶 <code class="inl">correlation_id</code>。</span></p>
+</div>
+
+<!-- 認證 -->
+<div class="card">
+  <h2>3. Authentication Flow (Microsoft Entra ID / OIDC)<span class="zh">認證流程（Entra ID / OIDC）</span></h2>
+  <pre class="light">┌────────┐      ┌──────────────┐      ┌──────────┐      ┌────────────┐
+│Browser │      │ Next.js BFF  │      │ Entra ID │      │ auth-svc   │
+└───┬────┘      └──────┬───────┘      └────┬─────┘      └─────┬──────┘
+    │ 1. GET /dashboard                    │                   │
+    ├─────────────────►│                   │                   │
+    │                  │ 2. 302 → /authorize (PKCE code_challenge)
+    │◄─────────────────┤                   │                   │
+    │ 3. User authenticates (MFA enforced by Conditional Access)│
+    ├─────────────────────────────────────►│                   │
+    │ 4. Redirect back with code           │                   │
+    │◄─────────────────────────────────────┤                   │
+    ├─────────────────►│ 5. POST /api/auth/callback (code + verifier)
+    │                  ├──────────────────────────────────────►│
+    │                  │                   │ 6. token exchange │
+    │                  │                   │◄─────────────────┤
+    │                  │                   │ 7. id_token (oid, groups, upn)
+    │                  │ 8. JWT access(15m) + refresh(8h, rotation) ◄─┤
+    │◄─────────────────┤   HttpOnly, Secure, SameSite=Strict           │
+    │ 9. Subsequent API calls: Authorization: Bearer &lt;JWT&gt;            │
+    │                  ├─ gateway verifies signature + role claims ────►│
+  </pre>
+  <ul class="tick" style="font-size:13.5px">
+    <li><b>PKCE + OIDC</b>; MFA and Conditional Access enforced by Entra ID, not by SAAS.
+      <span class="zh">採用 PKCE + OIDC；多重要素驗證與條件式存取由 Entra ID 負責，不由 SAAS 自行實作。</span></li>
+    <li>Roles derived from Entra ID <b>security groups</b> + local DB overrides (e.g. delegated approver).
+      <span class="zh">角色由 Entra ID 安全性群組 ＋ 資料庫本地覆寫（如代理審批人）共同決定。</span></li>
+    <li>Short-lived access tokens (15 min) with rotating refresh tokens; refresh reuse detection revokes the family.
+      <span class="zh">存取憑證僅 15 分鐘，刷新憑證輪替；偵測到重用即撤銷整個憑證族。</span></li>
+    <li>Break-glass local admin account: hardware-key only, no password, quarterly drill.
+      <span class="zh">緊急本地管理帳號：僅允許硬體金鑰、無密碼、每季演練。</span></li>
+  </ul>
+</div>
+
+<!-- RBAC -->
+<div class="card">
+  <h2>4. RBAC Permission Model<span class="zh">RBAC 權限模型</span></h2>
+  <p style="font-size:13.5px">Permissions are enforced <b>server-side at the gateway and at the service layer</b>; the UI
+    only hides what the user cannot do. Scope qualifiers: <code class="inl">own</code> · <code class="inl">course</code> ·
+    <code class="inl">programme</code> · <code class="inl">department</code> · <code class="inl">all</code>.
+    <span class="zh">權限於<b>閘道與服務層的伺服器端</b>強制執行；介面僅隱藏使用者無權執行的動作。範圍限定詞：<code class="inl">own</code>（本人）· <code class="inl">course</code>（所授課程）· <code class="inl">programme</code>（所屬項目）· <code class="inl">department</code>（所屬院系）· <code class="inl">all</code>（全校）。</span></p>
+
+  <div style="overflow:auto">
+  <table class="tight">
+    <thead><tr>
+      <th>Permission<span class="zh">權限</span></th>
+      <th>Stud.</th><th>Instr.</th><th>Prog.<br>Office</th><th>Registry</th><th>Stu.<br>Affairs</th><th>Sports</th><th>Event<br>Org.</th><th>Advisor</th><th>Admin</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>request:create<span class="zh">建立申請</span></td><td>own</td><td>—</td><td>—</td><td>—</td><td>—</td><td>own</td><td>—</td><td>—</td><td>all</td></tr>
+      <tr><td>request:read<span class="zh">讀取申請</span></td><td>own</td><td>course</td><td>programme</td><td>all</td><td>all*</td><td>own</td><td>own</td><td>own advisees</td><td>all</td></tr>
+      <tr><td>request:approve<span class="zh">核准</span></td><td>—</td><td>course</td><td>programme</td><td>all</td><td>—</td><td>—</td><td>—</td><td>own advisees</td><td>all</td></tr>
+      <tr><td>request:reject<span class="zh">駁回</span></td><td>—</td><td>course</td><td>programme</td><td>all</td><td>—</td><td>—</td><td>—</td><td>—</td><td>all</td></tr>
+      <tr><td>request:withdraw<span class="zh">撤回</span></td><td>own</td><td>—</td><td>programme</td><td>all</td><td>—</td><td>—</td><td>—</td><td>—</td><td>all</td></tr>
+      <tr><td>document:read<span class="zh">讀取證明文件</span></td><td>own</td><td><b>never</b></td><td>programme†</td><td>all†</td><td>all†</td><td>—</td><td>—</td><td>advisees†</td><td>all</td></tr>
+      <tr><td>conflict:decide<span class="zh">衝突決策</span></td><td>—</td><td>course</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>event:manage<span class="zh">管理活動</span></td><td>—</td><td>—</td><td>programme<br>(endorse)</td><td>all</td><td>—</td><td>own</td><td>own</td><td>—</td><td>all</td></tr>
+      <tr><td>report:view<span class="zh">查看報表</span></td><td>—</td><td>course</td><td>programme</td><td>all</td><td>all</td><td>own</td><td>own</td><td>advisees</td><td>all</td></tr>
+      <tr><td>policy:configure<span class="zh">配置政策</span></td><td>—</td><td>—</td><td>—</td><td>all</td><td>—</td><td>—</td><td>—</td><td>—</td><td>all</td></tr>
+      <tr><td>user:manage<span class="zh">管理帳號</span></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>all</td></tr>
+      <tr><td>audit:read<span class="zh">讀取審計</span></td><td>own</td><td>—</td><td>programme</td><td>all</td><td>—</td><td>—</td><td>—</td><td>—</td><td>all</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="font-size:13px;color:var(--muted)">
+    * Student Affairs sees category-level data only, never medical content.
+    <span class="zh">學生事務處僅見類別層級資料，絕不包含醫療內容。</span>
+    † Medical documents visible only to Registry, Student Affairs and the advisor — and each access is logged.
+    <span class="zh">醫療文件僅供教務處、學生事務處與導師查看，且每次存取均記入日誌。</span>
+    <b>Instructors never see medical evidence or reasons</b> — only "excused" plus the accommodation to apply.
+    <span class="zh"><b>教師絕不會看到醫療證明或病假原因</b>，只會看到「已豁免」及其須執行的便利安排。</span></p>
+</div>
+
+<!-- API -->
+<div class="card">
+  <h2>5. REST API Design<span class="zh">REST API 設計</span></h2>
+  <p style="font-size:13.5px">Conventions: <code class="inl">/api/v1/…</code>, JSON, camelCase, cursor pagination
+    (<code class="inl">?cursor=&amp;limit=</code>), <code class="inl">Idempotency-Key</code> on all writes,
+    RFC 7807 problem+json errors, <code class="inl">ETag</code> on reads.
+    <span class="zh">慣例：<code class="inl">/api/v1/…</code>、JSON、駝峰命名、游標分頁（<code class="inl">?cursor=&amp;limit=</code>）、所有寫入附 <code class="inl">Idempotency-Key</code>、錯誤採 RFC 7807 problem+json、讀取附 <code class="inl">ETag</code>。</span></p>
+
+  <h3>5.1 Absence Requests<span class="zh">請假申請</span></h3>
+  <table class="tight">
+    <thead><tr><th style="width:90px">Method</th><th>Path<span class="zh">路徑</span></th><th>Description<span class="zh">說明</span></th><th style="width:130px">Roles<span class="zh">角色</span></th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/requests</td><td>Create absence request<span class="zh">建立請假申請</span></td><td>student, admin</td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/requests?scope=mine|queue|all</td><td>List with filters (status, category, date, student)<span class="zh">列表查詢（狀態、類別、日期、學生）</span></td><td>all (scoped)</td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/requests/{id}</td><td>Detail with timeline, conflicts, approvals<span class="zh">詳情：時間軸、衝突、審批</span></td><td>scoped</td></tr>
+      <tr><td><span class="tag t-warn">PATCH</span></td><td class="mono">/api/v1/requests/{id}</td><td>Edit before first approval / respond to info request<span class="zh">首次核准前編輯／回應補件要求</span></td><td>owner</td></tr>
+      <tr><td><span class="tag t-err">DELETE</span></td><td class="mono">/api/v1/requests/{id}</td><td>Withdraw<span class="zh">撤回</span></td><td>owner</td></tr>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/requests/{id}/documents</td><td>Upload supporting document<span class="zh">上傳證明文件</span></td><td>owner</td></tr>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/requests/{id}/decision</td><td>Approve / reject / request-info<span class="zh">核准／駁回／要求補件</span></td><td>instructor, office, registry</td></tr>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/requests/{id}/reassign</td><td>Reassign step (delegation)<span class="zh">改派步驟（代理）</span></td><td>office, admin</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 Conflicts, Events, Workflow, Notification, Analytics<span class="zh">衝突、活動、工作流、通知、分析</span></h3>
+  <table class="tight">
+    <thead><tr><th style="width:90px">Method</th><th>Path</th><th>Description<span class="zh">說明</span></th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/requests/{id}/conflicts</td><td>Conflicts for a request<span class="zh">某申請的衝突清單</span></td></tr>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/conflicts/{id}/resolution</td><td>Record accommodation: excused | make_up | alternative | redistribute | reject<span class="zh">記錄便利方案：豁免／補考／替代／權重調整／駁回</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/instructors/me/queue</td><td>Instructor decision queue<span class="zh">教師決策佇列</span></td></tr>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/events</td><td>Create official activity<span class="zh">建立官方活動</span></td></tr>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/events/{id}/roster</td><td>Upload roster (CSV/XLSX)<span class="zh">上傳名單</span></td></tr>
+      <tr><td><span class="tag t-brand">POST</span></td><td class="mono">/api/v1/events/{id}/endorse</td><td>Program Office endorsement<span class="zh">項目辦公室核准活動</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/events/{id}/verify?studentId=</td><td>Auto-verification lookup<span class="zh">自動核實查詢</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/workflow/routes</td><td>Route catalogue &amp; policy config<span class="zh">路由目錄與政策配置</span></td></tr>
+      <tr><td><span class="tag t-warn">PUT</span></td><td class="mono">/api/v1/workflow/policy</td><td>Update thresholds, SLA, routing<span class="zh">更新門檻、SLA、路由</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/notifications</td><td>In-app notification feed<span class="zh">站內通知</span></td></tr>
+      <tr><td><span class="tag t-warn">PUT</span></td><td class="mono">/api/v1/notifications/preferences</td><td>Channel preferences per event type<span class="zh">按事件設定渠道偏好</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/analytics/dashboard?role=</td><td>Dashboard payload<span class="zh">看板資料</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/analytics/reports/{key}</td><td>Report by key + filters; <code class="inl">?format=csv|xlsx|pdf</code><span class="zh">按代號與篩選產出報表</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/analytics/risk-alerts</td><td>Early-warning queue<span class="zh">預警佇列</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/audit-logs?entity=&amp;actor=</td><td>Audit query<span class="zh">審計查詢</span></td></tr>
+      <tr><td><span class="tag t-ok">GET</span></td><td class="mono">/api/v1/health</td><td>Liveness + dependency status<span class="zh">健康檢查與相依服務狀態</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 Sample payloads<span class="zh">範例酬載</span></h3>
+  <div class="grid g2">
+    <div>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:4px">POST /api/v1/requests</p>
+      <pre>{
+  "category": "medical",
+  "startDate": "2026-10-12",
+  "endDate": "2026-10-14",
+  "startPeriod": "AM",
+  "endPeriod": "PM",
+  "reason": "Influenza, fever 38.9°C",
+  "contactPhone": "+86-138-0000-0000",
+  "documentIds": ["doc_9f3a1c"],
+  "activityId": null
+}</pre>
+    </div>
+    <div>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:4px">201 Created</p>
+      <pre>{
+  "id": "req_7c21ea",
+  "status": "pending",
+  "route": { "code": "A-MED-L", "version": 3 },
+  "currentStep": {
+    "level": 1,
+    "owner": { "id": "u_8812", "role": "instructor" },
+    "slaHours": 24,
+    "dueAt": "2026-10-12T09:00:00+08:00"
+  },
+  "conflicts": [
+    { "id": "cf_31", "courseCode": "AIAA 1010",
+      "type": "midterm", "date": "2026-10-13" }
+  ],
+  "autoVerified": false
+}</pre>
+    </div>
+  </div>
+  <div style="margin-top:10px">
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:4px">
+      POST /api/v1/conflicts/cf_31/resolution — instructor decision
+      <span class="zh">教師對單一衝突的決策</span></p>
+    <pre>{
+  "decision": "make_up",
+  "makeUpDate": "2026-10-20",
+  "makeUpVenue": "E3-201",
+  "makeUpMode": "in_person",
+  "comment": "Make-up paper of equal weight.",
+  "notifyStudent": true
+}</pre>
+  </div>
+  <p style="font-size:13px;color:var(--muted)">Error model (RFC 7807):
+    <span class="zh">錯誤模型（RFC 7807）：</span></p>
+  <pre>{
+  "type": "https://saas.hkust-gz.edu.cn/errors/validation",
+  "title": "Missing supporting document",
+  "status": 422,
+  "detail": "Category 'medical' requires at least one document.",
+  "correlationId": "cor_5b1e...",
+  "errors": [{ "field": "documentIds", "code": "required" }]
+}</pre>
+</div>
+
+<!-- 部署 -->
+<div class="card">
+  <h2>6. Deployment &amp; Environments<span class="zh">部署與環境</span></h2>
+  <table>
+    <thead><tr><th>Layer<span class="zh">層級</span></th><th>Azure service<span class="zh">Azure 服務</span></th>
+      <th>Prod<span class="zh">生產</span></th><th>Staging / UAT<span class="zh">測試</span></th></tr></thead>
+    <tbody>
+      <tr><td>Front end<span class="zh">前端</span></td><td>App Service (Linux, Node 20) or Container Apps</td><td>P1v3 ×2 (zone-redundant)</td><td>B2 ×1</td></tr>
+      <tr><td>Services<span class="zh">微服務</span></td><td>Azure Container Apps</td><td>3 vCPU / 6 GB ×7, autoscale 2–10</td><td>1 vCPU ×2</td></tr>
+      <tr><td>Database<span class="zh">資料庫</span></td><td>Azure Database for PostgreSQL Flexible Server</td><td>D4ds_v5, Zone-redundant HA, 1 read replica</td><td>B2ms</td></tr>
+      <tr><td>Cache<span class="zh">快取</span></td><td>Azure Cache for Redis</td><td>Premium P1 (persistence)</td><td>Standard C1</td></tr>
+      <tr><td>Storage<span class="zh">儲存</span></td><td>Azure Blob (hot) + private endpoint</td><td>ZRS, 7-yr lifecycle to archive</td><td>LRS</td></tr>
+      <tr><td>Messaging<span class="zh">訊息</span></td><td>Azure Service Bus</td><td>Standard</td><td>Basic</td></tr>
+      <tr><td>Secrets<span class="zh">機密</span></td><td>Azure Key Vault</td><td>Managed identities only<span class="zh">僅用受控身分</span></td><td>same</td></tr>
+      <tr><td>Observability<span class="zh">監控</span></td><td>Application Insights + Log Analytics</td><td>90-day retention<span class="zh">保存 90 天</span></td><td>30-day</td></tr>
+      <tr><td>CI/CD<span class="zh">持續整合</span></td><td>GitHub Actions / Azure DevOps</td><td>Manual approval gate<span class="zh">人工核准關卡</span></td><td>auto</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Data residency: production deployed to Azure China East 2 (Shanghai) for mainland operation, or
+    Azure East Asia (Hong Kong) for HKUST main campus — decided by the data classification review.
+    <span class="zh">資料存放地：生產環境部署於 Azure 中國東部 2（上海）以支援內地運作，或 Azure 東亞（香港）以支援清水灣校園——由資料分級評審決定。</span></p>
+  <p style="font-size:13.5px"><b>Environments（環境）:</b> dev → staging → UAT (pilot cohort) → prod. Database migrations
+    are forward-only and applied via CI; destructive changes require a two-release deprecation window.
+    <span class="zh">環境鏈：開發 → 測試 → UAT（試點群體）→ 生產。資料庫遷移僅允許向前，並由 CI 執行；破壞性變更須經兩個版本的棄用期。</span></p>
+</div>
+
+</div>
+
+<div class="foot"><div class="in">
+  <span>SAAS Architecture &amp; API v1.0 · HKUST(GZ) · Confidential</span>
+  <span>系統架構與 API 設計 v1.0 · 僅供校內評審</span>
+</div></div>
+</body>
+</html>

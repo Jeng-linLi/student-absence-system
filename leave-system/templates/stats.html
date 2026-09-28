@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}統計 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>請假統計</h1>
+
+<div class="grid g2">
+  <div class="card">
+    <h3>學生請假彙總</h3>
+    {% if rows %}
+    <table>
+      <thead><tr><th>學生</th><th>班級</th>
+        <th class="tnum">已核准天數</th><th class="tnum">審批中</th><th class="tnum">駁回</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr><td>{{ r.name }}<div class="muted mono">{{ r.username }}</div></td>
+          <td>{{ r.class_name }}</td>
+          <td class="tnum"><strong>{{ r.approved_days }}</strong></td>
+          <td class="tnum">{{ r.pending_cnt }}</td>
+          <td class="tnum">{{ r.rejected_cnt }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">暫無資料。</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>按假別（已核准）</h3>
+    {% if by_type %}
+    <table>
+      <thead><tr><th>假別</th><th class="tnum">單數</th><th class="tnum">天數</th></tr></thead>
+      <tbody>
+      {% for b in by_type %}
+        <tr><td>{{ b.name }}</td><td class="tnum">{{ b.cnt }}</td>
+          <td class="tnum">{{ b.days }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">暫無核准記錄。</div>{% endif %}
+    <div class="actions"><a class="btn ghost sm" href="{{ url_for('export_csv') }}">匯出 CSV</a></div>
+  </div>
+</div>
+{% endblock %}

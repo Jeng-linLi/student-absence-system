@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRD &amp; Use Cases · SAAS</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top"><div class="in">
+  <div class="logo"><span class="mk">SA</span>SAAS<span class="zh" style="margin:0">學生請假與學業便利支援系統</span></div>
+  <nav class="nav">
+    <a href="index.html">Executive Summary<span class="zh">執行摘要</span></a>
+    <a class="on" href="prd.html">PRD &amp; Use Cases<span class="zh">需求與用例</span></a>
+    <a href="architecture.html">Architecture &amp; API<span class="zh">架構與 API</span></a>
+    <a href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
+    <a href="design.html">UI Design<span class="zh">介面設計</span></a>
+    <a href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+  </nav>
+  <span class="lang">EN / 中文</span>
+</div></header>
+
+<div class="wrap">
+
+<div class="toc">
+  <b>Contents<span class="zh">目錄</span></b>
+  <ol>
+    <li><a href="#s1">Product Overview &amp; Goals</a></li>
+    <li><a href="#s2">Users &amp; Personas</a></li>
+    <li><a href="#s3">Feature Requirements by Role</a></li>
+    <li><a href="#s4">Absence Categories &amp; Routing</a></li>
+    <li><a href="#s5">Academic Conflict Management</a></li>
+    <li><a href="#s6">Official Activity Module</a></li>
+    <li><a href="#s7">Workflow Engine (Case A / B / C)</a></li>
+    <li><a href="#s8">Notification System</a></li>
+    <li><a href="#s9">Dashboards</a></li>
+    <li><a href="#s10">Early Warning System</a></li>
+    <li><a href="#s11">Analytics Reports</a></li>
+    <li><a href="#s12">User Stories (24)</a></li>
+    <li><a href="#s13">Use Cases (8)</a></li>
+    <li><a href="#s14">Business Process Flows</a></li>
+    <li><a href="#s15">Non-Functional Requirements &amp; KPIs</a></li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<div class="card" id="s1">
+  <h2>1. Product Overview &amp; Goals<span class="zh">產品概述與目標</span></h2>
+  <p>SAAS replaces email-based absence handling with a single, policy-driven platform covering short-term leave,
+    assessment conflict accommodation, and official-activity verification for HKUST(GZ) — designed to be
+    portable to HKUST (Hong Kong), CUHK(SZ) and other international universities.
+    <span class="zh">SAAS 以政策驅動的單一平台取代電郵式請假，覆蓋短期請假、考評衝突便利安排與官方活動核實，服務香港科技大學（廣州），並可移植至香港科技大學、香港中文大學（深圳）及其他國際院校。</span></p>
+
+  <div class="grid g2">
+    <div>
+      <h4>In scope<span class="zh">範圍內</span></h4>
+      <ul class="dot" style="font-size:13.5px">
+        <li>Short-term absence requests (1–30 days)<span class="zh">短期請假（1–30 天）</span></li>
+        <li>Assessment conflict detection &amp; accommodation<span class="zh">考評衝突偵測與便利安排</span></li>
+        <li>Official activity rosters &amp; auto-verification<span class="zh">官方活動名單與自動核實</span></li>
+        <li>Approval workflow engine + SLA/escalation<span class="zh">審批工作流與 SLA／升級</span></li>
+        <li>Notifications, dashboards, analytics, audit<span class="zh">通知、看板、分析、審計</span></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Out of scope (v1)<span class="zh">範圍外（第一版）</span></h4>
+      <ul class="dot" style="font-size:13.5px">
+        <li>Class timetabling &amp; room booking<span class="zh">排課與教室預訂</span></li>
+        <li>Long-term leave of absence / suspension of studies<span class="zh">長期休學／停學</span></li>
+        <li>Grading, transcript changes<span class="zh">成績與成績單變更</span></li>
+        <li>Staff (faculty &amp; admin) leave management<span class="zh">教職員請假管理</span></li>
+        <li>Disciplinary attendance enforcement<span class="zh">出席懲戒執行</span></li>
+      </ul>
+    </div>
+  </div>
+  <p class="note">Design decision: SAAS <b>decides accommodations, not attendance policy</b>. Policy parameters
+    (thresholds, SLA, routing) live in a configuration table owned by the Academic Registry, so rules change
+    without redeploying code.
+    <span class="zh">設計決定：SAAS 負責「執行學業便利安排」，不負責「制定出席政策」。門檻、SLA、路由等政策參數存放於教務處維護的配置表中，規則調整毋須重新部署程式。</span></p>
+</div>
+
+<!-- 2 -->
+<div class="card" id="s2">
+  <h2>2. Users &amp; Personas<span class="zh">使用者與角色畫像</span></h2>
+  <table>
+    <thead><tr><th>Role<span class="zh">角色</span></th><th>Core need<span class="zh">核心需求</span></th>
+      <th>Key screens<span class="zh">主要介面</span></th><th>Volume<span class="zh">規模</span></th></tr></thead>
+    <tbody>
+      <tr><td><b>Student</b><span class="zh">學生</span></td><td>Submit once, know the outcome fast<span class="zh">一次提交、盡快知道結果</span></td><td>New request, My requests, Dashboard<span class="zh">新建申請、我的申請、看板</span></td><td>~6,000</td></tr>
+      <tr><td><b>Instructor</b><span class="zh">任課教師</span></td><td>Decide quickly with full context<span class="zh">有充分上下文地快速決策</span></td><td>Decision queue, Conflict resolver, Class attendance<span class="zh">決策佇列、衝突處理、課堂出席</span></td><td>~450</td></tr>
+      <tr><td><b>Program Office</b><span class="zh">項目辦公室</span></td><td>See programme-wide trends and risk<span class="zh">掌握項目整體趨勢與風險</span></td><td>Department dashboard, Reports<span class="zh">院系看板、報表</span></td><td>~15 offices</td></tr>
+      <tr><td><b>Academic Registry</b><span class="zh">教務處</span></td><td>Policy compliance, long-absence control<span class="zh">政策合規、長期請假管控</span></td><td>Policy config, &gt;7-day queue<span class="zh">政策配置、七天以上佇列</span></td><td>~10</td></tr>
+      <tr><td><b>Student Affairs Office</b><span class="zh">學生事務處</span></td><td>Welfare follow-up, wellbeing flags<span class="zh">關懷跟進、身心健康標記</span></td><td>Welfare queue, Student profile<span class="zh">關懷佇列、學生檔案</span></td><td>~12</td></tr>
+      <tr><td><b>Sports Team Coordinator</b><span class="zh">運動隊協調員</span></td><td>Roster athletes, bulk pre-approval<span class="zh">登錄運動員名單、批量預審</span></td><td>Event management, Roster upload<span class="zh">活動管理、名單上傳</span></td><td>~8</td></tr>
+      <tr><td><b>Event Organizer</b><span class="zh">活動負責人</span></td><td>Register official activities &amp; rosters<span class="zh">登記官方活動與參與名單</span></td><td>Event management<span class="zh">活動管理</span></td><td>~30</td></tr>
+      <tr><td><b>Academic Advisor</b><span class="zh">學術導師</span></td><td>Academic-impact view, advise student<span class="zh">學業影響視圖、輔導學生</span></td><td>Advisee list, Student timeline<span class="zh">導生清單、學生時間軸</span></td><td>~120</td></tr>
+      <tr><td><b>System Administrator</b><span class="zh">系統管理員</span></td><td>RBAC, config, audit, integration health<span class="zh">權限、配置、審計、整合健康度</span></td><td>Admin console, Audit log<span class="zh">管理控制台、審計日誌</span></td><td>~4</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 3 -->
+<div class="card" id="s3">
+  <h2>3. Feature Requirements by Role<span class="zh">按角色之功能需求</span></h2>
+  <p style="font-size:13px;color:var(--muted)">
+    Priority legend: <span class="must">Must</span> MVP · <span class="should">Should</span> Phase 2 ·
+    <span class="could">Could</span> Phase 3
+    <span class="zh">優先級：<span class="must">Must</span> 第一期必須 · <span class="should">Should</span> 第二期 ·
+    <span class="could">Could</span> 第三期</span></p>
+
+  <h3 style="margin-top:18px">3.1 Student Module<span class="zh">學生模組</span></h3>
+  <table class="tight">
+    <thead><tr><th style="width:38px">ID</th><th>Requirement<span class="zh">需求</span></th><th style="width:70px">Priority<span class="zh">優先</span></th></tr></thead>
+    <tbody>
+      <tr><td>F-01</td><td>Submit absence request (category, dates, reason, affected courses auto-resolved)<span class="zh">提交請假申請（類別、日期、事由，自動解析受影響課程）</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-02</td><td>Upload supporting documents (PDF/JPG/PNG, ≤10 MB each, ≤5 files)<span class="zh">上傳證明文件（PDF／JPG／PNG，單檔 ≤10MB，最多 5 份）</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-03</td><td>View approval status with per-step timeline and current owner<span class="zh">查看審批狀態、逐步時間軸與當前負責人</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-04</td><td>Track affected courses &amp; assessments for each request<span class="zh">追蹤每單受影響的課程與考評項目</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-05</td><td>Track assignment extensions granted (new deadline, granting instructor)<span class="zh">追蹤已獲批的作業延期（新期限、批准教師）</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-06</td><td>Track make-up tests (date, venue, mode)<span class="zh">追蹤補考安排（日期、地點、形式）</span></td><td><span class="should">Should</span></td></tr>
+      <tr><td>F-07</td><td>Receive notifications on every status change<span class="zh">狀態變更即時通知</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-08</td><td>View full absence history with filters &amp; export<span class="zh">查看完整請假紀錄，支援篩選與匯出</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-09</td><td>Withdraw a request before first approval<span class="zh">首次審批前可撤回申請</span></td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-10</td><td>Respond to "Request for more information" without re-submitting<span class="zh">回應「要求補充資料」而毋須重新提交</span></td><td><span class="should">Should</span></td></tr>
+      <tr><td>F-11</td><td>Mobile app / responsive web for on-the-go submission<span class="zh">流動應用／響應式網頁，隨時提交</span></td><td><span class="should">Should</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:22px">3.2 Instructor, Office &amp; Admin Modules<span class="zh">教師、辦公室與管理模組</span></h3>
+  <table class="tight">
+    <thead><tr><th style="width:38px">ID</th><th>Requirement<span class="zh">需求</span></th><th style="width:90px">Role<span class="zh">角色</span></th><th style="width:70px">Priority</th></tr></thead>
+    <tbody>
+      <tr><td>F-12</td><td>Decision queue with filters (pending, overdue, by course, by category)<span class="zh">決策佇列，可按待辦／逾期／課程／類別篩選</span></td><td>Instructor</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-13</td><td>Choose one of 5 accommodations per affected assessment<span class="zh">為每個受影響考評項目選擇 5 種便利方案之一</span></td><td>Instructor</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-14</td><td>Bulk action: approve all low-risk requests in one click<span class="zh">批量操作：一鍵核准所有低風險申請</span></td><td>Instructor</td><td><span class="should">Should</span></td></tr>
+      <tr><td>F-15</td><td>Request more information (returns request to student, pauses SLA)<span class="zh">要求補充資料（退回學生並暫停 SLA 計時）</span></td><td>Instructor / Office</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-16</td><td>Class attendance summary per course section<span class="zh">按課程班級的出席統計</span></td><td>Instructor</td><td><span class="should">Should</span></td></tr>
+      <tr><td>F-17</td><td>Department statistics, absence trends, risk alerts<span class="zh">院系統計、缺席趨勢、風險預警</span></td><td>Program Office</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-18</td><td>Escalated queue for absences &gt; 7 days<span class="zh">七天以上請假之升級佇列</span></td><td>Registry</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-19</td><td>Welfare follow-up queue flagged by early-warning rules<span class="zh">由預警規則標記的關懷跟進佇列</span></td><td>Student Affairs</td><td><span class="should">Should</span></td></tr>
+      <tr><td>F-20</td><td>Create official activity, upload roster (CSV/XLSX), associate dates<span class="zh">建立官方活動、上傳名單（CSV／XLSX）、關聯日期</span></td><td>Event Organizer / Sports Coordinator</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-21</td><td>Advisee list with absence timeline and academic impact<span class="zh">導生清單，含請假時間軸與學業影響</span></td><td>Academic Advisor</td><td><span class="should">Should</span></td></tr>
+      <tr><td>F-22</td><td>Policy configuration: thresholds, SLA, routing rules, categories<span class="zh">政策配置：門檻、SLA、路由規則、類別</span></td><td>Registry / Admin</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-23</td><td>RBAC administration, role assignment, delegation<span class="zh">RBAC 管理、角色指派、代理人設定</span></td><td>Admin</td><td><span class="must">Must</span></td></tr>
+      <tr><td>F-24</td><td>Audit log viewer with tamper-evident export<span class="zh">審計日誌查詢與防竄改匯出</span></td><td>Admin</td><td><span class="must">Must</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 4 -->
+<div class="card" id="s4">
+  <h2>4. Absence Categories &amp; Routing<span class="zh">請假類別與分派規則</span></h2>
+  <table>
+    <thead><tr><th>Category<span class="zh">類別</span></th><th>Document required<span class="zh">需證明</span></th>
+      <th>Default route<span class="zh">預設路由</span></th><th>SLA<span class="zh">時限</span></th><th>Notes<span class="zh">說明</span></th></tr></thead>
+    <tbody>
+      <tr><td><b>Medical Leave</b><span class="zh">病假</span></td><td>Yes — medical certificate<span class="zh">需醫生證明</span></td><td>Student → Instructor (Case A)<span class="zh">學生 → 教師（A 案）</span></td><td>24 h</td><td>&gt;3 days requires Registry countersign<span class="zh">超過 3 天需教務處會簽</span></td></tr>
+      <tr><td><b>University Activity</b><span class="zh">校方活動</span></td><td>No — roster auto-verify<span class="zh">否，名單自動核實</span></td><td>Coordinator → Auto → Instructor notify (Case B)<span class="zh">協調員 → 自動核實 → 通知教師（B 案）</span></td><td>Auto</td><td>Highest approval priority<span class="zh">最高審批優先級</span></td></tr>
+      <tr><td><b>Sports Competition</b><span class="zh">體育比賽</span></td><td>No if on team roster<span class="zh">在運動隊名單內則免</span></td><td>Coordinator → Auto → Instructor<span class="zh">協調員 → 自動 → 教師</span></td><td>12 h</td><td>Roster maintained by Sports Coordinator<span class="zh">名單由運動隊協調員維護</span></td></tr>
+      <tr><td><b>Conference</b><span class="zh">學術會議</span></td><td>Yes — acceptance letter<span class="zh">需邀請函／錄取通知</span></td><td>Student → Advisor → Instructor<span class="zh">學生 → 導師 → 教師</span></td><td>48 h</td><td>Encouraged; does not count against absence cap<span class="zh">鼓勵參加，不計入缺席上限</span></td></tr>
+      <tr><td><b>Family Emergency</b><span class="zh">家庭緊急事故</span></td><td>Best effort<span class="zh">盡力提供</span></td><td>Student → Advisor → Instructor<span class="zh">學生 → 導師 → 教師</span></td><td>12 h</td><td>Expedited lane<span class="zh">快速通道</span></td></tr>
+      <tr><td><b>Visa / Immigration</b><span class="zh">簽證／出入境</span></td><td>Yes — appointment notice<span class="zh">需預約證明</span></td><td>Student → Registry → Instructor<span class="zh">學生 → 教務處 → 教師</span></td><td>48 h</td><td>Unavoidable date; instructor cannot reject date<span class="zh">日期不可改，教師不可因日期駁回</span></td></tr>
+      <tr><td><b>Bereavement</b><span class="zh">喪假</span></td><td>No<span class="zh">否</span></td><td>Student → Advisor → Instructor<span class="zh">學生 → 導師 → 教師</span></td><td>12 h</td><td>Standard 5 days, auto-approve assessment accommodation<span class="zh">標準 5 天，學業便利自動核准</span></td></tr>
+      <tr><td><b>Personal Reason</b><span class="zh">個人原因</span></td><td>At instructor discretion<span class="zh">由教師決定</span></td><td>Student → Instructor<span class="zh">學生 → 教師</span></td><td>48 h</td><td>May be rejected; counts toward absence cap<span class="zh">可駁回，計入缺席上限</span></td></tr>
+      <tr><td><b>Other</b><span class="zh">其他</span></td><td>Case by case<span class="zh">視情況</span></td><td>Student → Program Office → Instructor<span class="zh">學生 → 項目辦公室 → 教師</span></td><td>72 h</td><td>Office may re-route<span class="zh">辦公室可重新分派</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 5 -->
+<div class="card" id="s5">
+  <h2>5. Academic Conflict Management<span class="zh">考評衝突管理</span></h2>
+  <p>On submission, SAAS resolves the student's enrolments and assessment calendar for the requested date range and
+    generates one <b>AssessmentConflict</b> row per clash. Instructors resolve each conflict independently.
+    <span class="zh">提交申請時，SAAS 依學生的修讀紀錄與考評行事曆，在請假區間內解析出所有衝突，每個衝突產生一筆「考評衝突」紀錄；教師逐項獨立處理。</span></p>
+
+  <div class="grid g2">
+    <div>
+      <h4>Detected conflict types<span class="zh">偵測之衝突類型</span></h4>
+      <ul class="tick" style="font-size:13.5px">
+        <li>Quiz<span class="zh">小測</span></li>
+        <li>Midterm examination<span class="zh">期中考試</span></li>
+        <li>Final assessment<span class="zh">期末考評</span></li>
+        <li>Mandatory workshop<span class="zh">必修工作坊</span></li>
+        <li>Laboratory session<span class="zh">實驗課</span></li>
+      </ul>
+      <p class="note" style="font-size:13px">Detection requires the assessment calendar. MVP ingests a nightly
+        CSV/API feed from the SIS and Canvas LMS; institutions without a feed fall back to instructor-declared
+        assessment dates.
+        <span class="zh">衝突偵測依賴考評行事曆。MVP 每晚從教務系統（SIS）與 Canvas 匯入 CSV／API；若院校無匯入來源，則退回「教師自行申報考評日期」模式。</span></p>
+    </div>
+    <div>
+      <h4>Instructor options<span class="zh">教師可選方案</span></h4>
+      <table class="tight">
+        <thead><tr><th>Option<span class="zh">方案</span></th><th>Effect<span class="zh">效果</span></th></tr></thead>
+        <tbody>
+          <tr><td>Excused absence<span class="zh">缺席豁免</span></td><td>No penalty, no make-up required<span class="zh">不扣分，毋須補做</span></td></tr>
+          <tr><td>Make-up assessment<span class="zh">安排補考</span></td><td>New date/venue recorded; student notified<span class="zh">記錄新日期地點並通知學生</span></td></tr>
+          <tr><td>Alternative assignment<span class="zh">替代作業</span></td><td>Substitute task + extended deadline<span class="zh">替代任務＋延長期限</span></td></tr>
+          <tr><td>Weight redistribution<span class="zh">權重重分配</span></td><td>Assessment weight moved to other components<span class="zh">該項權重移至其他評核項目</span></td></tr>
+          <tr><td>Rejection<span class="zh">駁回</span></td><td>Reason required; student &amp; Program Office notified<span class="zh">須填理由，通知學生與項目辦公室</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 6 -->
+<div class="card" id="s6">
+  <h2>6. Official Activity Module<span class="zh">官方活動模組</span></h2>
+  <p>Event Organizers and Sports Team Coordinators register activities and upload participant rosters. Students on a
+    roster are <b>auto-verified</b> — no document upload, higher approval priority, and instructor notification
+    rather than instructor approval.
+    <span class="zh">活動負責人與運動隊協調員登記活動並上傳參與名單。名單內學生<b>自動核實</b>：毋須上傳證明、享有較高審批優先級，教師只需接收通知而無須核准。</span></p>
+  <table>
+    <thead><tr><th>Step<span class="zh">步驟</span></th><th>Actor<span class="zh">操作者</span></th><th>Action<span class="zh">動作</span></th><th>System behaviour<span class="zh">系統行為</span></th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Event Organizer<span class="zh">活動負責人</span></td><td>Create activity: name, type, dates, owner unit<span class="zh">建立活動：名稱、類型、日期、主辦單位</span></td><td>Status = <span class="tag t-warn">Draft</span></td></tr>
+      <tr><td>2</td><td>Event Organizer</td><td>Upload roster (CSV/XLSX of student IDs)<span class="zh">上傳名單（學號 CSV／XLSX）</span></td><td>Match by student ID; unmatched rows flagged<span class="zh">按學號比對，無法匹配者標記</span></td></tr>
+      <tr><td>3</td><td>Program Office<span class="zh">項目辦公室</span></td><td>Endorse activity<span class="zh">核准活動</span></td><td>Status = <span class="tag t-ok">Official</span>; rosters become verifiable<span class="zh">狀態轉為「官方」，名單可供核實</span></td></tr>
+      <tr><td>4</td><td>Student</td><td>Submit absence, select the activity<span class="zh">提交請假並選取該活動</span></td><td><b>Auto-verified</b>; skips approval, notifies instructors<span class="zh">自動核實，跳過審批，僅通知教師</span></td></tr>
+      <tr><td>5</td><td>System</td><td>Weekly reconciliation<span class="zh">每週對帳</span></td><td>Expired activities archived; retroactive claims blocked<span class="zh">過期活動歸檔，禁止事後追溯申請</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note">Fraud control: roster membership is snapshotted at activity creation. A student added to a roster
+    <i>after</i> the absence dates cannot use it for retroactive verification.
+    <span class="zh">防欺詐：名單在活動建立時即快照存證。於請假日期<i>之後</i>才被加入名單的學生，不得以該名單作追溯核實。</span></p>
+  <p style="font-size:13.5px"><b>Examples（示例）:</b> Soccer Festival 足球節 · HKUST Sports Team 校隊 ·
+    Exchange Program 交流項目 · Research Competition 科研競賽 · International Conference 國際會議</p>
+</div>
+
+<!-- 7 -->
+<div class="card" id="s7">
+  <h2>7. Workflow Engine<span class="zh">工作流引擎</span></h2>
+  <p>The engine is data-driven: each request is assigned a <b>route</b> at submission time, computed from category,
+    duration, and activity membership. Routes are versioned so historical requests remain reproducible.
+    <span class="zh">引擎為資料驅動：每筆申請在提交時依類別、天數與活動名單歸屬計算出「路由」。路由具版本控制，歷史申請可完整重現。</span></p>
+
+  <h3>Case A · Medical Leave<span class="zh">A 案 · 病假</span></h3>
+  <p style="font-size:13.5px">Student → Instructor → Approved. Instructor may approve, reject, or request more
+    information. If duration &gt; 3 days, Registry countersignature is appended.
+    <span class="zh">學生 → 教師 → 核准。教師可核准、駁回或要求補充資料；超過 3 天則追加教務處會簽。</span></p>
+
+  <h3>Case B · Official University Activity<span class="zh">B 案 · 校方官方活動</span></h3>
+  <p style="font-size:13.5px">Event Coordinator → Auto Verification → Instructor Notification. No approval gate;
+    instructors receive the notice and resolve assessment conflicts only.
+    <span class="zh">活動協調員 → 自動核實 → 通知教師。無審批關卡，教師僅接收通知並處理考評衝突。</span></p>
+
+  <h3>Case C · Absence &gt; 7 days<span class="zh">C 案 · 請假超過 7 天</span></h3>
+  <p style="font-size:13.5px">Student → Program Office → Academic Registry → Instructor. Registry may impose
+    conditions (e.g. coursework plan, minimum attendance). Instructor handles assessment accommodation.
+    <span class="zh">學生 → 項目辦公室 → 教務處 → 教師。教務處可附加條件（如修課計劃、最低出席要求）；教師負責學業便利安排。</span></p>
+
+  <table style="margin-top:14px">
+    <thead><tr><th>Route<span class="zh">路由</span></th><th>Trigger<span class="zh">觸發條件</span></th>
+      <th>Steps<span class="zh">步驟</span></th><th>End-to-end SLA<span class="zh">整體時限</span></th></tr></thead>
+    <tbody>
+      <tr><td>A-MED</td><td>Medical ≤ 3 days</td><td>Instructor</td><td>24 h</td></tr>
+      <tr><td>A-MED-L</td><td>Medical &gt; 3 days</td><td>Instructor → Registry</td><td>48 h</td></tr>
+      <tr><td>B-OFFICIAL</td><td>On endorsed activity roster</td><td>Auto-verify → notify instructors</td><td>Instant</td></tr>
+      <tr><td>C-LONG</td><td>Any category &gt; 7 days</td><td>Program Office → Registry → Instructor</td><td>5 working days</td></tr>
+      <tr><td>S-STANDARD</td><td>Default (personal, conference, bereavement…)</td><td>Advisor → Instructor</td><td>48 h</td></tr>
+      <tr><td>X-MANUAL</td><td>Office re-routes "Other"</td><td>Defined per case</td><td>72 h</td></tr>
+    </tbody>
+  </table>
+
+  <p class="note"><b>Escalation（升級機制）:</b> if a step exceeds 50% of its SLA, a reminder is sent; at 100%,
+    the step is escalated to the approver's delegate and the Program Office is notified. Requests still open after
+    150% of SLA are auto-escalated to the Academic Registry.
+    <span class="zh">若某步驟用時達 SLA 五成，發送提醒；達 100% 則升級至審批人的代理人並通知項目辦公室；超過 SLA 150% 仍未處理者自動升級至教務處。</span></p>
+</div>
+
+<!-- 8 -->
+<div class="card" id="s8">
+  <h2>8. Notification System<span class="zh">通知系統</span></h2>
+  <table>
+    <thead><tr><th>Event<span class="zh">事件</span></th><th>Student</th><th>Instructor</th><th>Program Office</th><th>Registry</th><th>Advisor</th><th>Channels<span class="zh">渠道</span></th></tr></thead>
+    <tbody>
+      <tr><td>Submission<span class="zh">提交申請</span></td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>✓</td><td>Email + In-app + Push</td></tr>
+      <tr><td>Approval<span class="zh">核准</span></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>Email + In-app + Push + Teams</td></tr>
+      <tr><td>Rejection<span class="zh">駁回</span></td><td>✓</td><td>—</td><td>✓</td><td>—</td><td>✓</td><td>Email + In-app + Push + SMS*</td></tr>
+      <tr><td>Request for more info<span class="zh">要求補充資料</span></td><td>✓</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Email + In-app + Push</td></tr>
+      <tr><td>Accommodation decision<span class="zh">學業便利決定</span></td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>Email + In-app + Teams</td></tr>
+      <tr><td>Make-up scheduled<span class="zh">補考已安排</span></td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>—</td><td>Email + Calendar invite + Push</td></tr>
+      <tr><td>SLA reminder / escalation<span class="zh">SLA 提醒／升級</span></td><td>—</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>Teams + Email</td></tr>
+      <tr><td>Early-warning alert<span class="zh">預警觸發</span></td><td>—</td><td>—</td><td>✓</td><td>—</td><td>✓</td><td>Teams + Email</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--muted)">
+    Channels: Email (Exchange Online / SMTP) · Mobile Push (FCM/APNs) · SMS (Azure Communication Services)* ·
+    Microsoft Teams (Adaptive Cards via Graph) · WeChat (WeChat Work / 企業微信, Phase 2).
+    <span class="zh">渠道：電郵（Exchange Online／SMTP）· 手機推送（FCM／APNs）· 短信（Azure Communication Services）* · Microsoft Teams（Graph 自適應卡片）· 微信（企業微信，第二期）。</span>
+    * SMS reserved for rejection and SLA escalation only, to control cost.
+    <span class="zh">* 短信僅用於駁回與 SLA 升級，以控制成本。</span></p>
+</div>
+
+<!-- 9 -->
+<div class="card" id="s9">
+  <h2>9. Dashboards<span class="zh">看板設計</span></h2>
+  <div class="grid g3">
+    <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+      <h4>Student Dashboard<span class="zh">學生看板</span></h4>
+      <ul class="dot" style="font-size:13px;margin:0">
+        <li>Active requests &amp; current step owner<span class="zh">進行中申請與當前負責人</span></li>
+        <li>Approved / denied counts this term<span class="zh">本學期核准／駁回數</span></li>
+        <li>Missed assessments &amp; pending make-up<span class="zh">已錯過考評與待補安排</span></li>
+        <li>Upcoming deadlines (extended assignments)<span class="zh">即將到期（已延期作業）</span></li>
+        <li>Absence rate vs. 10% threshold<span class="zh">缺席率對照 10% 門檻</span></li>
+      </ul>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+      <h4>Instructor Dashboard<span class="zh">教師看板</span></h4>
+      <ul class="dot" style="font-size:13px;margin:0">
+        <li>Pending requests, split by overdue / due<span class="zh">待辦申請，區分逾期／未逾期</span></li>
+        <li>Upcoming conflicts for own sections<span class="zh">所授班級的即將發生衝突</span></li>
+        <li>Student attendance summary per section<span class="zh">各班級學生出席摘要</span></li>
+        <li>Median decision turnaround<span class="zh">決策中位時長</span></li>
+        <li>Bulk actions for low-risk requests<span class="zh">低風險申請批量處理</span></li>
+      </ul>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+      <h4>Program Office Dashboard<span class="zh">項目辦公室看板</span></h4>
+      <ul class="dot" style="font-size:13px;margin:0">
+        <li>Department statistics (volume, category mix)<span class="zh">院系統計（申請量、類別分佈）</span></li>
+        <li>Absence trends (weekly / monthly)<span class="zh">缺席趨勢（週／月）</span></li>
+        <li>Risk alerts &amp; at-risk student list<span class="zh">風險預警與風險學生名單</span></li>
+        <li>Approval turnaround by approver<span class="zh">按審批人之處理時長</span></li>
+        <li>Official activity participation<span class="zh">官方活動參與統計</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 10 -->
+<div class="card" id="s10">
+  <h2>10. Early Warning System<span class="zh">預警系統</span></h2>
+  <table>
+    <thead><tr><th>Rule<span class="zh">規則</span></th><th>Trigger<span class="zh">觸發條件</span></th>
+      <th>Action<span class="zh">動作</span></th><th>Owner<span class="zh">責任方</span></th><th style="width:70px">Phase</th></tr></thead>
+    <tbody>
+      <tr><td>EW-1 High absence rate<span class="zh">缺席率偏高</span></td><td>Term absence &gt; 10% of scheduled sessions in any course<span class="zh">任一課程本學期缺席超過總節次的 10%</span></td><td>Flag student; notify advisor + Program Office<span class="zh">標記學生，通知導師與項目辦公室</span></td><td>Program Office</td><td><span class="must">P1</span></td></tr>
+      <tr><td>EW-2 Consecutive absence<span class="zh">連續缺席</span></td><td>≥ 3 consecutive sessions missed in one course<span class="zh">同一課程連續缺席達 3 節</span></td><td>Notify instructor + advisor within 24 h<span class="zh">24 小時內通知教師與導師</span></td><td>Instructor</td><td><span class="must">P1</span></td></tr>
+      <tr><td>EW-3 Repeated medical pattern<span class="zh">病假頻繁</span></td><td>≥ 3 medical leaves in one term, or clustering near assessments<span class="zh">單學期病假 ≥3 次，或集中於考評前後</span></td><td>Confidential flag to Student Affairs for wellbeing check<span class="zh">保密標記轉學生事務處關懷</span></td><td>Student Affairs</td><td><span class="should">P2</span></td></tr>
+      <tr><td>EW-4 Assessment conflict load<span class="zh">考評衝突過多</span></td><td>≥ 2 conflicts in one course, or ≥ 5 in a term<span class="zh">同一課程 ≥2 次，或單學期 ≥5 次衝突</span></td><td>Require Program Office review before further approvals<span class="zh">後續核准前須由項目辦公室覆核</span></td><td>Program Office</td><td><span class="should">P2</span></td></tr>
+      <tr><td>EW-5 Composite risk score<span class="zh">綜合風險評分</span></td><td>Weighted score (absence rate, conflicts, late submissions, GPA trend) above threshold<span class="zh">加權評分（缺席率、衝突、遲交、GPA 走勢）超門檻</span></td><td>Case opened; advisor assigned follow-up task<span class="zh">開立個案，指派導師跟進</span></td><td>Advisor</td><td><span class="could">P3</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note warn">Privacy safeguard: medical and wellbeing flags are <b>never</b> exposed to instructors or
+    other students. Only the Student Affairs Office and the student's advisor see category-level detail; instructors
+    see only "approved / excused" and the accommodations they must apply.
+    <span class="zh">私隱保障：病假與身心健康標記<b>絕不</b>向任課教師或其他學生揭露。僅學生事務處與該生導師可見類別層級的細節；教師只會看到「已核准／已豁免」及其須執行的便利安排。</span></p>
+</div>
+
+<!-- 11 -->
+<div class="card" id="s11">
+  <h2>11. Analytics Reports<span class="zh">分析報表</span></h2>
+  <table>
+    <thead><tr><th>Report<span class="zh">報表</span></th><th>Content<span class="zh">內容</span></th>
+      <th>Cadence<span class="zh">週期</span></th><th>Audience<span class="zh">對象</span></th></tr></thead>
+    <tbody>
+      <tr><td>Monthly absence report<span class="zh">月度缺席報告</span></td><td>Volume by department, category, duration; approval rate<span class="zh">按院系／類別／天數的申請量與核准率</span></td><td>Monthly</td><td>Registry, Program Offices</td></tr>
+      <tr><td>Faculty workload report<span class="zh">教師工作量報告</span></td><td>Requests handled, median turnaround, escalation count<span class="zh">處理量、中位時長、升級次數</span></td><td>Monthly / Termly</td><td>Program Offices, Department Heads</td></tr>
+      <tr><td>Approval turnaround<span class="zh">審批時效</span></td><td>Per-step and end-to-end SLA attainment, bottleneck steps<span class="zh">逐步與整體 SLA 達成率、瓶頸步驟</span></td><td>Weekly</td><td>Registry, Admin</td></tr>
+      <tr><td>Absence reasons<span class="zh">請假原因分佈</span></td><td>Top categories, seasonal patterns, cohort comparison<span class="zh">主要類別、季節性規律、年級對比</span></td><td>Termly</td><td>Student Affairs, Registry</td></tr>
+      <tr><td>Activity participation<span class="zh">官方活動參與</span></td><td>Events, participants, student-days excused, by unit<span class="zh">活動數、參與人次、豁免學生天數，按單位統計</span></td><td>Termly</td><td>Student Affairs, Sports, Registry</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--muted)">All reports are generated from a read replica and are exportable to
+    CSV/XLSX and PDF; every report records the filter set used so results are reproducible.
+    <span class="zh">所有報表由唯讀副本產出，可匯出 CSV／XLSX／PDF；每份報表均記錄所使用篩選條件，確保結果可重現。</span></p>
+</div>
+
+<!-- 12 -->
+<div class="card" id="s12">
+  <h2>12. User Stories<span class="zh">用戶故事</span></h2>
+  <div class="grid g2">
+    <div class="story"><span class="id">US-01</span> As a <b>student</b>, I want to submit one absence request
+      covering all affected courses, so that I don't have to email each instructor.
+      <span class="zh">作為學生，我希望提交一次申請即涵蓋所有受影響課程，毋須逐封電郵通知教師。</span>
+      <p class="ac"><b>Acceptance:</b> On submit, system lists affected sessions and creates one conflict record
+        per assessment clash. <span class="zh">驗收：提交後系統列出受影響課節，並為每個考評衝突建立紀錄。</span></p></div>
+
+    <div class="story"><span class="id">US-02</span> As a <b>student</b>, I want to upload a medical certificate,
+      so that my sick leave is verified without visiting an office.
+      <span class="zh">作為學生，我希望上傳醫生證明，不必親赴辦公室即可完成核實。</span>
+      <p class="ac"><b>Acceptance:</b> PDF/JPG/PNG ≤10 MB accepted; virus-scanned; stored encrypted in Blob with
+        7-year retention. <span class="zh">驗收：接受 ≤10MB 的 PDF／JPG／PNG；經病毒掃描；加密存放於 Blob，保存 7 年。</span></p></div>
+
+    <div class="story"><span class="id">US-03</span> As a <b>student</b>, I want to see who is currently reviewing my
+      request, so that I know when to expect a decision.
+      <span class="zh">作為學生，我希望知道目前由誰審批，以便預期結果時間。</span>
+      <p class="ac"><b>Acceptance:</b> Timeline shows each step, owner, and SLA countdown.
+        <span class="zh">驗收：時間軸顯示每一步驟、負責人與 SLA 倒數。</span></p></div>
+
+    <div class="story"><span class="id">US-04</span> As a <b>student</b> on an official team roster, I want my absence
+      auto-verified, so that I don't upload proof each time.
+      <span class="zh">作為官方隊伍名單內的學生，我希望請假自動核實，毋須每次上傳證明。</span>
+      <p class="ac"><b>Acceptance:</b> Selecting an endorsed activity removes the document requirement; request is
+        approved with "auto-verified" provenance. <span class="zh">驗收：選取已核准活動後免除文件要求；申請以「自動核實」來源核准。</span></p></div>
+
+    <div class="story"><span class="id">US-05</span> As a <b>student</b>, I want to track granted extensions and
+      make-up tests in one place, so that I don't miss a new deadline.
+      <span class="zh">作為學生，我希望集中查看已批的延期與補考，避免錯過新期限。</span>
+      <p class="ac"><b>Acceptance:</b> Dashboard lists new deadlines &amp; make-up schedule with countdown.
+        <span class="zh">驗收：看板列出新期限與補考安排，附倒數提示。</span></p></div>
+
+    <div class="story"><span class="id">US-06</span> As a <b>student</b>, I want to withdraw a request before it is
+      decided, so that a cancelled plan doesn't count against me.
+      <span class="zh">作為學生，我希望在決定前撤回申請，避免已取消的計劃仍被計算。</span>
+      <p class="ac"><b>Acceptance:</b> Withdraw allowed until first approval; status becomes Withdrawn; instructors
+        notified. <span class="zh">驗收：首次核准前可撤回；狀態轉為「已撤回」並通知教師。</span></p></div>
+
+    <div class="story"><span class="id">US-07</span> As an <b>instructor</b>, I want a single queue of pending requests
+      with full context, so that I can decide in one pass.
+      <span class="zh">作為教師，我希望在單一佇列中看到完整上下文的待辦，一次完成決策。</span>
+      <p class="ac"><b>Acceptance:</b> Queue shows student, category, dates, documents, affected assessments,
+        student's term absence rate. <span class="zh">驗收：佇列顯示學生、類別、日期、文件、受影響考評與該生本學期缺席率。</span></p></div>
+
+    <div class="story"><span class="id">US-08</span> As an <b>instructor</b>, I want to grant a make-up assessment
+      with date and venue, so that the student knows exactly what to do.
+      <span class="zh">作為教師，我希望指定補考的日期與地點，讓學生清楚知道安排。</span>
+      <p class="ac"><b>Acceptance:</b> Make-up option records date/venue/mode; calendar invite sent to student.
+        <span class="zh">驗收：補考方案記錄日期／地點／形式，並向學生發出行事曆邀請。</span></p></div>
+
+    <div class="story"><span class="id">US-09</span> As an <b>instructor</b>, I want to redistribute assessment weight,
+      so that an excused student is assessed fairly without a make-up.
+      <span class="zh">作為教師，我希望重新分配考評權重，使獲豁免學生毋須補考亦獲公平評核。</span>
+      <p class="ac"><b>Acceptance:</b> New weights sum to 100% and are recorded with effective date.
+        <span class="zh">驗收：新權重總和為 100%，並記錄生效日期。</span></p></div>
+
+    <div class="story"><span class="id">US-10</span> As an <b>instructor</b>, I want to request more information,
+      so that I don't reject a legitimate request on incomplete evidence.
+      <span class="zh">作為教師，我希望要求補充資料，避免因資料不足而駁回合理申請。</span>
+      <p class="ac"><b>Acceptance:</b> Request returns to student, SLA pauses, student can respond without
+        re-submitting. <span class="zh">驗收：申請退回學生、SLA 暫停，學生可直接回應毋須重新提交。</span></p></div>
+
+    <div class="story"><span class="id">US-11</span> As a <b>Program Office</b> user, I want department-wide absence
+      statistics, so that I can spot trends early.
+      <span class="zh">作為項目辦公室人員，我希望掌握全院缺席統計，及早發現趨勢。</span>
+      <p class="ac"><b>Acceptance:</b> Dashboard shows volume, category mix, trend chart, filterable by
+        programme/cohort. <span class="zh">驗收：看板顯示申請量、類別分佈、趨勢圖，可按項目／年級篩選。</span></p></div>
+
+    <div class="story"><span class="id">US-12</span> As a <b>Program Office</b> user, I want risk alerts, so that I can
+      intervene before a student fails.
+      <span class="zh">作為項目辦公室人員，我希望收到風險預警，在學生不及格前介入。</span>
+      <p class="ac"><b>Acceptance:</b> EW-1..EW-5 alerts appear in a queue with student context.
+        <span class="zh">驗收：EW-1 至 EW-5 預警於佇列中顯示並附學生脈絡。</span></p></div>
+
+    <div class="story"><span class="id">US-13</span> As an <b>Academic Registry</b> user, I want to review absences
+      longer than 7 days, so that policy is consistently applied.
+      <span class="zh">作為教務處人員，我希望覆核七天以上請假，確保政策一致執行。</span>
+      <p class="ac"><b>Acceptance:</b> Case C queue lists all &gt;7-day requests with conditions field.
+        <span class="zh">驗收：C 案佇列列出所有七天以上申請，附「附加條件」欄位。</span></p></div>
+
+    <div class="story"><span class="id">US-14</span> As a <b>Registry</b> user, I want to change policy thresholds
+      without a release, so that rules follow academic calendar changes.
+      <span class="zh">作為教務處人員，我希望毋須發版即可調整政策門檻，使規則跟隨校曆變動。</span>
+      <p class="ac"><b>Acceptance:</b> Config UI edits thresholds/SLA/routing; changes versioned and audited.
+        <span class="zh">驗收：配置介面可編輯門檻／SLA／路由；變更具版本並記錄審計。</span></p></div>
+
+    <div class="story"><span class="id">US-15</span> As a <b>Student Affairs</b> user, I want welfare flags for
+      repeated medical leave, so that I can offer support.
+      <span class="zh">作為學生事務處人員，我希望獲悉頻繁病假的關懷標記，以便提供支援。</span>
+      <p class="ac"><b>Acceptance:</b> EW-3 creates a confidential case; instructors see no medical detail.
+        <span class="zh">驗收：EW-3 建立保密個案；教師看不到任何醫療細節。</span></p></div>
+
+    <div class="story"><span class="id">US-16</span> As a <b>Sports Team Coordinator</b>, I want to upload a roster
+      once per season, so that athletes are covered for all fixtures.
+      <span class="zh">作為運動隊協調員，我希望每季上傳一次名單，使運動員全季賽事均獲覆蓋。</span>
+      <p class="ac"><b>Acceptance:</b> CSV upload matches by student ID; unmatched rows flagged; roster snapshot
+        timestamped. <span class="zh">驗收：CSV 按學號比對，無法匹配者標記，名單快照附時間戳。</span></p></div>
+
+    <div class="story"><span class="id">US-17</span> As an <b>Event Organizer</b>, I want to register an official
+      activity with dates, so that participants are auto-verified.
+      <span class="zh">作為活動負責人，我希望登記官方活動與日期，使參與者自動核實。</span>
+      <p class="ac"><b>Acceptance:</b> Activity requires Program Office endorsement before rosters verify.
+        <span class="zh">驗收：活動須經項目辦公室核准，名單方可生效核實。</span></p></div>
+
+    <div class="story"><span class="id">US-18</span> As an <b>Academic Advisor</b>, I want an advisee timeline, so
+      that I can discuss academic impact in our meetings.
+      <span class="zh">作為學術導師，我希望查看導生的請假時間軸，以便在會談中討論學業影響。</span>
+      <p class="ac"><b>Acceptance:</b> Advisee list shows term absence rate, conflicts, accommodations.
+        <span class="zh">驗收：導生清單顯示本學期缺席率、衝突與已批便利安排。</span></p></div>
+
+    <div class="story"><span class="id">US-19</span> As an <b>administrator</b>, I want role-based access control,
+      so that sensitive data is only visible to authorised roles.
+      <span class="zh">作為系統管理員，我希望具備角色權限控制，使敏感資料僅供授權角色查看。</span>
+      <p class="ac"><b>Acceptance:</b> RBAC matrix enforced server-side; every read of sensitive fields audited.
+        <span class="zh">驗收：RBAC 矩陣於伺服器端強制執行；敏感欄位的每次讀取均記入審計。</span></p></div>
+
+    <div class="story"><span class="id">US-20</span> As an <b>administrator</b>, I want an immutable audit log, so
+      that any decision can be reconstructed.
+      <span class="zh">作為系統管理員，我希望有不可竄改的操作日誌，使任何決定都可還原。</span>
+      <p class="ac"><b>Acceptance:</b> Append-only log with actor, action, timestamp, before/after hash chain.
+        <span class="zh">驗收：僅可追加的日誌，含操作者、動作、時間戳與前後雜湊鏈。</span></p></div>
+
+    <div class="story"><span class="id">US-21</span> As a <b>student</b>, I want notifications in my preferred
+      channel, so that I don't miss a decision because I didn't check email.
+      <span class="zh">作為學生，我希望以偏好渠道接收通知，避免因未查電郵而錯過結果。</span>
+      <p class="ac"><b>Acceptance:</b> Channel preferences configurable per event type.
+        <span class="zh">驗收：可按事件類型設定通知渠道偏好。</span></p></div>
+
+    <div class="story"><span class="id">US-22</span> As an <b>instructor</b>, I want a Teams card with approve/reject
+      buttons, so that I can decide without opening the app.
+      <span class="zh">作為教師，我希望在 Teams 收到含核准／駁回按鈕的卡片，毋須開啟系統即可決策。</span>
+      <p class="ac"><b>Acceptance:</b> Adaptive Card actions call the API with the instructor's token.
+        <span class="zh">驗收：自適應卡片的動作以教師憑證呼叫 API。</span></p></div>
+
+    <div class="story"><span class="id">US-23</span> As a <b>student</b>, I want the interface in English or Chinese,
+      so that I can work in my preferred language.
+      <span class="zh">作為學生，我希望介面支援中英文，以便使用慣用語言。</span>
+      <p class="ac"><b>Acceptance:</b> Full zh-CN / en (and zh-HK in Phase 2) locale coverage; dates follow locale.
+        <span class="zh">驗收：完整覆蓋簡中／英文（第二期增繁中）；日期格式依語系顯示。</span></p></div>
+
+    <div class="story"><span class="id">US-24</span> As a <b>student with a disability</b>, I want the system to meet
+      WCAG 2.1 AA, so that I can complete a request independently.
+      <span class="zh">作為有障礙需要的學生，我希望系統符合 WCAG 2.1 AA，以便獨立完成申請。</span>
+      <p class="ac"><b>Acceptance:</b> Keyboard navigable, 4.5:1 contrast, screen-reader labels, no colour-only
+        status. <span class="zh">驗收：可純鍵盤操作、對比度 4.5:1、具螢幕閱讀器標籤、狀態不單靠顏色表達。</span></p></div>
+  </div>
+</div>
+
+<!-- 13 -->
+<div class="card" id="s13">
+  <h2>13. Use Cases<span class="zh">用例</span></h2>
+  <table>
+    <thead><tr><th style="width:70px">ID</th><th>Use case<span class="zh">用例</span></th>
+      <th>Actor<span class="zh">參與者</span></th><th>Main flow<span class="zh">主要流程</span></th>
+      <th>Alternative / exception<span class="zh">替代／例外流程</span></th></tr></thead>
+    <tbody>
+      <tr><td>UC-01</td><td>Submit medical leave<span class="zh">提交病假</span></td><td>Student</td>
+        <td>Select Medical → dates → upload certificate → submit → route A-MED created → instructor notified<span class="zh">選病假 → 填日期 → 上傳證明 → 提交 → 建立 A-MED 路由 → 通知教師</span></td>
+        <td>No certificate ⇒ blocked with explanation; &gt;3 days ⇒ Registry step added<span class="zh">無證明則攔截並說明；超過 3 天則加入教務處步驟</span></td></tr>
+      <tr><td>UC-02</td><td>Submit official-activity absence<span class="zh">提交官方活動請假</span></td><td>Student</td>
+        <td>Select endorsed activity → system matches roster → auto-verify → instructors notified only<span class="zh">選取已核准活動 → 系統比對名單 → 自動核實 → 僅通知教師</span></td>
+        <td>Not on roster ⇒ falls back to standard route, document required<span class="zh">不在名單內則退回標準路由並要求證明</span></td></tr>
+      <tr><td>UC-03</td><td>Request &gt; 7 days<span class="zh">申請七天以上請假</span></td><td>Student</td>
+        <td>Submit → C-LONG route → Program Office → Registry → instructors resolve conflicts<span class="zh">提交 → C-LONG 路由 → 項目辦公室 → 教務處 → 教師處理衝突</span></td>
+        <td>Registry imposes conditions; student must acknowledge before final approval<span class="zh">教務處附加條件；學生須確認後方完成核准</span></td></tr>
+      <tr><td>UC-04</td><td>Instructor decision<span class="zh">教師決策</span></td><td>Instructor</td>
+        <td>Open queue → review context → choose accommodation per conflict → submit decision<span class="zh">開啟佇列 → 檢視脈絡 → 為每個衝突選擇方案 → 提交決定</span></td>
+        <td>Reject requires reason; "more info" returns request and pauses SLA<span class="zh">駁回須填理由；「要求補充」退回申請並暫停 SLA</span></td></tr>
+      <tr><td>UC-05</td><td>Schedule make-up<span class="zh">安排補考</span></td><td>Instructor</td>
+        <td>Choose make-up → set date/venue/mode → system creates calendar invite → student notified<span class="zh">選補考 → 設定日期地點形式 → 系統建立行事曆邀請 → 通知學生</span></td>
+        <td>Venue unavailable ⇒ instructor records "to be confirmed"; reminder at T-7 days<span class="zh">場地未定則記錄「待確認」，並於 7 天前提醒</span></td></tr>
+      <tr><td>UC-06</td><td>Manage official activity<span class="zh">管理官方活動</span></td><td>Event Organizer / Sports Coordinator</td>
+        <td>Create activity → upload roster → Program Office endorses → rosters verifiable<span class="zh">建立活動 → 上傳名單 → 項目辦公室核准 → 名單可供核實</span></td>
+        <td>Unmatched student IDs listed for correction; endorsement rejected with reason<span class="zh">列出無法匹配的學號供修正；核准被駁回時附理由</span></td></tr>
+      <tr><td>UC-07</td><td>Monitor at-risk student<span class="zh">監察風險學生</span></td><td>Program Office / Advisor</td>
+        <td>Early-warning rule fires → case created → advisor assigned → follow-up recorded<span class="zh">預警規則觸發 → 建立個案 → 指派導師 → 記錄跟進</span></td>
+        <td>False positive ⇒ advisor closes case with reason; rule threshold reviewed<span class="zh">誤報則導師填理由結案，並覆核規則門檻</span></td></tr>
+      <tr><td>UC-08</td><td>Audit a decision<span class="zh">審計某項決定</span></td><td>Administrator / Registry</td>
+        <td>Search request → view hash-chained log → export evidence pack (PDF)<span class="zh">搜尋申請 → 檢視雜湊鏈日誌 → 匯出證據包（PDF）</span></td>
+        <td>Log integrity check fails ⇒ security incident raised<span class="zh">日誌完整性校驗失敗則啟動安全事件</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 14 -->
+<div class="card" id="s14">
+  <h2>14. Business Process Flows<span class="zh">業務流程圖</span></h2>
+
+  <h4>Case A · Medical Leave<span class="zh">A 案 · 病假</span></h4>
+  <pre class="light">Student                System                 Instructor              Registry
+  │                       │                        │                      │
+  ├─ Submit + cert ──────►│                        │                      │
+  │                       ├─ Resolve courses       │                      │
+  │                       ├─ Create conflicts      │                      │
+  │                       ├─ Route A-MED ─────────►│                      │
+  │                       │                        ├─ Approve / Reject /  │
+  │                       │                        │  Request more info   │
+  │                       │◄───── decision ────────┤                      │
+  │                       │                        │                      │
+  │                       ├─ if &gt;3 days ─────────────────────────────────►│
+  │                       │                        │                      ├─ Countersign
+  │◄── Notification ──────┤                        │                      │
+  │     (Email/Push/Teams)│                        │                      │
+  </pre>
+
+  <h4>Case B · Official University Activity<span class="zh">B 案 · 校方官方活動</span></h4>
+  <pre class="light">Coordinator            System                  Instructors
+  │                       │                        │
+  ├─ Create activity ────►│                        │
+  ├─ Upload roster ──────►├─ Match student IDs     │
+  │                       ├─ Snapshot + timestamp  │
+  │                       │                        │
+  │                    Program Office endorses     │
+  │                       │                        │
+  │                    Student submits             │
+  │                       ├─ Roster match? ─── yes ┤
+  │                       ├─ AUTO-VERIFY           │
+  │                       ├─ Notify only ─────────►│ (no approval gate)
+  │                       │                        ├─ Resolve conflicts
+  │                       │                        │
+  │                       └─ no → standard route, document required
+  </pre>
+
+  <h4>Case C · Absence &gt; 7 days<span class="zh">C 案 · 請假超過 7 天</span></h4>
+  <pre class="light">Student        Program Office        Academic Registry       Instructors
+  │                  │                       │                     │
+  ├─ Submit ────────►│                       │                     │
+  │                  ├─ Review / conditions  │                     │
+  │                  ├─ Forward ────────────►│                     │
+  │                  │                       ├─ Policy compliance  │
+  │◄── Conditions ───┤                       ├─ Forward ──────────►│
+  ├─ Acknowledge ───►│                       │                     ├─ Resolve conflicts
+  │                  │                       │                     ├─ Accommodation
+  │◄──────────── Final approval + notifications ───────────────────┤
+  </pre>
+</div>
+
+<!-- 15 -->
+<div class="card" id="s15">
+  <h2>15. Non-Functional Requirements &amp; KPIs<span class="zh">非功能需求與指標</span></h2>
+  <div class="grid g2">
+    <div>
+      <h4>Non-functional requirements<span class="zh">非功能需求</span></h4>
+      <table class="tight">
+        <tbody>
+          <tr><td>Availability<span class="zh">可用性</span></td><td>99.5% during term; 99.9% target in Phase 2<span class="zh">學期內 99.5%；第二期目標 99.9%</span></td></tr>
+          <tr><td>Performance<span class="zh">效能</span></td><td>p95 &lt; 800 ms page, &lt; 400 ms API<span class="zh">p95 頁面 &lt;800ms、API &lt;400ms</span></td></tr>
+          <tr><td>Concurrency<span class="zh">併發</span></td><td>500 concurrent users; 2,000 submissions/hour peak (exam week)<span class="zh">500 並發；考試週峰值每小時 2,000 份提交</span></td></tr>
+          <tr><td>Accessibility<span class="zh">無障礙</span></td><td>WCAG 2.1 AA, audited each release<span class="zh">WCAG 2.1 AA，每次發版檢測</span></td></tr>
+          <tr><td>Internationalisation<span class="zh">國際化</span></td><td>zh-CN + en at launch; zh-HK Phase 2; RTL-ready layout<span class="zh">上線支援簡中＋英文；第二期增繁中；版面預留 RTL</span></td></tr>
+          <tr><td>Browsers<span class="zh">瀏覽器</span></td><td>Edge/Chrome/Safari/Firefox latest 2 versions; iOS 16+, Android 11+<span class="zh">Edge／Chrome／Safari／Firefox 最近兩版；iOS 16+、Android 11+</span></td></tr>
+          <tr><td>Recovery<span class="zh">災難恢復</span></td><td>RPO ≤ 15 min, RTO ≤ 4 h<span class="zh">RPO ≤15 分鐘、RTO ≤4 小時</span></td></tr>
+          <tr><td>Data residency<span class="zh">資料存放地</span></td><td>Azure China (Shanghai/Beijing) or Hong Kong region per policy<span class="zh">按政策存放於 Azure 中國（上海／北京）或香港區域</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h4>Product KPIs<span class="zh">產品指標</span></h4>
+      <table class="tight">
+        <tbody>
+          <tr><td>Adoption<span class="zh">採用率</span></td><td>≥ 90% of absence requests via SAAS by end of Term 2<span class="zh">第二學期末前 90% 申請經系統提交</span></td></tr>
+          <tr><td>Speed<span class="zh">速度</span></td><td>Median instructor decision ≤ 24 h<span class="zh">教師決策中位 ≤24 小時</span></td></tr>
+          <tr><td>Student effort<span class="zh">學生耗時</span></td><td>Submission completion ≤ 5 min (median)<span class="zh">完成提交中位 ≤5 分鐘</span></td></tr>
+          <tr><td>Compliance<span class="zh">合規</span></td><td>100% of requests with complete audit trail<span class="zh">100% 申請具完整審計軌跡</span></td></tr>
+          <tr><td>Conflict resolution<span class="zh">衝突處理</span></td><td>100% of detected conflicts resolved within 5 working days<span class="zh">100% 偵測到的衝突於 5 個工作日內處理完畢</span></td></tr>
+          <tr><td>Satisfaction<span class="zh">滿意度</span></td><td>Student &amp; instructor CSAT ≥ 4.0 / 5<span class="zh">學生與教師滿意度 ≥4.0／5</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="font-size:13px">Measurement: product analytics events + quarterly survey; KPI dashboard
+        shared with the steering committee.
+        <span class="zh">量測方式：產品分析事件＋季度問卷；指標看板定期提交指導委員會。</span></p>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="foot"><div class="in">
+  <span>SAAS PRD v1.0 · HKUST(GZ) · Confidential</span>
+  <span>產品需求文件 v1.0 · 僅供校內評審</span>
+</div></div>
+</body>
+</html>

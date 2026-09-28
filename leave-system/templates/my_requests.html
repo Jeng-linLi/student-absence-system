@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}我的假單 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>我的假單</h1>
+
+<div class="card">
+  <div class="actions" style="margin:0 0 12px">
+    <a class="btn sm {{ 'ghost' if filter_status != '' }}" href="{{ url_for('my_requests') }}">全部</a>
+    <a class="btn sm {{ '' if filter_status == 'pending' else 'ghost' }}" href="{{ url_for('my_requests', status='pending') }}">審批中</a>
+    <a class="btn sm {{ '' if filter_status == 'approved' else 'ghost' }}" href="{{ url_for('my_requests', status='approved') }}">已核准</a>
+    <a class="btn sm {{ '' if filter_status == 'rejected' else 'ghost' }}" href="{{ url_for('my_requests', status='rejected') }}">已駁回</a>
+    <a class="btn sm {{ '' if filter_status == 'withdrawn' else 'ghost' }}" href="{{ url_for('my_requests', status='withdrawn') }}">已撤回</a>
+    <span style="flex:1"></span>
+    <a class="btn" href="{{ url_for('new_request') }}">＋ 提交假單</a>
+  </div>
+
+  {% if requests %}
+  <table>
+    <thead><tr><th>#</th><th>假別</th><th>起訖</th><th class="tnum">天數</th>
+      <th>狀態</th><th class="tnum">提交時間</th><th></th></tr></thead>
+    <tbody>
+    {% for r in requests %}
+      <tr>
+        <td class="mono">{{ r.id }}</td>
+        <td>{{ r.type_name }}</td>
+        <td class="tnum">{{ r.start_date }}
+          {{ '上午' if r.start_period=='AM' else '下午' }} →
+          {{ r.end_date }} {{ '上午' if r.end_period=='AM' else '下午' }}</td>
+        <td class="tnum">{{ r.days }}</td>
+        <td><span class="tag {{ STATUS_TONE[r.status] }}">{{ status_view(r) }}</span></td>
+        <td class="tnum muted">{{ r.created_at }}</td>
+        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">查看</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="empty">這個分類下還沒有假單。</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}儀表板 · 線上請假系統{% endblock %}
+{% block content %}
+
+{% if current_user.role == 'student' %}
+  <h1>你好，{{ current_user.name }}</h1>
+  <div class="grid g3" style="margin-bottom:18px">
+    <div class="stat"><div class="n">{{ pending_mine }}</div><div class="l">審批中的假單</div></div>
+    <div class="stat"><div class="n">{{ my_leave_days }}</div><div class="l">已核准請假天數</div></div>
+    <div class="stat"><div class="n">{{ current_user.class_name or '—' }}</div><div class="l">班級</div></div>
+  </div>
+  <div class="actions" style="margin-bottom:18px">
+    <a class="btn" href="{{ url_for('new_request') }}">＋ 提交假單</a>
+    <a class="btn ghost" href="{{ url_for('my_requests') }}">查看我的假單</a>
+  </div>
+{% else %}
+  <h1>你好，{{ current_user.name }}</h1>
+  <div class="grid g4" style="margin-bottom:18px">
+    <div class="stat"><div class="n">{{ todo }}</div><div class="l">待我審批</div></div>
+    <div class="stat"><div class="n">{{ stats.pending }}</div><div class="l">全校審批中</div></div>
+    <div class="stat"><div class="n">{{ stats.approved }}</div><div class="l">已核准</div></div>
+    <div class="stat"><div class="n">{{ stats.rejected }}</div><div class="l">已駁回</div></div>
+  </div>
+  <div class="actions" style="margin-bottom:18px">
+    <a class="btn" href="{{ url_for('approvals') }}">去審批</a>
+    <a class="btn ghost" href="{{ url_for('stats') }}">統計報表</a>
+    <a class="btn ghost" href="{{ url_for('export_csv') }}">匯出 CSV</a>
+  </div>
+{% endif %}
+
+<div class="card">
+  <h3>{% if current_user.role == 'student' %}最近提交的假單{% else %}待處理的假單{% endif %}</h3>
+  {% if recent %}
+  <table>
+    <thead><tr>
+      <th>#</th>
+      {% if current_user.role != 'student' %}<th>學生</th>{% endif %}
+      <th>假別</th><th>起訖</th><th class="tnum">天數</th><th>狀態</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in recent %}
+      <tr>
+        <td class="mono">{{ r.id }}</td>
+        {% if current_user.role != 'student' %}
+          <td>{{ r.student_name }}<div class="muted">{{ r.class_name }}</div></td>
+        {% endif %}
+        <td>{{ r.type_name }}</td>
+        <td class="tnum">{{ r.start_date }} → {{ r.end_date }}</td>
+        <td class="tnum">{{ r.days }}</td>
+        <td><span class="tag {{ STATUS_TONE[r.status] }}">{{ status_view(r) }}</span></td>
+        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">查看</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="empty">目前沒有記錄。</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>審批規則</h3>
+  <p class="muted" style="margin:0">
+    · 請假 ≤ {{ FACULTY_THRESHOLD_DAYS }} 天：導師核准即生效。<br>
+    · 請假 &gt; {{ FACULTY_THRESHOLD_DAYS }} 天，或假別標記為「需院系審批」（如公假、喪假）：導師核准後自動轉院系複核。<br>
+    · 病假必須上傳證明文件。
+  </p>
+</div>
+{% endblock %}

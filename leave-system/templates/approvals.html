@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}審批 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>{{ '全部假單' if scope == 'all' else '待我審批' }}</h1>
+
+<div class="card">
+  <div class="actions" style="margin:0 0 12px">
+    <a class="btn sm {{ '' if scope=='todo' else 'ghost' }}" href="{{ url_for('approvals', scope='todo') }}">待我審批</a>
+    <a class="btn sm {{ '' if scope=='all' else 'ghost' }}" href="{{ url_for('approvals', scope='all') }}">全部假單</a>
+    <span style="flex:1"></span>
+    <a class="btn ghost sm" href="{{ url_for('export_csv') }}">匯出 CSV</a>
+  </div>
+
+  {% if requests %}
+  <table>
+    <thead><tr><th>#</th><th>學生</th><th>假別</th><th>起訖</th>
+      <th class="tnum">天數</th><th>狀態</th><th class="tnum">提交</th><th></th></tr></thead>
+    <tbody>
+    {% for r in requests %}
+      <tr>
+        <td class="mono">{{ r.id }}</td>
+        <td>{{ r.student_name }}<div class="muted">{{ r.class_name }} · {{ r.department }}</div></td>
+        <td>{{ r.type_name }}</td>
+        <td class="tnum">{{ r.start_date }} → {{ r.end_date }}</td>
+        <td class="tnum">{{ r.days }}</td>
+        <td><span class="tag {{ STATUS_TONE[r.status] }}">{{ status_view(r) }}</span></td>
+        <td class="tnum muted">{{ r.created_at[:16] }}</td>
+        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">審批</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="empty">沒有需要處理的假單。</div>
+  {% endif %}
+</div>
+{% endblock %}

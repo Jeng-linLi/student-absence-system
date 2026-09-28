@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Data &amp; Security · SAAS</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top"><div class="in">
+  <div class="logo"><span class="mk">SA</span>SAAS<span class="zh" style="margin:0">學生請假與學業便利支援系統</span></div>
+  <nav class="nav">
+    <a href="index.html">Executive Summary<span class="zh">執行摘要</span></a>
+    <a href="prd.html">PRD &amp; Use Cases<span class="zh">需求與用例</span></a>
+    <a href="architecture.html">Architecture &amp; API<span class="zh">架構與 API</span></a>
+    <a class="on" href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
+    <a href="design.html">UI Design<span class="zh">介面設計</span></a>
+    <a href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+  </nav>
+  <span class="lang">EN / 中文</span>
+</div></header>
+
+<div class="wrap">
+
+<div class="pagehead"><h1>Database Design &amp; Security
+  <span class="zh">資料庫設計與安全</span></h1>
+  <p style="color:var(--ink-2)">PostgreSQL 15 · 20 tables · row-level security · hash-chained audit log ·
+    FERPA/GDPR-aligned classification.
+    <span class="zh">PostgreSQL 15 · 18 張表 · 列級安全 · 雜湊鏈審計日誌 · 對齊 FERPA／GDPR 的資料分級。</span></p>
+</div>
+
+<!-- ER -->
+<div class="card">
+  <h2>1. Entity Relationship Diagram<span class="zh">實體關係圖（ERD）</span></h2>
+  <svg viewBox="0 0 1000 460" style="width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:8px" role="img" aria-label="SAAS entity relationship diagram">
+    <defs>
+      <marker id="e1" markerWidth="9" markerHeight="9" refX="5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8A8886"/></marker>
+    </defs>
+
+    <!-- 分組容器 -->
+    <g fill="none" stroke="#D2D0CE" stroke-dasharray="5 4">
+      <rect x="14" y="14" width="256" height="372" rx="10"/>
+      <rect x="284" y="14" width="256" height="372" rx="10"/>
+      <rect x="554" y="14" width="212" height="372" rx="10"/>
+      <rect x="780" y="14" width="206" height="372" rx="10"/>
+    </g>
+    <g font-size="11" fill="#8A8886" font-weight="600">
+      <text x="24" y="30">PEOPLE 組織與人員</text>
+      <text x="294" y="30">CURRICULUM &amp; REQUESTS 課程與申請</text>
+      <text x="564" y="30">EVENTS &amp; CONFLICTS 活動與衝突</text>
+      <text x="790" y="30">SYSTEM 系統</text>
+    </g>
+
+    <g font-size="12.5">
+      <!-- Col1 -->
+      <rect x="30" y="40" width="224" height="48" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="42" y="62" fill="#0F6CBD" font-weight="600">departments</text>
+      <text x="42" y="79" fill="#424242" font-size="11">code, name_en/zh, parent_id</text>
+
+      <rect x="30" y="108" width="224" height="48" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="42" y="130" fill="#0F6CBD" font-weight="600">users</text>
+      <text x="42" y="147" fill="#424242" font-size="11">entra_oid, username, email, primary_role</text>
+
+      <rect x="30" y="176" width="224" height="48" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="42" y="198" fill="#0F6CBD" font-weight="600">user_roles</text>
+      <text x="42" y="215" fill="#424242" font-size="11">user_id, role, scope_type, scope_id</text>
+
+      <rect x="30" y="244" width="224" height="48" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="42" y="266" fill="#0F6CBD" font-weight="600">students</text>
+      <text x="42" y="283" fill="#424242" font-size="11">student_no, programme_code, advisor_id</text>
+
+      <rect x="30" y="312" width="224" height="48" rx="6" fill="#E8F1FB" stroke="#0F6CBD"/>
+      <text x="42" y="334" fill="#0F6CBD" font-weight="600">faculty</text>
+      <text x="42" y="351" fill="#424242" font-size="11">staff_no, title, delegate_id</text>
+
+      <!-- Col2 -->
+      <rect x="300" y="40" width="224" height="48" rx="6" fill="#E7F5EC" stroke="#0E7A3D"/>
+      <text x="312" y="62" fill="#0E7A3D" font-weight="600">courses</text>
+      <text x="312" y="79" fill="#424242" font-size="11">code, term, section, instructor_id</text>
+
+      <rect x="300" y="108" width="224" height="48" rx="6" fill="#E7F5EC" stroke="#0E7A3D"/>
+      <text x="312" y="130" fill="#0E7A3D" font-weight="600">assessments</text>
+      <text x="312" y="147" fill="#424242" font-size="11">course_id, type, date, weight_pct</text>
+
+      <rect x="300" y="176" width="224" height="48" rx="6" fill="#E7F5EC" stroke="#0E7A3D"/>
+      <text x="312" y="198" fill="#0E7A3D" font-weight="600">enrollments</text>
+      <text x="312" y="215" fill="#424242" font-size="11">student_id, course_id, status</text>
+
+      <rect x="300" y="244" width="224" height="48" rx="6" fill="#FDF5E3" stroke="#B8860B"/>
+      <text x="312" y="266" fill="#B8860B" font-weight="600">absence_requests</text>
+      <text x="312" y="283" fill="#424242" font-size="11">category, dates, days, status, route_code</text>
+
+      <rect x="300" y="312" width="224" height="48" rx="6" fill="#FDF5E3" stroke="#B8860B"/>
+      <text x="312" y="334" fill="#B8860B" font-weight="600">documents</text>
+      <text x="312" y="351" fill="#424242" font-size="11">blob_path, sha256, is_medical, scan_status</text>
+
+      <!-- Col3 -->
+      <rect x="570" y="40" width="180" height="48" rx="6" fill="#F0EBFA" stroke="#6C4AB6"/>
+      <text x="582" y="62" fill="#6C4AB6" font-weight="600">events</text>
+      <text x="582" y="79" fill="#424242" font-size="11">name, dates, status</text>
+
+      <rect x="570" y="108" width="180" height="48" rx="6" fill="#F0EBFA" stroke="#6C4AB6"/>
+      <text x="582" y="130" fill="#6C4AB6" font-weight="600">event_participants</text>
+      <text x="582" y="147" fill="#424242" font-size="11">event_id, student_id, added_at</text>
+
+      <rect x="570" y="196" width="180" height="48" rx="6" fill="#FBE9EA" stroke="#B10E1C"/>
+      <text x="582" y="218" fill="#B10E1C" font-weight="600">assessment_conflicts</text>
+      <text x="582" y="235" fill="#424242" font-size="11">request_id, course_id, type</text>
+
+      <rect x="570" y="264" width="180" height="48" rx="6" fill="#FBE9EA" stroke="#B10E1C"/>
+      <text x="582" y="286" fill="#B10E1C" font-weight="600">accommodations</text>
+      <text x="582" y="303" fill="#424242" font-size="11">type, make_up_date, weight_after_pct</text>
+
+      <!-- Col4 -->
+      <rect x="796" y="40" width="176" height="48" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="808" y="62" fill="#201F1E" font-weight="600">notifications</text>
+      <text x="808" y="79" fill="#424242" font-size="11">user_id, channel, status</text>
+
+      <rect x="796" y="108" width="176" height="48" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="808" y="130" fill="#201F1E" font-weight="600">notification_prefs</text>
+      <text x="808" y="147" fill="#424242" font-size="11">user_id, event_type, channel</text>
+
+      <rect x="796" y="196" width="176" height="48" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="808" y="218" fill="#201F1E" font-weight="600">risk_alerts</text>
+      <text x="808" y="235" fill="#424242" font-size="11">student_id, rule_code, severity</text>
+
+      <rect x="796" y="264" width="176" height="48" rx="6" fill="#F5F5F5" stroke="#8A8886"/>
+      <text x="808" y="286" fill="#201F1E" font-weight="600">audit_logs</text>
+      <text x="808" y="303" fill="#424242" font-size="11">entity, actor, prev_hash, row_hash</text>
+    </g>
+
+    <!-- 關聯線 -->
+    <g stroke="#8A8886" fill="none">
+      <path d="M142 88 V 108" marker-end="url(#e1)"/>
+      <path d="M142 156 V 176" marker-end="url(#e1)"/>
+      <path d="M142 224 V 244" marker-end="url(#e1)"/>
+      <path d="M254 132 H 266 V 200 H 300" marker-end="url(#e1)"/>
+      <path d="M412 88 V 108" marker-end="url(#e1)"/>
+      <path d="M524 132 H 536 V 200 H 500" marker-end="url(#e1)"/>
+      <path d="M412 224 V 244" marker-end="url(#e1)"/>
+      <path d="M412 292 V 312" marker-end="url(#e1)"/>
+      <path d="M524 268 H 540 V 220 H 570" marker-end="url(#e1)"/>
+      <path d="M660 88 V 108" marker-end="url(#e1)"/>
+      <path d="M660 244 V 264" marker-end="url(#e1)"/>
+      <path d="M524 156 H 772 V 220 H 750" marker-end="url(#e1)"/>
+      <path d="M524 280 H 784 V 64 H 796" marker-end="url(#e1)"/>
+      <path d="M524 296 H 778 V 220 H 796" marker-end="url(#e1)"/>
+      <path d="M254 336 H 780 V 300 H 772" stroke-dasharray="4 3" marker-end="url(#e1)"/>
+    </g>
+  </svg>
+  <p class="mcap">Figure 2 — ER diagram. Solid arrows = foreign keys; dashed = write relationship.
+    <span class="zh">圖二 — 實體關係圖。實線箭頭為外鍵；虛線為寫入關係。</span></p>
+
+  <table class="tight">
+    <thead><tr><th>Relationship<span class="zh">關聯</span></th><th>Cardinality<span class="zh">基數</span></th><th>Meaning<span class="zh">說明</span></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">departments → users</td><td>1 : N</td><td>User belongs to one home department</td></tr>
+      <tr><td class="mono">users → user_roles</td><td>1 : N</td><td>Multiple roles per person, each scoped</td></tr>
+      <tr><td class="mono">users → students / faculty</td><td>1 : 1</td><td>Role-specific extension tables</td></tr>
+      <tr><td class="mono">courses → assessments</td><td>1 : N</td><td>Assessment calendar per course section</td></tr>
+      <tr><td class="mono">users × courses → enrollments</td><td>N : M</td><td>Drive conflict detection</td></tr>
+      <tr><td class="mono">absence_requests → documents</td><td>1 : N</td><td>Multiple supporting documents</td></tr>
+      <tr><td class="mono">absence_requests → approvals</td><td>1 : N</td><td>One row per workflow level</td></tr>
+      <tr><td class="mono">absence_requests → assessment_conflicts</td><td>1 : N</td><td>One conflict per affected assessment</td></tr>
+      <tr><td class="mono">assessment_conflicts → accommodations</td><td>1 : 1</td><td>Instructor's decision per conflict</td></tr>
+      <tr><td class="mono">events → event_participants</td><td>1 : N</td><td>Immutable roster snapshot</td></tr>
+      <tr><td class="mono">events → absence_requests</td><td>1 : N</td><td>Activity-based auto-verification</td></tr>
+      <tr><td class="mono">users → risk_alerts</td><td>1 : N</td><td>Early-warning cases per student</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 表目錄 -->
+<div class="card">
+  <h2>2. Table Catalogue<span class="zh">資料表目錄</span></h2>
+  <table class="tight">
+    <thead><tr><th>Table<span class="zh">資料表</span></th><th>Purpose<span class="zh">用途</span></th>
+      <th>Key columns<span class="zh">關鍵欄位</span></th><th>Sensitivity<span class="zh">敏感度</span></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">departments</td><td>Org structure<span class="zh">組織架構</span></td><td>code, name_en, name_zh, parent_id</td><td><span class="tag t-grey">Low</span></td></tr>
+      <tr><td class="mono">users</td><td>Identity master<span class="zh">身分主檔</span></td><td>entra_oid, username, email, primary_role, locale</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">user_roles</td><td>RBAC grants with scope<span class="zh">具範圍的權限授予</span></td><td>user_id, role, scope_type, scope_id</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">students</td><td>Student profile<span class="zh">學生檔案</span></td><td>student_no, programme_code, cohort, advisor_id</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">faculty</td><td>Staff profile &amp; delegate<span class="zh">教師檔案與代理人</span></td><td>staff_no, title, delegate_id, can_approve</td><td><span class="tag t-grey">Low</span></td></tr>
+      <tr><td class="mono">courses</td><td>Course sections<span class="zh">課程班級</span></td><td>code, term, section, instructor_id</td><td><span class="tag t-grey">Low</span></td></tr>
+      <tr><td class="mono">enrollments</td><td>Student ↔ course<span class="zh">學生與課程關聯</span></td><td>student_id, course_id, status</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">assessments</td><td>Assessment calendar<span class="zh">考評行事曆</span></td><td>course_id, type, assessment_date, weight_pct</td><td><span class="tag t-grey">Low</span></td></tr>
+      <tr><td class="mono">absence_requests</td><td><b>Core transaction</b><span class="zh">核心交易</span></td><td>category, dates, days, status, route_code, current_level</td><td><span class="tag t-err">High</span></td></tr>
+      <tr><td class="mono">documents</td><td>Supporting evidence<span class="zh">證明文件</span></td><td>blob_path, sha256, is_medical, scan_status</td><td><span class="tag t-err">High</span></td></tr>
+      <tr><td class="mono">approvals</td><td>Workflow steps<span class="zh">工作流步驟</span></td><td>level, approver_id, action, sla_hours, conditions</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">events</td><td>Official activities<span class="zh">官方活動</span></td><td>name, category, dates, status, endorsed_by</td><td><span class="tag t-grey">Low</span></td></tr>
+      <tr><td class="mono">event_participants</td><td>Roster snapshot<span class="zh">名單快照</span></td><td>event_id, student_id, added_at</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">assessment_conflicts</td><td>Detected clashes<span class="zh">偵測到的衝突</span></td><td>request_id, course_id, conflict_type, resolved_at</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">accommodations</td><td>Instructor decisions<span class="zh">教師決策</span></td><td>type, make_up_date, weight_after_pct, rejection_reason</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">notifications / notification_prefs</td><td>Delivery &amp; preferences<span class="zh">投遞與偏好</span></td><td>user_id, channel, status, payload_json</td><td><span class="tag t-warn">Medium</span></td></tr>
+      <tr><td class="mono">risk_alerts</td><td>Early warning cases<span class="zh">預警個案</span></td><td>student_id, rule_code, severity, status</td><td><span class="tag t-err">High</span></td></tr>
+      <tr><td class="mono">audit_logs</td><td>Append-only ledger<span class="zh">僅可追加帳本</span></td><td>entity, actor, before/after, prev_hash, row_hash</td><td><span class="tag t-err">High</span></td></tr>
+      <tr><td class="mono">policy_config</td><td>Runtime-tunable rules<span class="zh">可即時調整的規則</span></td><td>key, value_json</td><td><span class="tag t-grey">Low</span></td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:13.5px"><a href="schema.sql">↓ Download full PostgreSQL DDL (schema.sql)</a>
+    <span class="zh">下載完整 PostgreSQL 結構檔</span></p>
+</div>
+
+<!-- DDL 節錄 -->
+<div class="card">
+  <h2>3. Schema Excerpts<span class="zh">結構節錄</span></h2>
+  <p style="font-size:13px;color:var(--muted)">Core tables shown; full DDL in <code class="inl">schema.sql</code>.
+    <span class="zh">此處僅列核心表，完整定義見 <code class="inl">schema.sql</code>。</span></p>
+  <pre>CREATE TYPE absence_category AS ENUM (
+  'medical','university_activity','sports_competition','conference',
+  'family_emergency','visa_immigration','bereavement','personal','other'
+);
+
+CREATE TYPE request_status AS ENUM (
+  'draft','pending','info_requested','approved','rejected','withdrawn','expired'
+);
+
+CREATE TABLE absence_requests (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    reference_no     VARCHAR(20) NOT NULL UNIQUE,   -- SAAS-2026-001234
+    student_id       UUID NOT NULL REFERENCES users(id),
+    category         absence_category NOT NULL,
+    start_date       DATE NOT NULL,
+    end_date         DATE NOT NULL,
+    start_period     CHAR(2) NOT NULL DEFAULT 'AM', -- AM | PM
+    end_period       CHAR(2) NOT NULL DEFAULT 'PM',
+    days             NUMERIC(4,1) NOT NULL,         -- 半天計 0.5
+    reason           TEXT NOT NULL,
+    status           request_status NOT NULL DEFAULT 'pending',
+    route_code       VARCHAR(20) NOT NULL,          -- A-MED | B-OFFICIAL | C-LONG
+    route_version    INTEGER NOT NULL DEFAULT 1,
+    current_level    INTEGER NOT NULL DEFAULT 1,
+    required_levels  INTEGER NOT NULL DEFAULT 1,
+    auto_verified    BOOLEAN NOT NULL DEFAULT FALSE,
+    sla_due_at       TIMESTAMPTZ,
+    submitted_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_date_range   CHECK (end_date &gt;= start_date),
+    CONSTRAINT chk_days_positive CHECK (days &gt; 0)
+);
+
+CREATE TABLE accommodations (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conflict_id       UUID NOT NULL REFERENCES assessment_conflicts(id) ON DELETE CASCADE,
+    type              accommodation_type NOT NULL,  -- excused|make_up|alternative_assignment
+                                                    -- |weight_redistribution|rejected
+    decided_by        UUID NOT NULL REFERENCES users(id),
+    new_deadline      DATE,
+    make_up_date      DATE,
+    make_up_venue     VARCHAR(80),
+    weight_before_pct NUMERIC(5,2),
+    weight_after_pct  NUMERIC(5,2),
+    rejection_reason  TEXT,
+    decided_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_reject_reason CHECK (type &lt;&gt; 'rejected' OR rejection_reason IS NOT NULL)
+);</pre>
+</div>
+
+<!-- 索引 -->
+<div class="card">
+  <h2>4. Index Strategy<span class="zh">索引策略</span></h2>
+  <table>
+    <thead><tr><th>Index<span class="zh">索引</span></th><th>Serves<span class="zh">服務的查詢</span></th><th>Rationale<span class="zh">理由</span></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">idx_req_student_created</td><td>"My requests" list<span class="zh">我的申請列表</span></td><td>Highest-volume query; composite on (student_id, created_at DESC) avoids sort<span class="zh">最高頻查詢；複合索引免除排序</span></td></tr>
+      <tr><td class="mono">idx_req_status_level_due <span class="tag t-info">partial</span></td><td>Approval queues<span class="zh">審批佇列</span></td><td>Partial index on open statuses keeps index small and hot in cache<span class="zh">僅索引未結案狀態，體積小、常駐快取</span></td></tr>
+      <tr><td class="mono">idx_conflict_instructor_open <span class="tag t-info">partial</span></td><td>Instructor decision queue<span class="zh">教師決策佇列</span></td><td>Only unresolved rows are queried<span class="zh">只查未處理紀錄</span></td></tr>
+      <tr><td class="mono">idx_approval_approver</td><td>"Waiting on me"<span class="zh">待我處理</span></td><td>Filtered on <code class="inl">acted_at IS NULL</code></td></tr>
+      <tr><td class="mono">idx_participant_student</td><td>Roster auto-verification<span class="zh">名單自動核實</span></td><td>Hot path in Case B; must be sub-10 ms<span class="zh">B 案關鍵路徑，須在 10ms 內</span></td></tr>
+      <tr><td class="mono">idx_document_sha</td><td>Duplicate / forged document detection<span class="zh">重複／偽造文件偵測</span></td><td>Fraud control; also enables dedup<span class="zh">反欺詐，同時支援去重</span></td></tr>
+      <tr><td class="mono">idx_assessment_course_dt</td><td>Conflict detection scan<span class="zh">衝突偵測掃描</span></td><td>Range scan per course during submission<span class="zh">提交時按課程做區間掃描</span></td></tr>
+      <tr><td class="mono">idx_audit_entity / actor / correlation</td><td>Audit &amp; trace queries<span class="zh">審計與追蹤查詢</span></td><td>Compliance lookups and incident investigation<span class="zh">合規查詢與事件調查</span></td></tr>
+      <tr><td class="mono">idx_req_reason_fts (GIN)</td><td>Full-text search (P2)<span class="zh">全文檢索（第二期）</span></td><td>Registry investigations<span class="zh">教務處查證用</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note">Every index is justified by a measured query pattern; no speculative indexes. Quarterly review removes
+    unused indexes (via <code class="inl">pg_stat_user_indexes</code>).
+    <span class="zh">每個索引都對應經量測的查詢模式，不做投機性建索引；每季依 <code class="inl">pg_stat_user_indexes</code> 清除未使用索引。</span></p>
+</div>
+
+<!-- 安全 -->
+<div class="card">
+  <h2>5. Security Controls<span class="zh">安全控制</span></h2>
+  <div class="grid g2">
+    <div>
+      <h4>Encryption<span class="zh">加密</span></h4>
+      <table class="tight">
+        <tbody>
+          <tr><td>In transit<span class="zh">傳輸中</span></td><td>TLS 1.3 enforced; HSTS; internal mTLS between services<span class="zh">強制 TLS 1.3、HSTS，服務間採 mTLS</span></td></tr>
+          <tr><td>At rest<span class="zh">靜態</span></td><td>PostgreSQL TDE + Azure Storage SSE with customer-managed key in Key Vault<span class="zh">資料庫 TDE ＋ 儲存體 SSE，金鑰由 Key Vault 自管</span></td></tr>
+          <tr><td>Backups<span class="zh">備份</span></td><td>Encrypted, geo-redundant, restore tested quarterly<span class="zh">加密、異地備援，每季演練還原</span></td></tr>
+          <tr><td>Secrets<span class="zh">機密</span></td><td>Key Vault only; managed identities; no secrets in code or CI logs<span class="zh">統一存放 Key Vault，採受控身分；程式碼與 CI 日誌不含機密</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h4>Access control<span class="zh">存取控制</span></h4>
+      <table class="tight">
+        <tbody>
+          <tr><td>Authentication<span class="zh">認證</span></td><td>Entra ID OIDC + MFA + Conditional Access<span class="zh">Entra ID 登入＋多重要素＋條件式存取</span></td></tr>
+          <tr><td>Authorization<span class="zh">授權</span></td><td>Server-side RBAC + PostgreSQL RLS as defence in depth<span class="zh">伺服器端 RBAC ＋ 資料庫列級安全的深度防禦</span></td></tr>
+          <tr><td>Least privilege<span class="zh">最小權限</span></td><td><code class="inl">saas_app</code> has no DDL; <code class="inl">saas_readonly</code> for analytics<span class="zh">應用程式帳號無 DDL 權限；分析服務用唯讀帳號</span></td></tr>
+          <tr><td>Break-glass<span class="zh">緊急帳號</span></td><td>FIDO2 hardware key, no password, quarterly drill, all actions alerted<span class="zh">FIDO2 硬體金鑰、無密碼、每季演練、所有操作即時告警</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h4 style="margin-top:18px">Audit logging — tamper-evident hash chain<span class="zh">審計日誌：防竄改雜湊鏈</span></h4>
+  <pre class="light">row_hash = SHA256(prev_hash ‖ entity_type ‖ entity_id ‖ actor_id ‖ action ‖ before_json ‖ after_json ‖ created_at)
+
+-- 驗證：逐列重算並比對鏈條；任一步不符即代表紀錄被改動
+-- UPDATE / DELETE 於 audit_logs 上被原則禁止（p_audit_no_update / p_audit_no_delete）</pre>
+  <p style="font-size:13.5px">Logged events: login, logout, every read of a medical document, every state transition,
+    policy config change, export/download, failed access attempt.
+    <span class="zh">記錄事件：登入、登出、每次讀取醫療文件、每次狀態變更、政策配置變更、匯出／下載、存取失敗嘗試。</span></p>
+</div>
+
+<!-- 合規 -->
+<div class="card">
+  <h2>6. FERPA / GDPR Compliance Mapping<span class="zh">FERPA／GDPR 合規對應</span></h2>
+  <table>
+    <thead><tr><th>Requirement<span class="zh">要求</span></th><th>FERPA (US-style)<span class="zh">FERPA（美規）</span></th>
+      <th>GDPR (EU)<span class="zh">GDPR（歐盟）</span></th><th>SAAS control<span class="zh">SAAS 控制措施</span></th></tr></thead>
+    <tbody>
+      <tr><td>Lawful basis / legitimate access<span class="zh">合法基礎</span></td>
+        <td>School official with legitimate educational interest<span class="zh">具正當教育利益的校方人員</span></td>
+        <td>Art. 6(1)(e) public task; Art. 9(2)(b) for health data<span class="zh">第 6(1)(e) 公共任務；健康資料依第 9(2)(b)</span></td>
+        <td>RBAC scope + documented legitimate interest per role<span class="zh">RBAC 範圍限定＋逐角色記錄正當利益</span></td></tr>
+      <tr><td>Access control<span class="zh">存取控制</span></td><td>Directory info vs. education record<span class="zh">目錄資訊與教育紀錄之區分</span></td><td>Confidentiality &amp; integrity (Art. 5(1)(f))<span class="zh">保密性與完整性</span></td>
+        <td>RLS policies; instructors never see medical evidence<span class="zh">列級安全策略；教師永不接触醫療證明</span></td></tr>
+      <tr><td>Right of access<span class="zh">查閱權</span></td><td>Student may inspect own record<span class="zh">學生可查閱自身紀錄</span></td><td>Subject access request, 1 month<span class="zh">資料主體請求，一個月內回覆</span></td>
+        <td>Self-service export (JSON/PDF) + full audit trail download<span class="zh">自助匯出（JSON／PDF）＋完整軌跡下載</span></td></tr>
+      <tr><td>Right to rectification<span class="zh">更正權</span></td><td>Record amendment process<span class="zh">紀錄更正程序</span></td><td>Art. 16<span class="zh">第 16 條</span></td>
+        <td>Amendments create a new version; original retained<span class="zh">更正產生新版本，原紀錄保留</span></td></tr>
+      <tr><td>Data minimisation<span class="zh">資料最小化</span></td><td>—</td><td>Art. 5(1)(c)<span class="zh">第 5(1)(c) 條</span></td>
+        <td>Instructors receive "excused + accommodation", not the reason<span class="zh">教師僅收到「已豁免＋便利安排」，不含原因</span></td></tr>
+      <tr><td>Storage limitation<span class="zh">保存限制</span></td><td>—</td><td>Art. 5(1)(e)<span class="zh">第 5(1)(e) 條</span></td>
+        <td>Retention schedule: medical 7 yr post-graduation, general 10 yr, notifications 12 mo<span class="zh">保存期：醫療證明畢業後 7 年、一般紀錄 10 年、通知 12 個月</span></td></tr>
+      <tr><td>Breach notification<span class="zh">洩漏通報</span></td><td>—</td><td>Art. 33 (72 hours)<span class="zh">第 33 條（72 小時）</span></td>
+        <td>Defender + Sentinel alerting; documented incident runbook<span class="zh">Defender 與 Sentinel 告警；書面事件應變手冊</span></td></tr>
+      <tr><td>Cross-border transfer<span class="zh">跨境傳輸</span></td><td>—</td><td>Chapter V<span class="zh">第五章</span></td>
+        <td>Data residency in-region; SCCs if HK⇄mainland sync is enabled<span class="zh">資料區內存放；若啟用港陸同步則簽署標準合約條款</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 反欺詐 -->
+<div class="card">
+  <h2>7. Document Verification &amp; Fraud Prevention<span class="zh">文件核實與防欺詐</span></h2>
+  <ul class="dot">
+    <li><b>Integrity:</b> SHA-256 per document; identical hashes across different students are flagged for review.
+      <span class="zh"><b>完整性：</b>每份文件計算 SHA-256；不同學生出現相同雜湊即標記複查。</span></li>
+    <li><b>Malware:</b> every upload is virus-scanned before it becomes readable; infected files are quarantined.
+      <span class="zh"><b>防毒：</b>每次上傳先掃描方可讀取；感染檔案隔離。</span></li>
+    <li><b>Provenance:</b> Blob paths are private-endpoint only; documents are served through short-lived signed URLs
+      (5 min) and every access is logged.
+      <span class="zh"><b>來源：</b>Blob 僅經私有端點存取；文件透過 5 分鐘有效期的簽章網址提供，每次存取均記日誌。</span></li>
+    <li><b>Retroactive roster abuse:</b> <code class="inl">event_participants.added_at</code> is immutable; a student added
+      after the absence dates cannot be auto-verified.
+      <span class="zh"><b>事後補名單：</b><code class="inl">event_participants.added_at</code> 不可修改；請假日期後才加入名單者不得自動核實。</span></li>
+    <li><b>Pattern detection:</b> repeated medical certificates clustering immediately before assessments raise EW-3 for
+      confidential review (never shown to instructors).
+      <span class="zh"><b>模式偵測：</b>集中出現在考評前的重複病假證明會觸發 EW-3 保密複查（不會顯示給教師）。</span></li>
+    <li><b>SLA gaming:</b> escalation is automatic and recorded; delegation chains are capped at 2 hops to prevent
+      indefinite passing.
+      <span class="zh"><b>拖延審批：</b>升級自動化並留痕；代理鏈最多兩跳，避免無限期轉派。</span></li>
+  </ul>
+</div>
+
+</div>
+
+<div class="foot"><div class="in">
+  <span>SAAS Data &amp; Security v1.0 · HKUST(GZ) · Confidential</span>
+  <span>資料庫設計與安全 v1.0 · 僅供校內評審</span>
+</div></div>
+</body>
+</html>

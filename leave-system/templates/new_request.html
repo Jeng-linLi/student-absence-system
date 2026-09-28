@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}提交假單 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>提交假單</h1>
+
+<div class="card">
+  <form method="post" enctype="multipart/form-data">
+    <div class="row">
+      <div>
+        <label>假別 *</label>
+        <select name="leave_type_id" id="lt" required>
+          {% for t in types %}
+            <option value="{{ t.id }}" data-att="{{ t.requires_attachment }}"
+                    data-nf="{{ t.needs_faculty }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>聯絡電話</label>
+        <input name="contact_phone" value="{{ form.get('contact_phone','') }}" placeholder="請假期間可聯繫的手機">
+      </div>
+    </div>
+
+    <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr">
+      <div><label>開始日期 *</label><input type="date" name="start_date" required
+        value="{{ form.get('start_date','') }}"></div>
+      <div><label>開始時段</label>
+        <select name="start_period">
+          <option value="AM">上午（全日計）</option>
+          <option value="PM">下午（半日計）</option>
+        </select></div>
+      <div><label>結束日期 *</label><input type="date" name="end_date" required
+        value="{{ form.get('end_date','') }}"></div>
+      <div><label>結束時段</label>
+        <select name="end_period">
+          <option value="PM">下午（全日計）</option>
+          <option value="AM">上午（半日計）</option>
+        </select></div>
+    </div>
+
+    <label>請假事由 *</label>
+    <textarea name="reason" placeholder="請簡述原因">{{ form.get('reason','') }}</textarea>
+
+    <label>證明文件（病假必傳；PDF / 圖片 / Word，≤8MB）</label>
+    <input type="file" name="attachment">
+
+    <div class="actions">
+      <button class="btn" type="submit">提交</button>
+      <a class="btn ghost" href="{{ url_for('my_requests') }}">取消</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>提示</h3>
+  <p class="muted" style="margin:0" id="hint">
+    請假超過 {{ FACULTY_THRESHOLD_DAYS }} 天會自動送院系複核。
+  </p>
+</div>
+
+<script>
+document.getElementById('lt').addEventListener('change', function(){
+  var o = this.options[this.selectedIndex];
+  var hint = document.getElementById('hint');
+  var msg = [];
+  if (o.dataset.att === '1') msg.push('此假別必須上傳證明文件。');
+  if (o.dataset.nf === '1') msg.push('此假別無論天數都需院系複核。');
+  else msg.push('請假超過 {{ FACULTY_THRESHOLD_DAYS }} 天會自動送院系複核。');
+  hint.innerHTML = msg.join('<br>');
+});
+</script>
+{% endblock %}

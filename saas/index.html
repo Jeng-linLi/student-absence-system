@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SAAS · Student Absence &amp; Academic Accommodation System｜學生請假與學業便利支援系統</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="in">
+    <div class="logo"><span class="mk">SA</span>
+      SAAS<span class="zh" style="margin:0">學生請假與學業便利支援系統</span></div>
+    <nav class="nav">
+      <a class="on" href="index.html">Executive Summary<span class="zh">執行摘要</span></a>
+      <a href="prd.html">PRD &amp; Use Cases<span class="zh">需求與用例</span></a>
+      <a href="architecture.html">Architecture &amp; API<span class="zh">架構與 API</span></a>
+      <a href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
+      <a href="design.html">UI Design<span class="zh">介面設計</span></a>
+      <a href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+    </nav>
+    <span class="lang">EN / 中文</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="pagehead">
+    <p style="color:var(--muted);margin:0 0 6px;font-size:13px">
+      Prepared for: HKUST(GZ) Senior Management &amp; Information Technology Office
+      <span class="zh">呈：香港科技大學（廣州）高層管理團隊與資訊科技處 · 項目審批用</span>
+    </p>
+    <h1>Student Absence &amp; Academic Accommodation System (SAAS)
+      <span class="zh">學生請假與學業便利支援系統（SAAS）— 系統建設提案</span></h1>
+    <p class="lead" style="color:var(--ink-2)">
+      A centralized, audit-ready platform replacing email-based short-term leave, giving students one
+      submission point, instructors structured decisions, and Program Offices real-time visibility.
+      <span class="zh">以統一平台取代現行「學生逐封電郵向任課教師請假」的做法：學生一次提交、教師結構化決策、項目辦公室即時掌握全院請假態勢，全流程可審計。</span>
+    </p>
+  </div>
+
+  <div class="grid g4" style="margin:20px 0">
+    <div class="kpi"><div class="n">9</div><div class="l">User roles supported<span class="zh">支援角色</span></div></div>
+    <div class="kpi"><div class="n">9</div><div class="l">Absence categories<span class="zh">請假類別</span></div></div>
+    <div class="kpi"><div class="n">12 wks</div><div class="l">MVP delivery<span class="zh">MVP 交付週期</span></div></div>
+    <div class="kpi"><div class="n">¥5.0M</div><div class="l">3-year TCO (est.)<span class="zh">三年總擁有成本（估算）</span></div></div>
+  </div>
+
+  <!-- 1 問題 -->
+  <div class="card">
+    <h2>1. Problem Statement<span class="zh">現狀問題</span></h2>
+    <table>
+      <thead><tr><th style="width:32px">#</th><th>Pain point<span class="zh">痛點</span></th>
+        <th>Impact today<span class="zh">目前影響</span></th><th>After SAAS<span class="zh">SAAS 上線後</span></th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Students email each instructor individually<br><span class="zh">學生須逐封電郵通知每位任課教師</span></td>
+          <td>8–15 emails per absence; no guarantee of receipt<br><span class="zh">單次請假 8–15 封郵件，無法確認送達</span></td>
+          <td>One form, auto-notify all affected instructors<br><span class="zh">一次填表，自動通知全部受影響教師</span></td></tr>
+        <tr><td>2</td><td>No centralized tracking<br><span class="zh">缺乏集中紀錄</span></td>
+          <td>No single source of truth; disputes unresolvable<br><span class="zh">無單一事實來源，爭議無法追溯</span></td>
+          <td>Immutable request ledger + audit log<br><span class="zh">不可竄改的假單帳本與操作日誌</span></td></tr>
+        <tr><td>3</td><td>Assessment conflicts handled manually<br><span class="zh">考評衝突靠人工協調</span></td>
+          <td>Inconsistency across courses; make-up decided ad hoc<br><span class="zh">各課程口徑不一，補考安排臨時決定</span></td>
+          <td>Auto-detect conflicts + 5 standard accommodations<br><span class="zh">自動偵測衝突，提供 5 種標準學業便利方案</span></td></tr>
+        <tr><td>4</td><td>Official activities need repeated proof<br><span class="zh">官方活動需重複提交證明</span></td>
+          <td>Same letter uploaded semester after semester<br><span class="zh">同一份證明每學期重複上傳</span></td>
+          <td>Activity roster ⇒ auto-verified, zero document<br><span class="zh">活動名單內學生自動核實，免附證明</span></td></tr>
+        <tr><td>5</td><td>Program Offices lack visibility<br><span class="zh">項目辦公室無全局視圖</span></td>
+          <td>Trends and at-risk students invisible until too late<br><span class="zh">無法及早發現缺席趨勢與風險學生</span></td>
+          <td>Department dashboards + early-warning alerts<br><span class="zh">院系看板與預警機制</span></td></tr>
+        <tr><td>6</td><td>Faculty time lost to repetitive email<br><span class="zh">教師耗時處理重複郵件</span></td>
+          <td>Estimated 3–5 h per instructor per term<br><span class="zh">估計每位教師每學期 3–5 小時</span></td>
+          <td>One-click decision queues with context<br><span class="zh">待辦佇列一鍵決策，附完整上下文</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2 方案 -->
+  <div class="card">
+    <h2>2. Proposed Solution<span class="zh">方案概述</span></h2>
+    <p>SAAS is a single web + mobile platform covering three previously disconnected processes —
+      <b>absence requests</b>, <b>assessment conflict resolution</b>, and <b>official activity verification</b> —
+      behind one workflow engine, one notification bus, and one analytics layer.
+      <span class="zh">SAAS 以一套網頁 + 流動應用，統一承載三條原本割裂的業務線：請假申請、考評衝突處理、官方活動核實；共用同一工作流引擎、同一通知總線與同一分析層。</span></p>
+
+    <div class="grid g3" style="margin-top:14px">
+      <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+        <h4>One submission<span class="zh">一次提交</span></h4>
+        <p style="margin:0;font-size:13.5px">Student fills one form; SAAS resolves affected courses and assessments
+          automatically and routes to the right approvers.
+          <span class="zh">學生只填一次表；系統自動解析受影響課程與考評，並分派給正確審批人。</span></p>
+      </div>
+      <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+        <h4>One workflow engine<span class="zh">統一工作流引擎</span></h4>
+        <p style="margin:0;font-size:13.5px">Configurable, rule-driven approval chains (medical / official activity /
+          long absence) with SLA timers and escalation.
+          <span class="zh">規則驅動、可配置的審批鏈（病假／官方活動／長期請假），附 SLA 計時與升級機制。</span></p>
+      </div>
+      <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+        <h4>One source of truth<span class="zh">單一事實來源</span></h4>
+        <p style="margin:0;font-size:13.5px">Every action is logged; every document is versioned; every report is
+          reproducible from the same ledger.
+          <span class="zh">所有操作留痕、文件版本化、報表可從同一帳本重現。</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 角色 -->
+  <div class="card">
+    <h2>3. Users in Scope<span class="zh">使用者範圍</span></h2>
+    <div class="grid g3" style="gap:10px">
+      <div><span class="tag t-brand">01</span> <b>Student</b> <span class="zh">學生</span></div>
+      <div><span class="tag t-brand">02</span> <b>Instructor</b> <span class="zh">任課教師</span></div>
+      <div><span class="tag t-brand">03</span> <b>Program Office</b> <span class="zh">項目辦公室</span></div>
+      <div><span class="tag t-brand">04</span> <b>Academic Registry</b> <span class="zh">教務處</span></div>
+      <div><span class="tag t-brand">05</span> <b>Student Affairs Office</b> <span class="zh">學生事務處</span></div>
+      <div><span class="tag t-brand">06</span> <b>Sports Team Coordinator</b> <span class="zh">運動隊協調員</span></div>
+      <div><span class="tag t-brand">07</span> <b>Event Organizer</b> <span class="zh">活動負責人</span></div>
+      <div><span class="tag t-brand">08</span> <b>Academic Advisor</b> <span class="zh">學術導師</span></div>
+      <div><span class="tag t-brand">09</span> <b>System Administrator</b> <span class="zh">系統管理員</span></div>
+    </div>
+  </div>
+
+  <!-- 4 MVP -->
+  <div class="card">
+    <h2>4. MVP Scope (Phase 1 · 12 weeks)<span class="zh">MVP 範圍（第一期 · 12 週）</span></h2>
+    <ul class="tick">
+      <li>SSO via Azure AD / Microsoft Entra ID; RBAC for all 9 roles
+        <span class="zh">以 Azure AD（Entra ID）單一登入；9 種角色 RBAC 權限</span></li>
+      <li>Absence request submission with 9 categories + document upload (Azure Blob)
+        <span class="zh">9 類請假申請＋證明文件上傳（Azure Blob）</span></li>
+      <li>Workflow engine: Case A (medical) / Case B (official activity auto-verify) / Case C (&gt;7 days)
+        <span class="zh">工作流引擎：A 病假／B 官方活動自動核實／C 七天以上</span></li>
+      <li>Instructor decision queue with 5 accommodation options + conflict detection
+        <span class="zh">教師決策佇列，含 5 種學業便利方案與衝突偵測</span></li>
+      <li>Official activity module: create event, upload roster, auto-verification
+        <span class="zh">官方活動模組：建活動、上傳名單、自動核實</span></li>
+      <li>Notifications: email (Exchange Online) + Teams adaptive card + in-app
+        <span class="zh">通知：電郵（Exchange Online）＋ Teams 卡片＋站內</span></li>
+      <li>Student / Instructor / Program Office dashboards + 5 core reports
+        <span class="zh">學生／教師／項目辦公室看板＋5 份核心報表</span></li>
+      <li>Audit logging, encryption at rest &amp; in transit, WCAG 2.1 AA
+        <span class="zh">操作日誌、靜態與傳輸加密、WCAG 2.1 AA 無障礙</span></li>
+    </ul>
+    <p class="note"><b>Deferred to Phase 2 / 3（第二、三期）:</b> native mobile app, WeChat mini-program &amp; SMS channel,
+      early-warning risk scoring, advanced analytics, LMS-grade attendance sync.
+      <span class="zh">原生流動應用、微信小程序與短信通道、風險預警評分、進階分析、與 LMS 出席資料深度同步。</span></p>
+  </div>
+
+  <!-- 5 價值 -->
+  <div class="card">
+    <h2>5. Expected Value<span class="zh">預期效益</span></h2>
+    <table>
+      <thead><tr><th>Metric<span class="zh">指標</span></th><th>Baseline<span class="zh">現狀</span></th>
+        <th>Target (12 months)<span class="zh">12 個月目標</span></th></tr></thead>
+      <tbody>
+        <tr><td>Absence requests submitted via SAAS<span class="zh">經系統提交的請假比例</span></td><td>0%</td><td>≥ 90%<span class="zh">不低於九成</span></td></tr>
+        <tr><td>Instructor decision turnaround (median)<span class="zh">教師決策中位時長</span></td><td>2–4 days</td><td>≤ 24 h<span class="zh">24 小時內</span></td></tr>
+        <tr><td>Student time to submit one absence<span class="zh">學生單次請假耗時</span></td><td>25–40 min</td><td>≤ 5 min<span class="zh">5 分鐘內</span></td></tr>
+        <tr><td>Requests with complete audit trail<span class="zh">具完整審計軌跡的申請</span></td><td>~0%</td><td>100%</td></tr>
+        <tr><td>Official-activity requests needing documents<span class="zh">官方活動需附證明的比例</span></td><td>100%</td><td>0%<span class="zh">降至零</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 6 投資 -->
+  <div class="card">
+    <h2>6. Investment Summary<span class="zh">投資摘要</span></h2>
+    <div class="grid g3">
+      <div class="kpi"><div class="n">¥1.0M</div><div class="l">MVP build (12 wks, 8.5 FTE)<span class="zh">MVP 開發（12 週，8.5 人）</span></div></div>
+      <div class="kpi"><div class="n">¥1.0M</div><div class="l">Phase 2 (16 wks)<span class="zh">第二期（16 週）</span></div></div>
+      <div class="kpi"><div class="n">¥0.45M/yr</div><div class="l">Run cost incl. Azure<span class="zh">年度運維含 Azure</span></div></div>
+    </div>
+    <p style="margin-top:14px;font-size:13.5px;color:var(--ink-2)">
+      3-year TCO ≈ <b>¥5.0M</b> (≈ ¥280 per student per year at 6,000 students). Costs drop materially if delivery uses
+      internal IT staff and the campus Microsoft Entra / Azure education agreement.
+      <span class="zh">三年總擁有成本約 <b>500 萬人民幣</b>（按 6,000 名學生計，約每人每年 280 元）。若由校內資訊科技處自行交付，並沿用校園 Microsoft Entra / Azure 教育授權，成本可顯著下降。詳見「路線圖與成本」。</span></p>
+  </div>
+
+  <!-- 7 審批事項 -->
+  <div class="card">
+    <h2>7. Decisions Requested<span class="zh">提請審批事項</span></h2>
+    <table>
+      <thead><tr><th style="width:32px">#</th><th>Decision<span class="zh">決策點</span></th><th>Owner<span class="zh">責任方</span></th><th>Needed by<span class="zh">時限</span></th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Approve MVP budget &amp; 8.5 FTE allocation<span class="zh">批准 MVP 預算與 8.5 人投入</span></td><td>Senior Management<span class="zh">高層管理</span></td><td>Week 0</td></tr>
+        <tr><td>2</td><td>Confirm absence policy parameters (thresholds, SLA, &gt;7-day routing)<span class="zh">確認請假政策參數（門檻、SLA、七天以上路由）</span></td><td>Academic Registry<span class="zh">教務處</span></td><td>Week 1</td></tr>
+        <tr><td>3</td><td>Grant Azure subscription, Entra ID app registration, Blob storage<span class="zh">批核 Azure 訂閱、Entra ID 應用註冊、Blob 儲存</span></td><td>ITO<span class="zh">資訊科技處</span></td><td>Week 1</td></tr>
+        <tr><td>4</td><td>Approve data classification &amp; retention schedule (FERPA/GDPR-aligned)<span class="zh">核准資料分級與保存期（對齊 FERPA / GDPR）</span></td><td>Data Protection Officer<span class="zh">資料保護負責人</span></td><td>Week 2</td></tr>
+        <tr><td>5</td><td>Nominate pilot cohort (2 programmes, ~600 students)<span class="zh">指定試點（2 個項目、約 600 名學生）</span></td><td>Program Offices<span class="zh">項目辦公室</span></td><td>Week 4</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 導覽 -->
+  <h2 style="margin-top:30px">Deliverables in this package<span class="zh">本提案包含之交付物</span></h2>
+  <div class="grid g3">
+    <a class="card" href="prd.html" style="margin:0">
+      <h4>PRD &amp; Use Cases<span class="zh">產品需求文件與用例</span></h4>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">Feature requirements by role, 9 absence categories,
+        conflict handling, workflow rules, 24 user stories, 8 use cases, process flows.
+        <span class="zh">按角色之功能需求、9 類請假、衝突處理、工作流規則、24 條用戶故事、8 個用例、流程圖。</span></p>
+    </a>
+    <a class="card" href="architecture.html" style="margin:0">
+      <h4>Architecture &amp; API<span class="zh">系統架構與 API</span></h4>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">System &amp; deployment architecture, 7 microservices,
+        Azure AD OIDC flow, RBAC matrix, REST API catalogue.
+        <span class="zh">系統與部署架構、7 個微服務、Azure AD 登入流程、RBAC 權限矩陣、REST API 清單。</span></p>
+    </a>
+    <a class="card" href="data.html" style="margin:0">
+      <h4>Data &amp; Security<span class="zh">資料與安全</span></h4>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">ER diagram, PostgreSQL DDL, index strategy, RLS policies,
+        FERPA/GDPR mapping, fraud prevention.
+        <span class="zh">實體關係圖、PostgreSQL DDL、索引策略、列級安全策略、FERPA / GDPR 對應、反欺詐。</span></p>
+    </a>
+    <a class="card" href="design.html" style="margin:0">
+      <h4>UI Design<span class="zh">介面設計</span></h4>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">Fluent design system, 7 high-fidelity mockups incl. mobile,
+        accessibility &amp; responsive rules.
+        <span class="zh">Fluent 設計系統、7 張高保真介面稿（含手機版）、無障礙與響應式規則。</span></p>
+    </a>
+    <a class="card" href="plan.html" style="margin:0">
+      <h4>Roadmap &amp; Cost<span class="zh">路線圖與成本</span></h4>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">3-phase roadmap, Gantt, team plan, 3-year cost model,
+        risk register, future AI features.
+        <span class="zh">三階段路線圖、甘特圖、團隊配置、三年成本模型、風險登記、未來 AI 功能。</span></p>
+    </a>
+    <a class="card" href="schema.sql" style="margin:0">
+      <h4>schema.sql<span class="zh">資料庫結構檔</span></h4>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">Full PostgreSQL DDL — downloadable, ready to run.
+        <span class="zh">完整 PostgreSQL DDL，可直接下載執行。</span></p>
+    </a>
+  </div>
+
+</div>
+
+<div class="foot"><div class="in">
+  <span>SAAS Design Package v1.0 · HKUST(GZ) · Confidential — internal review only</span>
+  <span>學生請假與學業便利支援系統 · 設計提案 v1.0 · 僅供校內評審</span>
+</div></div>
+</body>
+</html>

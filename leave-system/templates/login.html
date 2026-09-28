@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登入 · 線上請假系統</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<script>
+  (function(){ var t = localStorage.getItem('theme'); if(t) document.documentElement.dataset.theme = t; })();
+</script>
+<div class="container">
+  <div class="login-wrap">
+    <div class="brand">
+      <span class="logo">假</span>
+      <div><strong>線上請假系統</strong><small>Leave Management System</small></div>
+    </div>
+
+    <div class="card">
+      <h3>帳號登入</h3>
+      <form method="post">
+        <label>帳號（學號 / 教工號）</label>
+        <input name="username" placeholder="2024001" required autofocus>
+        <label>密碼</label>
+        <input name="password" type="password" placeholder="••••••" required>
+        <div class="actions"><button class="btn" type="submit">登入</button></div>
+      </form>
+
+      <div class="demo">
+        <strong>演示帳號</strong>（統一密碼 <span class="mono">Pass@123</span>）
+        <table>
+          <tr><th>角色</th><th>帳號</th><th>姓名</th></tr>
+          <tr><td>學生</td><td class="mono">2024001</td><td>李政霖</td></tr>
+          <tr><td>導師</td><td class="mono">T001</td><td>陳導師</td></tr>
+          <tr><td>院系</td><td class="mono">F001</td><td>王院辦</td></tr>
+          <tr><td>管理員</td><td class="mono">admin</td><td>系統管理員</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

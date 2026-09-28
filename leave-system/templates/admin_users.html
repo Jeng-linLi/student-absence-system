@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}帳號管理 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>帳號管理</h1>
+
+<div class="card">
+  <h3>新增帳號</h3>
+  <form method="post" action="{{ url_for('admin_add_user') }}">
+    <div class="row" style="grid-template-columns:1fr 1fr 1fr">
+      <div><label>帳號 *</label><input name="username" placeholder="學號 / 教工號" required></div>
+      <div><label>姓名 *</label><input name="name" required></div>
+      <div><label>初始密碼</label><input name="password" placeholder="Pass@123"></div>
+    </div>
+    <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr">
+      <div><label>角色</label>
+        <select name="role">
+          <option value="student">學生</option>
+          <option value="advisor">導師</option>
+          <option value="faculty">院系審批人</option>
+          <option value="admin">管理員</option>
+        </select></div>
+      <div><label>院系</label><input name="department" placeholder="人工智能學域"></div>
+      <div><label>班級</label><input name="class_name" placeholder="AI-1班"></div>
+      <div><label>導師（學生）</label>
+        <select name="advisor_id">
+          <option value="">—</option>
+          {% for a in advisors %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+        </select></div>
+    </div>
+    <div class="actions"><button class="btn" type="submit">建立帳號</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="actions" style="margin:0 0 12px">
+    <a class="btn sm {{ '' if filter_role=='' else 'ghost' }}" href="{{ url_for('admin_users') }}">全部</a>
+    {% for r, lbl in [('student','學生'),('advisor','導師'),('faculty','院系'),('admin','管理員')] %}
+      <a class="btn sm {{ '' if filter_role==r else 'ghost' }}"
+         href="{{ url_for('admin_users', role=r) }}">{{ lbl }}</a>
+    {% endfor %}
+  </div>
+  <table>
+    <thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>院系 / 班級</th>
+      <th>導師</th><th>狀態</th><th></th></tr></thead>
+    <tbody>
+    {% set rl = {'student':'學生','advisor':'導師','faculty':'院系','admin':'管理員'} %}
+    {% for u in users %}
+      <tr>
+        <td class="mono">{{ u.username }}</td>
+        <td>{{ u.name }}</td>
+        <td><span class="tag brand">{{ rl[u.role] }}</span></td>
+        <td>{{ u.department }}{% if u.class_name %} · {{ u.class_name }}{% endif %}</td>
+        <td>{{ u.advisor_name or '—' }}</td>
+        <td>{% if u.active %}<span class="tag green">啟用</span>
+            {% else %}<span class="tag grey">停用</span>{% endif %}</td>
+        <td><form method="post" action="{{ url_for('admin_toggle_user', uid=u.id) }}">
+          <button class="btn sm ghost" type="submit">{{ '停用' if u.active else '啟用' }}</button>
+        </form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
