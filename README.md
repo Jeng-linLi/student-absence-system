@@ -36,3 +36,18 @@ Demo accounts (password `Pass@123`): student `2024001`, advisor `T001`, faculty 
 ## Author
 
 Johnny, Jeng-lin Li · HKUST(GZ)
+
+## License
+
+Code and documentation are released under the **MIT License** — see [`LICENSE`](LICENSE).
+You may use, modify and redistribute freely, including commercially, provided the copyright
+notice is retained.
+
+程式碼與文件皆採 **MIT License**，可自由使用、修改、再散布（含商業用途），只需保留著作權聲明。
+
+> **On `assignment/`:** the Individual Ideation essay is published as a worked example for
+> reference and citation. **It must not be submitted as another student's own assessment.**
+> If you cite it, please attribute: Li, J. (2026). *SAAS: A Student Absence and Academic
+> Accommodation System* (Individual Ideation assignment), HKUST(GZ).
+>
+> `assignment/` 內的作業全文僅供參考與引用，**不得作為他人作業提交**。引用請註明出處。
