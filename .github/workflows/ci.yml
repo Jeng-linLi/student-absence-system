@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    name: 請假系統冒煙測試
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: 安裝依賴
+        run: pip install -r leave-system/requirements.txt
+
+      - name: 執行冒煙測試
+        run: python leave-system/smoke_test.py
+
+  lint:
+    name: 語法檢查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 編譯檢查（leave-system / assignment 腳本）
+        run: python -m compileall -q leave-system assignment
