@@ -6,27 +6,51 @@
 import os
 import csv
 import io
+import hmac
+import time
+import secrets
 import sqlite3
 from datetime import date, datetime, timedelta
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for, session,
-                   g, flash, jsonify, send_from_directory, Response)
+                   g, flash, jsonify, send_from_directory, Response, abort)
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'leave_system.db')
-UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
+# 可用環境變數指向另一個資料庫／上傳目錄（測試時隔離用）
+DB_PATH = os.environ.get('LEAVE_DB') or os.path.join(BASE_DIR, 'leave_system.db')
+UPLOAD_DIR = os.environ.get('LEAVE_UPLOAD_DIR') or os.path.join(BASE_DIR, 'uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # 審批分流門檻：超過此天數需院系複核
 FACULTY_THRESHOLD_DAYS = 3
 ALLOWED_EXT = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
 
+# 表單校驗邊界
+MAX_BACKDATE_DAYS = 30     # 最多可回溯補請的天數（病假補件等情境）
+MAX_SINGLE_DAYS = 90       # 單張假單天數上限，防止日期填錯
+MAX_ATTACHMENT_MB = 8
+
+# 登入限流
+LOGIN_MAX_ATTEMPTS = 8
+LOGIN_WINDOW_SEC = 300
+
+# 學年起始月份（9 月），用於統計「本學年已核准天數」
+ACADEMIC_YEAR_START_MONTH = 9
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
-app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = MAX_ATTACHMENT_MB * 1024 * 1024
+app.config['CSRF_ENABLED'] = True
+
+# Session cookie 強化：HttpOnly 阻擋 JS 讀取、SameSite=Lax 阻擋跨站送出
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('LEAVE_COOKIE_SECURE', '0') == '1',
+)
 
 
 # --------------------------------------------------------------------------
@@ -110,6 +134,77 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
 
 
+# --------------------------------------------------------------------------
+# CSRF 防護
+# --------------------------------------------------------------------------
+def csrf_token():
+    """取得（必要時產生）當前 session 的 CSRF token。"""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    return session['csrf_token']
+
+
+@app.before_request
+def csrf_protect():
+    """所有 POST 請求都必須帶上與 session 一致的 CSRF token。"""
+    if request.method != 'POST':
+        return
+    if not app.config.get('CSRF_ENABLED', True):
+        return
+    expected = session.get('csrf_token')
+    sent = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token', '')
+    if not expected or not sent or not hmac.compare_digest(str(expected), str(sent)):
+        abort(400, description='CSRF 驗證失敗，請重新載入頁面後再試。')
+
+
+@app.errorhandler(400)
+def bad_request(e):
+    flash(getattr(e, 'description', '請求無效。'), 'error')
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+# --------------------------------------------------------------------------
+# 登入限流（進程內計數，重啟即清零；多進程部署時請改用 Redis）
+# --------------------------------------------------------------------------
+_LOGIN_ATTEMPTS = {}
+
+
+def login_throttled(key):
+    attempts = [t for t in _LOGIN_ATTEMPTS.get(key, []) if time.time() - t < LOGIN_WINDOW_SEC]
+    _LOGIN_ATTEMPTS[key] = attempts
+    return len(attempts) >= LOGIN_MAX_ATTEMPTS
+
+
+def login_failed(key):
+    _LOGIN_ATTEMPTS.setdefault(key, []).append(time.time())
+
+
+def login_succeeded(key):
+    _LOGIN_ATTEMPTS.pop(key, None)
+
+
+# --------------------------------------------------------------------------
+# 業務校驗
+# --------------------------------------------------------------------------
+def overlapping_requests(student_id, start_date, end_date, exclude_id=None):
+    """找出與指定區間重疊、且仍有效的假單（已駁回/已撤回不算）。"""
+    sql = ("SELECT id, start_date, end_date FROM leave_requests "
+           "WHERE student_id=? AND status IN ('pending','approved') "
+           "AND date(start_date) <= date(?) AND date(end_date) >= date(?)")
+    args = [student_id, end_date.isoformat(), start_date.isoformat()]
+    if exclude_id:
+        sql += ' AND id<>?'
+        args.append(exclude_id)
+    return q(sql, args)
+
+
+def academic_year_start(today=None):
+    """回傳當前學年的起始日（9/1）。"""
+    today = today or date.today()
+    year = today.year if today.month >= ACADEMIC_YEAR_START_MONTH else today.year - 1
+    return date(year, ACADEMIC_YEAR_START_MONTH, 1)
+
+
 def current_user():
     if 'uid' not in session:
         return None
@@ -149,7 +244,10 @@ def inject_globals():
                 (u['id'],), one=True)
         unread = row['c']
     return dict(current_user=u, unread_count=unread,
-                now=datetime.now(), FACULTY_THRESHOLD_DAYS=FACULTY_THRESHOLD_DAYS)
+                now=datetime.now(), FACULTY_THRESHOLD_DAYS=FACULTY_THRESHOLD_DAYS,
+                min_date=(date.today() - timedelta(days=MAX_BACKDATE_DAYS)).isoformat(),
+                max_date=(date.today() + timedelta(days=365)).isoformat(),
+                MAX_SINGLE_DAYS=MAX_SINGLE_DAYS, MAX_BACKDATE_DAYS=MAX_BACKDATE_DAYS)
 
 
 # --------------------------------------------------------------------------
@@ -174,7 +272,8 @@ def status_view(req):
 
 app.jinja_env.globals.update(status_view=status_view,
                              STATUS_TONE=STATUS_TONE,
-                             STATUS_LABEL=STATUS_LABEL)
+                             STATUS_LABEL=STATUS_LABEL,
+                             csrf_token=csrf_token)
 
 
 # --------------------------------------------------------------------------
@@ -185,10 +284,18 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+        key = f"{request.remote_addr}:{username.lower()}"
+        if login_throttled(key):
+            flash('登入失敗次數過多，請 5 分鐘後再試。', 'error')
+            return render_template('login.html'), 429
         user = q('SELECT * FROM users WHERE username=? AND active=1', (username,), one=True)
         if user and check_password_hash(user['password_hash'], password):
+            login_succeeded(key)
+            session.clear()                       # 防 session fixation
             session['uid'] = user['id']
+            session['csrf_token'] = secrets.token_hex(32)
             return redirect(url_for('dashboard'))
+        login_failed(key)
         flash('帳號或密碼錯誤。', 'error')
     return render_template('login.html')
 
@@ -197,6 +304,39 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+
+@app.route('/password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """所有角色都共用初始密碼 Pass@123，必須能自行修改。"""
+    u = current_user()
+    if request.method == 'POST':
+        old = request.form.get('old_password', '')
+        new = request.form.get('new_password', '')
+        confirm = request.form.get('confirm_password', '')
+        if not check_password_hash(u['password_hash'], old):
+            flash('目前密碼不正確。', 'error')
+        elif len(new) < 8:
+            flash('新密碼至少 8 個字元。', 'error')
+        elif new != confirm:
+            flash('兩次輸入的新密碼不一致。', 'error')
+        else:
+            execute('UPDATE users SET password_hash=? WHERE id=?',
+                    (generate_password_hash(new), u['id']))
+            log_action(None, u['id'], 'change_password', '使用者自行修改密碼')
+            flash('密碼已更新，請用新密碼重新登入。', 'success')
+            return redirect(url_for('logout'))
+    return render_template('change_password.html')
+
+
+def paginate(rows, page, per_page=20):
+    """簡易分頁：回傳 (當頁資料, 總頁數, 當前頁)。"""
+    per_page = max(int(per_page), 1)
+    total_pages = max((len(rows) + per_page - 1) // per_page, 1)
+    page = min(max(int(page), 1), total_pages)
+    start = (page - 1) * per_page
+    return rows[start:start + per_page], total_pages, page
 
 
 def count_todo(u):
@@ -219,13 +359,19 @@ def count_todo(u):
 @login_required
 def dashboard():
     u = current_user()
-    ctx = {'pending_mine': 0, 'todo': 0, 'recent': [], 'stats': {}, 'my_leave_days': 0}
+    ctx = {'pending_mine': 0, 'todo': 0, 'recent': [], 'stats': {},
+           'my_leave_days': 0, 'year_leave_days': 0, 'year_start': ''}
 
     if u['role'] == 'student':
         ctx['pending_mine'] = q('SELECT COUNT(*) c FROM leave_requests WHERE student_id=? '
                                 "AND status='pending'", (u['id'],), one=True)['c']
         ctx['my_leave_days'] = q("SELECT COALESCE(SUM(days),0) s FROM leave_requests "
                                  "WHERE student_id=? AND status='approved'", (u['id'],), one=True)['s']
+        ctx['year_leave_days'] = q("SELECT COALESCE(SUM(days),0) s FROM leave_requests "
+                                   "WHERE student_id=? AND status='approved' "
+                                   "AND date(start_date) >= date(?)",
+                                   (u['id'], academic_year_start().isoformat()), one=True)['s']
+        ctx['year_start'] = academic_year_start().isoformat()
         ctx['recent'] = q('SELECT r.*, t.name type_name FROM leave_requests r '
                           'JOIN leave_types t ON t.id=r.leave_type_id '
                           'WHERE r.student_id=? ORDER BY r.created_at DESC LIMIT 5', (u['id'],))
@@ -280,15 +426,25 @@ def todo_requests(u, limit=None):
 def my_requests():
     u = current_user()
     status = request.args.get('status', '')
-    sql = ('SELECT r.*, t.name type_name FROM leave_requests r '
-           'JOIN leave_types t ON t.id=r.leave_type_id WHERE r.student_id=?')
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+
+    where = 'WHERE r.student_id=?'
     args = [u['id']]
     if status:
-        sql += ' AND r.status=?'
+        where += ' AND r.status=?'
         args.append(status)
-    sql += ' ORDER BY r.created_at DESC'
-    return render_template('my_requests.html',
-                           requests=q(sql, args), filter_status=status)
+
+    total = q('SELECT COUNT(*) c FROM leave_requests r ' + where, args, one=True)['c']
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    page = min(max(page, 1), total_pages)
+
+    rows = q('SELECT r.*, t.name type_name FROM leave_requests r '
+             'JOIN leave_types t ON t.id=r.leave_type_id '
+             f'{where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?',
+             args + [per_page, (page - 1) * per_page])
+    return render_template('my_requests.html', requests=rows, filter_status=status,
+                           page=page, total_pages=total_pages, total=total)
 
 
 # --------------------------------------------------------------------------
@@ -319,6 +475,7 @@ def new_request():
         ltype = q('SELECT * FROM leave_types WHERE id=?', (type_id,), one=True)
         days = calc_days(start_date, end_date, sp, ep)
 
+        today = date.today()
         err = None
         if not ltype:
             err = '請選擇有效的假別。'
@@ -326,6 +483,15 @@ def new_request():
             err = '結束日期不能早於開始日期。'
         elif days <= 0:
             err = '請假天數計算異常，請檢查日期與上午/下午設定。'
+        elif days > MAX_SINGLE_DAYS:
+            err = f'單張假單不得超過 {MAX_SINGLE_DAYS} 天，請確認日期是否填錯。'
+        elif (today - end_date).days > MAX_BACKDATE_DAYS:
+            err = f'不可補請超過 {MAX_BACKDATE_DAYS} 天前的假單。'
+        elif overlapping_requests(u['id'], start_date, end_date):
+            clash = overlapping_requests(u['id'], start_date, end_date)[0]
+            err = (f'你在此區間已有假單 #{clash["id"]}'
+                   f'（{clash["start_date"]} ~ {clash["end_date"]}），'
+                   '請先撤回或修改日期。')
         elif not reason:
             err = '請填寫請假事由。'
         if err:
@@ -338,7 +504,9 @@ def new_request():
             if not allowed_file(file.filename):
                 flash('證明文件格式不支援（僅 PDF/圖片/Word）。', 'error')
                 return render_template('new_request.html', types=types, form=request.form)
-            fn = secure_filename(f"{u['username']}_{datetime.now():%Y%m%d%H%M%S}_{file.filename}")
+            # 檔名加隨機字串，避免附件 URL 被猜測枚舉
+            fn = secure_filename(
+                f"{u['username']}_{datetime.now():%Y%m%d%H%M%S}_{secrets.token_hex(6)}_{file.filename}")
             file.save(os.path.join(UPLOAD_DIR, fn))
             attachment = fn
         if ltype['requires_attachment'] and not attachment:
@@ -501,15 +669,25 @@ def withdraw(rid):
 def approvals():
     u = current_user()
     scope = request.args.get('scope', 'todo')
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    total_pages = 1
+
     if scope == 'all':
+        total = q('SELECT COUNT(*) c FROM leave_requests', one=True)['c']
+        total_pages = max((total + per_page - 1) // per_page, 1)
+        page = min(max(page, 1), total_pages)
         rows = q('SELECT r.*, t.name type_name, s.name student_name, s.class_name, s.department '
                  'FROM leave_requests r '
                  'JOIN leave_types t ON t.id=r.leave_type_id '
                  'JOIN users s ON s.id=r.student_id '
-                 'ORDER BY r.created_at DESC LIMIT 200')
+                 'ORDER BY r.created_at DESC LIMIT ? OFFSET ?',
+                 (per_page, (page - 1) * per_page))
     else:
         rows = todo_requests(u)
-    return render_template('approvals.html', requests=rows, scope=scope)
+        page = 1
+    return render_template('approvals.html', requests=rows, scope=scope,
+                           page=page, total_pages=total_pages)
 
 
 # --------------------------------------------------------------------------
@@ -523,7 +701,6 @@ def notifications():
              'LEFT JOIN leave_requests r ON r.id=n.request_id '
              'WHERE n.user_id=? ORDER BY n.created_at DESC, n.id DESC LIMIT 50', (u['id'],))
     execute('UPDATE notifications SET is_read=1 WHERE user_id=?', (u['id'],))
-    get_db().commit()
     return render_template('notifications.html', items=rows)
 
 
@@ -644,6 +821,51 @@ def admin_toggle_user(uid):
     return redirect(url_for('admin_users'))
 
 
+@app.route('/admin/users/<int:uid>/reset-password', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_reset_password(uid):
+    """管理員重設密碼。未填寫時自動產生一組隨機臨時密碼。"""
+    target = q('SELECT id, username FROM users WHERE id=?', (uid,), one=True)
+    if not target:
+        flash('找不到該帳號。', 'error')
+        return redirect(url_for('admin_users'))
+    new = request.form.get('password', '').strip() or secrets.token_urlsafe(10)
+    if len(new) < 8:
+        flash('密碼至少 8 個字元。', 'error')
+        return redirect(url_for('admin_users'))
+    execute('UPDATE users SET password_hash=? WHERE id=?', (generate_password_hash(new), uid))
+    log_action(None, current_user()['id'], 'reset_password', f"重設 {target['username']} 的密碼")
+    flash(f"已重設 {target['username']} 的密碼為：{new}", 'success')
+    return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/users/<int:uid>/edit', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_edit_user(uid):
+    """調整姓名、院系、班級與導師歸屬（導師異動時最常需要）。"""
+    target = q('SELECT id FROM users WHERE id=?', (uid,), one=True)
+    if not target:
+        flash('找不到該帳號。', 'error')
+        return redirect(url_for('admin_users'))
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('姓名不可為空。', 'error')
+        return redirect(url_for('admin_users'))
+    advisor_id = request.form.get('advisor_id') or None
+    execute('UPDATE users SET name=?, department=?, class_name=?, email=?, advisor_id=? '
+            'WHERE id=?',
+            (name,
+             request.form.get('department', '').strip(),
+             request.form.get('class_name', '').strip(),
+             request.form.get('email', '').strip(),
+             advisor_id, uid))
+    log_action(None, current_user()['id'], 'edit_user', f'修改帳號 #{uid} 資料')
+    flash('帳號資料已更新。', 'success')
+    return redirect(url_for('admin_users'))
+
+
 @app.route('/admin/types')
 @login_required
 @role_required('admin')
@@ -672,6 +894,26 @@ def admin_add_type():
 @app.route('/uploads/<path:filename>')
 @login_required
 def uploaded_file(filename):
+    """附件僅限本人、該生的導師、同院系審批人與管理員下載。
+
+    病假證明屬個人敏感資料，僅「已登入」不足以構成授權。
+    """
+    u = current_user()
+    req = q('SELECT r.id, r.student_id, s.advisor_id, s.department '
+            'FROM leave_requests r JOIN users s ON s.id=r.student_id '
+            'WHERE r.attachment=?', (filename,), one=True)
+    if not req:
+        flash('找不到該附件。', 'error')
+        return redirect(url_for('dashboard'))
+    allowed = (
+        u['role'] == 'admin'
+        or u['id'] == req['student_id']
+        or (u['role'] == 'advisor' and u['id'] == req['advisor_id'])
+        or (u['role'] == 'faculty' and u['department'] == req['department'])
+    )
+    if not allowed:
+        flash('你沒有權限存取該檔案。', 'error')
+        return redirect(url_for('dashboard'))
     return send_from_directory(UPLOAD_DIR, filename)
 
 

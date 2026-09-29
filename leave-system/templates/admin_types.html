@@ -6,6 +6,7 @@
 <div class="card">
   <h3>新增假別</h3>
   <form method="post" action="{{ url_for('admin_add_type') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row" style="grid-template-columns:1fr 2fr">
       <div><label>代號 *</label><input name="code" placeholder="personal" required></div>
       <div><label>名稱 *</label><input name="name" placeholder="事假" required></div>

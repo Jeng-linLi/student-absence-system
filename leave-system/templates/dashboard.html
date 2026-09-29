@@ -6,7 +6,8 @@
   <h1>你好，{{ current_user.name }}</h1>
   <div class="grid g3" style="margin-bottom:18px">
     <div class="stat"><div class="n">{{ pending_mine }}</div><div class="l">審批中的假單</div></div>
-    <div class="stat"><div class="n">{{ my_leave_days }}</div><div class="l">已核准請假天數</div></div>
+    <div class="stat"><div class="n">{{ year_leave_days }}</div>
+      <div class="l">本學年已核准（{{ year_start }} 起）</div></div>
     <div class="stat"><div class="n">{{ current_user.class_name or '—' }}</div><div class="l">班級</div></div>
   </div>
   <div class="actions" style="margin-bottom:18px">

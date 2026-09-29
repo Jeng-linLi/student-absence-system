@@ -20,6 +20,7 @@
     <div class="card">
       <h3>帳號登入</h3>
       <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>帳號（學號 / 教工號）</label>
         <input name="username" placeholder="2024001" required autofocus>
         <label>密碼</label>

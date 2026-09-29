@@ -5,6 +5,7 @@
 
 <div class="card">
   <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row">
       <div>
         <label>假別 *</label>
@@ -23,6 +24,7 @@
 
     <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr">
       <div><label>開始日期 *</label><input type="date" name="start_date" required
+        min="{{ min_date }}" max="{{ max_date }}"
         value="{{ form.get('start_date','') }}"></div>
       <div><label>開始時段</label>
         <select name="start_period">
@@ -30,6 +32,7 @@
           <option value="PM">下午（半日計）</option>
         </select></div>
       <div><label>結束日期 *</label><input type="date" name="end_date" required
+        min="{{ min_date }}" max="{{ max_date }}"
         value="{{ form.get('end_date','') }}"></div>
       <div><label>結束時段</label>
         <select name="end_period">
@@ -56,9 +59,40 @@
   <p class="muted" style="margin:0" id="hint">
     請假超過 {{ FACULTY_THRESHOLD_DAYS }} 天會自動送院系複核。
   </p>
+  <ul class="muted" style="margin:8px 0 0; padding-left:18px">
+    <li>單張假單最多 {{ MAX_SINGLE_DAYS }} 天。</li>
+    <li>最多可回溯補請 {{ MAX_BACKDATE_DAYS }} 天內的假。</li>
+    <li>同一區間不可重複請假（已駁回／已撤回的假單不佔用區間）。</li>
+    <li id="days-preview"></li>
+  </ul>
 </div>
 
 <script>
+// 天數試算（與後端 calc_days 同邏輯，僅供提交前預覽）
+function calcDays(){
+  var sd = document.querySelector('[name=start_date]').value;
+  var ed = document.querySelector('[name=end_date]').value;
+  var out = document.getElementById('days-preview');
+  if(!sd || !ed){ out.textContent = ''; return; }
+  var s = new Date(sd + 'T00:00:00'), e = new Date(ed + 'T00:00:00');
+  if(e < s){ out.textContent = '結束日期早於開始日期。'; return; }
+  var sp = document.querySelector('[name=start_period]').value;
+  var ep = document.querySelector('[name=end_period]').value;
+  var days;
+  if(sd === ed){ days = (sp === 'AM' && ep === 'PM') ? 1.0 : 0.5; }
+  else {
+    var full = Math.round((e - s) / 86400000) - 1;
+    days = Math.max(full, 0) + (sp === 'PM' ? 0.5 : 1.0) + (ep === 'AM' ? 0.5 : 1.0);
+  }
+  var msg = '預計請假 ' + days + ' 天';
+  msg += days > {{ FACULTY_THRESHOLD_DAYS }} ? '（> {{ FACULTY_THRESHOLD_DAYS }} 天，需院系複核）。' : '。';
+  out.textContent = msg;
+}
+['start_date','end_date','start_period','end_period'].forEach(function(n){
+  document.querySelector('[name=' + n + ']').addEventListener('change', calcDays);
+});
+calcDays();
+
 document.getElementById('lt').addEventListener('change', function(){
   var o = this.options[this.selectedIndex];
   var hint = document.getElementById('hint');

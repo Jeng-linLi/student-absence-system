@@ -47,6 +47,7 @@
       <small>{{ {'student':'學生','advisor':'導師','faculty':'院系','admin':'管理員'}[current_user.role] }}
         {% if current_user.department %}· {{ current_user.department }}{% endif %}</small>
     </div>
+    <a class="logout" href="{{ url_for('change_password') }}">修改密碼</a>
     <a class="logout" href="{{ url_for('logout') }}">登出</a>
   </div>
 </header>
@@ -61,7 +62,7 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer class="foot">線上請假系統 · 原型 v0.1 · 僅供校內演示</footer>
+<footer class="foot">線上請假系統 · 原型 v0.2.0 · 僅供校內演示</footer>
 
 <script>
 function toggleTheme(){

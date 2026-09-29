@@ -30,6 +30,17 @@
     {% endfor %}
     </tbody>
   </table>
+  {% if scope == 'all' and total_pages > 1 %}
+    <div class="pager">
+      {% if page > 1 %}
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', page=page-1) }}">← 上一頁</a>
+      {% endif %}
+      <span class="muted">第 {{ page }} / {{ total_pages }} 頁</span>
+      {% if page < total_pages %}
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', page=page+1) }}">下一頁 →</a>
+      {% endif %}
+    </div>
+  {% endif %}
   {% else %}
     <div class="empty">沒有需要處理的假單。</div>
   {% endif %}

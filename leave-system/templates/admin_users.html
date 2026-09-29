@@ -6,6 +6,7 @@
 <div class="card">
   <h3>新增帳號</h3>
   <form method="post" action="{{ url_for('admin_add_user') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row" style="grid-template-columns:1fr 1fr 1fr">
       <div><label>帳號 *</label><input name="username" placeholder="學號 / 教工號" required></div>
       <div><label>姓名 *</label><input name="name" required></div>
@@ -53,9 +54,44 @@
         <td>{{ u.advisor_name or '—' }}</td>
         <td>{% if u.active %}<span class="tag green">啟用</span>
             {% else %}<span class="tag grey">停用</span>{% endif %}</td>
-        <td><form method="post" action="{{ url_for('admin_toggle_user', uid=u.id) }}">
-          <button class="btn sm ghost" type="submit">{{ '停用' if u.active else '啟用' }}</button>
-        </form></td>
+        <td>
+          <div class="row" style="grid-template-columns:auto auto auto; gap:6px">
+            <form method="post" action="{{ url_for('admin_toggle_user', uid=u.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn sm ghost" type="submit">{{ '停用' if u.active else '啟用' }}</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_reset_password', uid=u.id) }}"
+                  onsubmit="return confirm('確定重設 {{ u.username }} 的密碼？');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn sm" type="submit">重設密碼</button>
+            </form>
+            <button class="btn sm ghost" type="button"
+                    onclick="document.getElementById('edit-{{ u.id }}').showModal()">編輯</button>
+          </div>
+
+          <dialog id="edit-{{ u.id }}" class="modal">
+            <form method="post" action="{{ url_for('admin_edit_user', uid=u.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <h3>編輯 {{ u.username }}</h3>
+              <label>姓名</label><input name="name" value="{{ u.name }}" required>
+              <label>院系</label><input name="department" value="{{ u.department }}">
+              <label>班級</label><input name="class_name" value="{{ u.class_name }}">
+              <label>Email</label><input name="email" type="email" value="{{ u.email }}">
+              <label>導師</label>
+              <select name="advisor_id">
+                <option value="">—</option>
+                {% for a in advisors %}
+                  <option value="{{ a.id }}" {% if a.id == u.advisor_id %}selected{% endif %}>{{ a.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="actions">
+                <button class="btn" type="submit">儲存</button>
+                <button class="btn ghost" type="button"
+                        onclick="document.getElementById('edit-{{ u.id }}').close()">取消</button>
+              </div>
+            </form>
+          </dialog>
+        </td>
       </tr>
     {% endfor %}
     </tbody>
