@@ -17,8 +17,8 @@
         </select>
       </div>
       <div>
-        <label>聯絡電話</label>
-        <input name="contact_phone" value="{{ form.get('contact_phone','') }}" placeholder="請假期間可聯繫的手機">
+        <label>聯絡電話（{{ MAX_PHONE_LEN }} 字內）</label>
+        <input name="contact_phone" maxlength="{{ MAX_PHONE_LEN }}" value="{{ form.get('contact_phone','') }}" placeholder="請假期間可聯繫的手機">
       </div>
     </div>
 
@@ -41,8 +41,8 @@
         </select></div>
     </div>
 
-    <label>請假事由 *</label>
-    <textarea name="reason" placeholder="請簡述原因">{{ form.get('reason','') }}</textarea>
+    <label>請假事由 *（{{ MAX_REASON_LEN }} 字內）</label>
+    <textarea name="reason" maxlength="{{ MAX_REASON_LEN }}" placeholder="請簡述原因">{{ form.get('reason','') }}</textarea>
 
     <label>證明文件（病假必傳；PDF / 圖片 / Word，≤8MB）</label>
     <input type="file" name="attachment">

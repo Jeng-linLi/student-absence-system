@@ -52,8 +52,8 @@
   <h3>審批操作</h3>
   <form method="post" action="{{ url_for('decide', rid=req.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>審批意見（駁回時必填）</label>
-    <textarea name="comment" placeholder="請填寫意見"></textarea>
+    <label>審批意見（駁回時必填，{{ MAX_COMMENT_LEN }} 字內）</label>
+    <textarea name="comment" maxlength="{{ MAX_COMMENT_LEN }}" placeholder="請填寫意見"></textarea>
     <div class="actions">
       <button class="btn ok" type="submit" name="action" value="approve">核准</button>
       <button class="btn danger" type="submit" name="action" value="reject">駁回</button>

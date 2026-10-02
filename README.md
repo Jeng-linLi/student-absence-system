@@ -7,15 +7,16 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v0.2.0`**（2026-09-29）· MIT · CI passing
+**Prototype version ｜原型版本：`v0.3.0`**（2026-09-29）· MIT · CI passing
 
-v0.2.0 hardens the prototype: CSRF protection on every form, attachment access control
-(medical certificates were readable by any logged-in user), overlapping-leave validation,
-password management, pagination, and a 49-check smoke suite in CI.
+v0.3.0 hardens the prototype further: security response headers, an optional email
+notification channel (SMTP, fail-safe), free-text length caps, and a "mark all read"
+action — on top of v0.2.0's CSRF, attachment access control, overlapping-leave
+validation, password management, pagination, and a 60-check smoke suite in CI.
 
 | Folder | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v0.2.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control, 49-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限 |
+| `leave-system/` | Flask + SQLite prototype (**v0.3.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control, 60-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
@@ -25,7 +26,7 @@ password management, pagination, and a 49-check smoke suite in CI.
 # 原型系統
 cd leave-system
 python app.py            # http://127.0.0.1:5055
-python smoke_test.py     # 49 項全鏈路冒煙測試
+python smoke_test.py     # 60 項全鏈路冒煙測試
 
 # 設計提案包（靜態站）
 cd saas
@@ -38,8 +39,8 @@ Demo accounts (password `Pass@123`): student `2024001`, advisor `T001`, faculty 
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — v0.2.0 adds CSRF protection, attachment access control,
-overlapping-leave validation, password management, pagination, and a 49-check smoke suite.
+See [`CHANGELOG.md`](CHANGELOG.md) — v0.3.0 adds security headers, an optional SMTP email
+channel, free-text length caps, and a "mark all read" action, alongside a 60-check smoke suite.
 
 完整變更記錄見 [`CHANGELOG.md`](CHANGELOG.md)。
 

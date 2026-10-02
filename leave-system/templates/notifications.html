@@ -1,14 +1,21 @@
 {% extends "base.html" %}
 {% block title %}通知 · 線上請假系統{% endblock %}
 {% block content %}
-<h1>通知中心</h1>
+<h1>通知中心
+  {% if unread_count %}
+  <form method="post" action="{{ url_for('notifications_read_all') }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn sm ghost" type="submit">全部標為已讀（{{ unread_count }}）</button>
+  </form>
+  {% endif %}
+</h1>
 <div class="card">
   {% if items %}
   <table>
     <thead><tr><th class="tnum">時間</th><th>內容</th><th></th></tr></thead>
     <tbody>
     {% for n in items %}
-      <tr>
+      <tr{% if n.is_read == 0 %} class="unread"{% endif %}>
         <td class="tnum muted">{{ n.created_at[:16] }}</td>
         <td>{{ n.message }}</td>
         <td>{% if n.request_id %}

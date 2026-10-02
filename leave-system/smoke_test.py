@@ -17,7 +17,8 @@ os.environ['LEAVE_DB'] = os.path.join(TMP, 'test.db')
 os.environ['LEAVE_UPLOAD_DIR'] = os.path.join(TMP, 'uploads')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from app import app, calc_days, init_db, seed, academic_year_start  # noqa: E402
+from app import (app, calc_days, init_db, seed, academic_year_start,  # noqa: E402
+                MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN, _smtp_configured)
 
 with app.app_context():
     init_db()
@@ -233,6 +234,55 @@ for u, paths in [('T001', ['/', '/stats', '/export', '/approvals?scope=all',
     for p in paths:
         r = c.get(p)
         check(f'{u} GET {p} → 200', r.status_code == 200)
+
+print('\n[11] 安全標頭')
+r = c.get('/login')
+h = r.headers
+check('X-Content-Type-Options: nosniff', h.get('X-Content-Type-Options') == 'nosniff')
+check('Referrer-Policy 已設定', bool(h.get('Referrer-Policy')))
+check('Content-Security-Policy 已設定', bool(h.get('Content-Security-Policy')))
+
+print('\n[12] 自由文字長度上限')
+login('2024003')
+long_reason = '事' * (MAX_REASON_LEN + 10)
+r = c.post('/new', data={'leave_type_id': '1',
+                         'start_date': (TODAY + datetime.timedelta(days=60)).isoformat(),
+                         'end_date': (TODAY + datetime.timedelta(days=60)).isoformat(),
+                         'reason': long_reason, 'contact_phone': '13800000001'},
+            content_type='multipart/form-data')
+check('事由超過上限被阻擋', '過長' in r.get_data(as_text=True))
+
+long_phone = '1' * (MAX_PHONE_LEN + 10)
+r = c.post('/new', data={'leave_type_id': '1',
+                         'start_date': (TODAY + datetime.timedelta(days=61)).isoformat(),
+                         'end_date': (TODAY + datetime.timedelta(days=61)).isoformat(),
+                         'reason': '外出', 'contact_phone': long_phone},
+            content_type='multipart/form-data')
+check('聯絡電話超過上限被阻擋', '過長' in r.get_data(as_text=True))
+
+rid_c, _ = submit('2024004', 1, TODAY + datetime.timedelta(days=62),
+                  TODAY + datetime.timedelta(days=62), '外出')
+login('T002')
+long_comment = '意見' * (MAX_COMMENT_LEN + 10)
+r = c.post(f'/request/{rid_c}/decide', data={'action': 'approve', 'comment': long_comment},
+           follow_redirects=True)
+check('審批意見超過上限被阻擋', '過長' in r.get_data(as_text=True))
+
+print('\n[13] 通知「全部標為已讀」')
+login('T001')
+tid = db_query("SELECT id FROM users WHERE username='T001'")[0]['id']
+before_unread = db_query('SELECT COUNT(*) c FROM notifications WHERE user_id=? AND is_read=0', (tid,))[0]['c']
+check('T001 有未讀通知', before_unread > 0)
+html = get('/notifications')
+check('通知頁含「全部標為已讀」按鈕', '全部標為已讀' in html)
+r = c.post('/notifications/read', data={}, follow_redirects=False)
+check('POST 全部標為已讀導向回通知頁',
+      r.status_code == 302 and '/notifications' in dict(r.headers).get('Location', ''))
+after_unread = db_query('SELECT COUNT(*) c FROM notifications WHERE user_id=? AND is_read=0', (tid,))[0]['c']
+check('標為已讀後無未讀', after_unread == 0)
+
+print('\n[14] Email 通道預設關閉（失敗靜默）')
+check('未設定 LEAVE_SMTP_* → 不啟用 Email 通道', not _smtp_configured())
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

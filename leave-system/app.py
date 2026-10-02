@@ -18,6 +18,9 @@ from flask import (Flask, render_template, request, redirect, url_for, session,
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
+import smtplib
+from email.message import EmailMessage
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # 可用環境變數指向另一個資料庫／上傳目錄（測試時隔離用）
 DB_PATH = os.environ.get('LEAVE_DB') or os.path.join(BASE_DIR, 'leave_system.db')
@@ -32,6 +35,11 @@ ALLOWED_EXT = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
 MAX_BACKDATE_DAYS = 30     # 最多可回溯補請的天數（病假補件等情境）
 MAX_SINGLE_DAYS = 90       # 單張假單天數上限，防止日期填錯
 MAX_ATTACHMENT_MB = 8
+
+# 自由文字長度上限（防止超長內容撐爆版面／儲存）
+MAX_REASON_LEN = 500
+MAX_COMMENT_LEN = 300
+MAX_PHONE_LEN = 30
 
 # 登入限流
 LOGIN_MAX_ATTEMPTS = 8
@@ -51,6 +59,11 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_SECURE=os.environ.get('LEAVE_COOKIE_SECURE', '0') == '1',
 )
+
+# 預設密鑰告警：生產環境務必以 LEAVE_SECRET 覆寫，否則 session 可被偽造
+if os.environ.get('LEAVE_SECRET') is None:
+    print('[安全警告] 使用預設 secret_key（LEAVE_SECRET 未設定）。'
+          '僅限本地開發，切勿直接上線。')
 
 
 # --------------------------------------------------------------------------
@@ -119,10 +132,40 @@ def required_level_for(days, leave_type):
     return 2 if days > FACULTY_THRESHOLD_DAYS else 1
 
 
+def _smtp_configured():
+    """僅當三個必要變數都齊全才啟用 Email 通道。"""
+    return bool(os.environ.get('LEAVE_SMTP_HOST') and os.environ.get('LEAVE_SMTP_USER')
+                and os.environ.get('LEAVE_SMTP_FROM'))
+
+
+def send_email(to_addr, subject, body):
+    """失敗靜默：通知是「最好能有」，絕不能因郵件伺服器問題讓請假流程報錯。"""
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = os.environ.get('LEAVE_SMTP_FROM', '')
+        msg['To'] = to_addr
+        msg.set_content(body)
+        with smtplib.SMTP(os.environ['LEAVE_SMTP_HOST'],
+                          int(os.environ.get('LEAVE_SMTP_PORT', '587'))) as s:
+            if os.environ.get('LEAVE_SMTP_TLS', '1') == '1':
+                s.starttls()
+            if os.environ.get('LEAVE_SMTP_USER'):
+                s.login(os.environ['LEAVE_SMTP_USER'], os.environ.get('LEAVE_SMTP_PASS', ''))
+            s.send_message(msg)
+    except Exception as exc:  # noqa: BLE001 — 通知通道失敗不應影響主流程
+        print(f'[通知] 郵件發送失敗（已忽略，不影響請假流程）：{exc}')
+
+
 def notify(user_id, request_id, message):
+    """站內通知永遠寫入；若已設定 SMTP，再額外寄一封 Email（失敗靜默）。"""
     if user_id:
         execute('INSERT INTO notifications (user_id, request_id, message) VALUES (?,?,?)',
                 (user_id, request_id, message))
+        if _smtp_configured():
+            u = q('SELECT email FROM users WHERE id=?', (user_id,), one=True)
+            if u and u['email']:
+                send_email(u['email'], '線上請假系統通知', message)
 
 
 def log_action(request_id, actor_id, action, detail=''):
@@ -161,6 +204,18 @@ def csrf_protect():
 def bad_request(e):
     flash(getattr(e, 'description', '請求無效。'), 'error')
     return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.after_request
+def security_headers(resp):
+    """加上基本安全標頭；CSP 允許本專案所需的 inline style / script。"""
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    resp.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self'; img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
+    return resp
 
 
 # --------------------------------------------------------------------------
@@ -247,7 +302,9 @@ def inject_globals():
                 now=datetime.now(), FACULTY_THRESHOLD_DAYS=FACULTY_THRESHOLD_DAYS,
                 min_date=(date.today() - timedelta(days=MAX_BACKDATE_DAYS)).isoformat(),
                 max_date=(date.today() + timedelta(days=365)).isoformat(),
-                MAX_SINGLE_DAYS=MAX_SINGLE_DAYS, MAX_BACKDATE_DAYS=MAX_BACKDATE_DAYS)
+                MAX_SINGLE_DAYS=MAX_SINGLE_DAYS, MAX_BACKDATE_DAYS=MAX_BACKDATE_DAYS,
+                MAX_REASON_LEN=MAX_REASON_LEN, MAX_COMMENT_LEN=MAX_COMMENT_LEN,
+                MAX_PHONE_LEN=MAX_PHONE_LEN)
 
 
 # --------------------------------------------------------------------------
@@ -494,6 +551,10 @@ def new_request():
                    '請先撤回或修改日期。')
         elif not reason:
             err = '請填寫請假事由。'
+        elif len(reason) > MAX_REASON_LEN:
+            err = f'請假事由過長（上限 {MAX_REASON_LEN} 字）。'
+        elif len(phone) > MAX_PHONE_LEN:
+            err = f'聯絡電話過長（上限 {MAX_PHONE_LEN} 字）。'
         if err:
             flash(err, 'error')
             return render_template('new_request.html', types=types, form=request.form)
@@ -610,6 +671,9 @@ def decide(rid):
     if action not in ('approve', 'reject'):
         flash('無效的操作。', 'error')
         return redirect(url_for('detail', rid=rid))
+    if len(comment) > MAX_COMMENT_LEN:
+        flash(f'審批意見過長（上限 {MAX_COMMENT_LEN} 字）。', 'error')
+        return redirect(url_for('detail', rid=rid))
     if action == 'reject' and not comment:
         flash('駁回必須填寫理由。', 'error')
         return redirect(url_for('detail', rid=rid))
@@ -700,8 +764,17 @@ def notifications():
     rows = q('SELECT n.*, r.start_date FROM notifications n '
              'LEFT JOIN leave_requests r ON r.id=n.request_id '
              'WHERE n.user_id=? ORDER BY n.created_at DESC, n.id DESC LIMIT 50', (u['id'],))
-    execute('UPDATE notifications SET is_read=1 WHERE user_id=?', (u['id'],))
     return render_template('notifications.html', items=rows)
+
+
+@app.route('/notifications/read', methods=['POST'])
+@login_required
+def notifications_read_all():
+    """「全部標為已讀」：CSRF 已由 before_request 統一防護。"""
+    u = current_user()
+    execute('UPDATE notifications SET is_read=1 WHERE user_id=? AND is_read=0', (u['id'],))
+    flash('已將全部通知標為已讀。', 'success')
+    return redirect(url_for('notifications'))
 
 
 # --------------------------------------------------------------------------

@@ -7,6 +7,38 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [0.3.0] — 2026-09-29
+
+原型系統（`leave-system/`）的第二輪安全性與健壯性強化。資料庫結構未變動，既有資料可直接沿用。
+
+### Added ｜新增
+
+- **安全回應標頭**：所有回應加上 `X-Content-Type-Options: nosniff`、`Referrer-Policy` 與基本
+  `Content-Security-Policy`（允許本專案所需的 inline style / script）。
+- **可選 Email 通知通道**：設定 `LEAVE_SMTP_*` 環境變數後，`notify()` 在寫入站內通知的同時額外寄信；
+  發送失敗靜默處理，絕不影響請假主流程（預設關閉）。
+- **通知「全部標為已讀」**（`/notifications/read`，POST + CSRF）：可一次清空未讀，未讀項在清單中以左側色條標示。
+- 環境變數 `LEAVE_SMTP_HOST` / `LEAVE_SMTP_USER` / `LEAVE_SMTP_FROM` / `LEAVE_SMTP_PASS` /
+  `LEAVE_SMTP_PORT` / `LEAVE_SMTP_TLS`：啟用可選 Email 通道。
+
+### Changed ｜變更
+
+- 冒煙測試由 49 項擴充至 **60 項**（新增安全標頭、文字長度上限、通知標為已讀、Email 通道預設關閉等檢查）。
+- 開啟通知頁不再自動清除未讀，改由明確的「全部標為已讀」按鈕處理。
+- 預設 `secret_key` 未以 `LEAVE_SECRET` 覆寫時，啟動即印出安全警告。
+
+### Fixed ｜修正
+
+- **自由文字缺少長度上限**：事由、審批意見、聯絡電話過長可能撐爆版面／儲存。現在分別設上限
+  500 / 300 / 30 字（前端 `maxlength` 先擋一層，後端再校驗）。
+
+### Security ｜安全性
+
+- 回應層補齊 `X-Content-Type-Options`、`Referrer-Policy` 與 `Content-Security-Policy`，
+  降低 MIME 嗅探、referrer 洩漏與 XSS 風險。
+
+---
+
 ## [0.2.0] — 2026-09-29
 
 原型系統（`leave-system/`）的安全性與完整性強化。資料庫結構未變動，既有資料可直接沿用。

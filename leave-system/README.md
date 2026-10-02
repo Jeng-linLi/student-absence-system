@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v0.2.0）
+# 線上請假系統（原型 v0.3.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -35,12 +35,14 @@
 - 單張假單最多 **90 天**。
 - 最多可回溯補請 **30 天**內的假。
 - **同一區間不可重複請假**；被阻擋時會提示衝突的假單編號。已駁回／已撤回的假單不佔用區間。
+- 自由文字長度上限：事由 **500 字**、審批意見 **300 字**、聯絡電話 **30 字**（前端 `maxlength` 先擋，後端再校驗）。
 
 ## 安全設計
 
 | 項目 | 做法 |
 |---|---|
 | CSRF | 所有 POST 表單需帶 session 內的 CSRF token，不符者直接拒絕 |
+| 安全標頭 | 回應加 `X-Content-Type-Options: nosniff`、`Referrer-Policy` 與基本 `Content-Security-Policy` |
 | Session | 登入成功時重設 session（防 fixation）；cookie 設 `HttpOnly` + `SameSite=Lax` |
 | 登入限流 | 同一 IP + 帳號 5 分鐘內失敗 8 次即鎖定（進程內計數，多進程請改用 Redis） |
 | 附件存取 | 僅本人、該生導師、同院系審批人、管理員可下載；檔名含隨機字串防枚舉 |
@@ -59,7 +61,7 @@
 | 院系 | 同上（第 2 級複核，範圍為所屬院系） |
 | 管理員 | 帳號增刪/停用/編輯、重設密碼、假別管理（是否需證明、是否需院系） |
 
-共通：站內通知、操作日誌（誰在何時做了什麼）、淺色/深色主題切換。
+共通：站內通知（可選 Email 通道，需設定 `LEAVE_SMTP_*`）、操作日誌（誰在何時做了什麼）、淺色/深色主題切換。
 
 ## 目錄結構
 
@@ -68,7 +70,7 @@ leave-system/
   app.py              路由與業務邏輯（提交、審批、撤回、統計、後台、安全防護）
   schema.sql          資料庫結構
   seed                見 app.py 的 seed()
-  smoke_test.py       全鏈路冒煙測試（49 項）
+  smoke_test.py       全鏈路冒煙測試（60 項）
   start.bat           一鍵啟動
   templates/          Jinja2 頁面模板
   static/css/         樣式
@@ -79,7 +81,7 @@ leave-system/
 ## 測試
 
 ```bash
-python smoke_test.py   # 49 項：天數計算、兩級審批、駁回、撤回、表單校驗、
+python smoke_test.py   # 60 項：天數計算、兩級審批、駁回、撤回、表單校驗、
                        #       附件權限、密碼管理、CSRF、登入限流、頁面可達性與分頁
 ```
 
@@ -93,6 +95,7 @@ python smoke_test.py   # 49 項：天數計算、兩級審批、駁回、撤回�
 | `LEAVE_COOKIE_SECURE` | `0` | 設 `1` 時 session cookie 加上 `Secure`（僅 HTTPS） |
 | `LEAVE_DB` | `leave_system.db` | 資料庫路徑（測試隔離用） |
 | `LEAVE_UPLOAD_DIR` | `uploads/` | 附件上傳目錄 |
+| `LEAVE_SMTP_HOST` / `LEAVE_SMTP_USER` / `LEAVE_SMTP_FROM` / `LEAVE_SMTP_PASS` / `LEAVE_SMTP_PORT` / `LEAVE_SMTP_TLS` | （未設則不啟用） | 選用 Email 通知通道；`HOST`/`USER`/`FROM` 三者齊全才啟用，發送失敗不影響主流程 |
 
 ## 上生產前還要補
 
@@ -100,5 +103,5 @@ python smoke_test.py   # 49 項：天數計算、兩級審批、駁回、撤回�
 2. **安全**：上傳檔案做病毒掃描、登入限流改 Redis 以免多進程失效、`SECRET_KEY` 走密鑰管理服務。
    （CSRF token、參數化 SQL、`SECRET_KEY` 環境變數、附件權限已於 v0.2.0 補上。）
 3. **部署**：換 Gunicorn/Waitress + Nginx，SQLite 換 PostgreSQL（DDL 見 `../saas/schema.sql`）。
-4. **業務**：假期額度上限、學期/校曆（排除假日扣天數）、銷假流程、與教務考勤系統對接、郵件/企業微信通知。
+4. **業務**：假期額度上限、學期/校曆（排除假日扣天數）、銷假流程、與教務考勤系統對接、企業微信通知（站內通知已就緒，Email 為可選通道，需自備 SMTP 伺服器）。
 5. **合規**：個資（請假事由、病假證明）保存期限與存取權限需符合學校與《個人信息保護法》要求。
