@@ -7,9 +7,27 @@ on:
   workflow_dispatch:
 
 jobs:
+  unit-test:
+    name: 單元測試
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: 安裝依賴
+        run: pip install -r leave-system/requirements.txt
+
+      - name: 執行單元測試
+        run: python -m pytest leave-system/tests/ -v
+
   smoke-test:
     name: 請假系統冒煙測試
     runs-on: ubuntu-latest
+    needs: unit-test
     steps:
       - uses: actions/checkout@v7
 
