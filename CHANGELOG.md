@@ -7,6 +7,29 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [0.4.0] — 2026-10-07
+
+原型系統模組化重構與測試補強。資料庫結構未變動，既有資料可直接沿用。
+
+### Added ｜新增
+
+- **`utils.py`**：抽出純函式（`calc_days`、`required_level_for`、`academic_year_start`、`allowed_file`）與常數，不依賴 Flask。
+- **`db.py`**：抽出 SQLite 連線與查詢輔助（`get_db` / `q` / `execute` / `init_db`）。
+- **單元測試**：`tests/` 共 16 項（天數計算、審批層級、學年起算、副檔名白名單）；CI 新增 `unit-test` job。
+- **待審分頁**：`/approvals?scope=todo` 改為 SQL `LIMIT/OFFSET`，與「全部假單」一致。
+
+### Changed ｜變更
+
+- `app.py` 精簡為路由與業務流程；常數與純函式改由 `utils` / `db` 匯入。
+- 刪除未使用的記憶體分頁函式 `paginate()`。
+- `requirements.txt` 加入 `pytest>=8.0`。
+
+### Security ｜安全性
+
+- 無變更（沿用 v0.3.0 的 CSRF、附件權限、安全標頭、登入限流）。
+
+---
+
 ## [0.3.0] — 2026-09-29
 
 原型系統（`leave-system/`）的第二輪安全性與健壯性強化。資料庫結構未變動，既有資料可直接沿用。
