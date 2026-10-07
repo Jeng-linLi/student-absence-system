@@ -30,14 +30,14 @@
     {% endfor %}
     </tbody>
   </table>
-  {% if scope == 'all' and total_pages > 1 %}
+  {% if total_pages > 1 %}
     <div class="pager">
       {% if page > 1 %}
-        <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', page=page-1) }}">← 上一頁</a>
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page-1) }}">← 上一頁</a>
       {% endif %}
-      <span class="muted">第 {{ page }} / {{ total_pages }} 頁</span>
+      <span class="muted">第 {{ page }} / {{ total_pages }} 頁{% if total is defined %}（共 {{ total }} 筆）{% endif %}</span>
       {% if page < total_pages %}
-        <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', page=page+1) }}">下一頁 →</a>
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page+1) }}">下一頁 →</a>
       {% endif %}
     </div>
   {% endif %}
