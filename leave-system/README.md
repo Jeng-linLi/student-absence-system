@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v0.3.0）
+# 線上請假系統（原型 v0.4.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -6,7 +6,7 @@
 
 ```bash
 # 或雙擊 start.bat
-"C:\Users\Johnny\.workbuddy-ai\binaries\python\envs\default\Scripts\python.exe" app.py
+"C:\\Users\\Johnny\\.workbuddy-ai\\binaries\\python\\envs\\default\\Scripts\\python.exe" app.py
 ```
 
 打開 <http://127.0.0.1:5055>。首次啟動自動建庫並寫入示範資料。
@@ -67,10 +67,12 @@
 
 ```
 leave-system/
-  app.py              路由與業務邏輯（提交、審批、撤回、統計、後台、安全防護）
+  app.py              路由與業務流程
+  utils.py            純函式與常數（calc_days 等，可單元測試）
+  db.py               SQLite 連線 / 查詢輔助
   schema.sql          資料庫結構
-  seed                見 app.py 的 seed()
   smoke_test.py       全鏈路冒煙測試（60 項）
+  tests/              單元測試（pytest，16 項）
   start.bat           一鍵啟動
   templates/          Jinja2 頁面模板
   static/css/         樣式
@@ -81,8 +83,8 @@ leave-system/
 ## 測試
 
 ```bash
-python smoke_test.py   # 60 項：天數計算、兩級審批、駁回、撤回、表單校驗、
-                       #       附件權限、密碼管理、CSRF、登入限流、頁面可達性與分頁
+python -m pytest tests/ -v   # 16 項單元測試（calc_days / 審批層級 / 學年 / 副檔名）
+python smoke_test.py         # 60 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限、分頁等
 ```
 
 測試會使用**全新的暫存資料庫**，不會動到 `leave_system.db`。
@@ -90,7 +92,7 @@ python smoke_test.py   # 60 項：天數計算、兩級審批、駁回、撤回�
 ## 環境變數
 
 | 變數 | 預設 | 說明 |
-|---|---|---|
+|---|---|
 | `LEAVE_SECRET` | `dev-only-change-me-in-production` | Flask `SECRET_KEY`，**部署前務必覆寫** |
 | `LEAVE_COOKIE_SECURE` | `0` | 設 `1` 時 session cookie 加上 `Secure`（僅 HTTPS） |
 | `LEAVE_DB` | `leave_system.db` | 資料庫路徑（測試隔離用） |
