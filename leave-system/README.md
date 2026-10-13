@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v0.4.0）
+# 線上請假系統（原型 v0.5.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -42,11 +42,11 @@
 | 項目 | 做法 |
 |---|---|
 | CSRF | 所有 POST 表單需帶 session 內的 CSRF token，不符者直接拒絕 |
-| 安全標頭 | 回應加 `X-Content-Type-Options: nosniff`、`Referrer-Policy` 與基本 `Content-Security-Policy` |
+| 安全標頭 | 回應加 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Referrer-Policy` 與基本 `Content-Security-Policy`（含 `frame-ancestors 'none'`） |
 | Session | 登入成功時重設 session（防 fixation）；cookie 設 `HttpOnly` + `SameSite=Lax` |
 | 登入限流 | 同一 IP + 帳號 5 分鐘內失敗 8 次即鎖定（進程內計數，多進程請改用 Redis） |
 | 附件存取 | 僅本人、該生導師、同院系審批人、管理員可下載；檔名含隨機字串防枚舉 |
-| 密碼 | 長度至少 8 碼；使用者可自行修改，管理員可重設（未填則產生隨機臨時密碼） |
+| 密碼 | 長度至少 8 碼（後端 `validate_password` 於修改／管理員重設／新增用戶強制）；使用者可自行修改，管理員可重設（未填則產生隨機臨時密碼） |
 | SQL | 全部參數化查詢 |
 
 > `SECRET_KEY` 預設為開發用值，部署前請設環境變數 `LEAVE_SECRET`；
@@ -71,7 +71,7 @@ leave-system/
   utils.py            純函式與常數（calc_days 等，可單元測試）
   db.py               SQLite 連線 / 查詢輔助
   schema.sql          資料庫結構
-  smoke_test.py       全鏈路冒煙測試（60 項）
+  smoke_test.py       全鏈路冒煙測試（66 項）
   tests/              單元測試（pytest，16 項）
   start.bat           一鍵啟動
   templates/          Jinja2 頁面模板
@@ -84,7 +84,7 @@ leave-system/
 
 ```bash
 python -m pytest tests/ -v   # 16 項單元測試（calc_days / 審批層級 / 學年 / 副檔名）
-python smoke_test.py         # 60 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限、分頁等
+python smoke_test.py         # 66 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限、分頁等
 ```
 
 測試會使用**全新的暫存資料庫**，不會動到 `leave_system.db`。

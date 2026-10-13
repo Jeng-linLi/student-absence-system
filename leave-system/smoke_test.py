@@ -284,5 +284,46 @@ check('標為已讀後無未讀', after_unread == 0)
 print('\n[14] Email 通道預設關閉（失敗靜默）')
 check('未設定 LEAVE_SMTP_* → 不啟用 Email 通道', not _smtp_configured())
 
+# ---- v0.5.0 新增檢查：防點擊劫持標頭 + 密碼強度策略 ----
+from app import validate_password as _vp
+
+
+def _chk(name, ok):
+    global PASS
+    PASS += 1 if ok else 0
+    print(('  ✓ ' if ok else '  ✗ ') + name)
+
+
+print('\n[+1] 防點擊劫持標頭')
+_tc = app.test_client()
+_rh = _tc.get('/login')
+_chk('X-Frame-Options: DENY', _rh.headers.get('X-Frame-Options') == 'DENY')
+_chk("CSP 含 frame-ancestors 'none'",
+     "frame-ancestors 'none'" in (_rh.headers.get('Content-Security-Policy') or ''))
+
+print('\n[+2] 密碼強度策略')
+_chk('短密碼被 validate_password 拒絕', _vp('123') is not None)
+_chk('合格密碼通過 validate_password', _vp('Pass@123') is None)
+
+app.config['CSRF_ENABLED'] = False
+# 管理員：短密碼新增用戶應被拒絕（隨後用該帳號登入應失敗）
+_tc.post('/login', data={'username': 'admin', 'password': 'Pass@123'})
+_tc.post('/admin/users/add', data={'username': 'tstshort', 'password': '123',
+        'name': '短密測試', 'role': 'student', 'department': 'TEST',
+        'class_name': 'T1', 'email': 't@x.io', 'advisor_id': ''})
+_lg = _tc.post('/login', data={'username': 'tstshort', 'password': '123'},
+              follow_redirects=False)
+_chk('管理員新增短密碼用戶被拒絕',
+     not _lg.headers.get('Location', '').endswith('/dashboard'))
+
+# 學生：改密短密碼不生效（用新密碼登入應失敗）
+_tc.post('/login', data={'username': '2024001', 'password': 'Pass@123'})
+_tc.post('/password', data={'old_password': 'Pass@123', 'new_password': '123',
+        'confirm_password': '123'})
+_lg2 = _tc.post('/login', data={'username': '2024001', 'password': '123'},
+               follow_redirects=False)
+_chk('學生改密：短密碼不生效',
+     not _lg2.headers.get('Location', '').endswith('/dashboard'))
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

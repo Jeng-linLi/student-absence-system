@@ -40,6 +40,7 @@ MAX_ATTACHMENT_MB = 8
 MAX_REASON_LEN = 500
 MAX_COMMENT_LEN = 300
 MAX_PHONE_LEN = 30
+MIN_PASSWORD_LEN = 8
 
 # 登入限流
 LOGIN_MAX_ATTEMPTS = 8
@@ -168,6 +169,13 @@ def notify(user_id, request_id, message):
                 send_email(u['email'], '線上請假系統通知', message)
 
 
+def validate_password(pw):
+    """回傳錯誤訊息（字串）或 None。原型僅檢查最小長度。"""
+    if not pw or len(pw) < MIN_PASSWORD_LEN:
+        return f'密碼長度至少需 {MIN_PASSWORD_LEN} 個字元。'
+    return None
+
+
 def log_action(request_id, actor_id, action, detail=''):
     execute('INSERT INTO audit_logs (request_id, actor_id, action, detail) VALUES (?,?,?,?)',
             (request_id, actor_id, action, detail))
@@ -210,11 +218,13 @@ def bad_request(e):
 def security_headers(resp):
     """加上基本安全標頭；CSP 允許本專案所需的 inline style / script。"""
     resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
     resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
     resp.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self'; img-src 'self' data:; "
-        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
+        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+        "frame-ancestors 'none'")
     return resp
 
 
@@ -372,6 +382,10 @@ def change_password():
         old = request.form.get('old_password', '')
         new = request.form.get('new_password', '')
         confirm = request.form.get('confirm_password', '')
+        err = validate_password(new)
+        if err:
+            flash(err, 'error')
+            return redirect(url_for('change_password'))
         if not check_password_hash(u['password_hash'], old):
             flash('目前密碼不正確。', 'error')
         elif len(new) < 8:
@@ -871,6 +885,10 @@ def admin_add_user():
     email = request.form.get('email', '').strip()
     advisor_id = request.form.get('advisor_id') or None
     password = request.form.get('password') or 'Pass@123'
+    err = validate_password(password)
+    if err:
+        flash(err, 'error')
+        return redirect(url_for('admin_users'))
 
     if not username or not name:
         flash('帳號與姓名必填。', 'error')
@@ -904,6 +922,10 @@ def admin_reset_password(uid):
         flash('找不到該帳號。', 'error')
         return redirect(url_for('admin_users'))
     new = request.form.get('password', '').strip() or secrets.token_urlsafe(10)
+    err = validate_password(new)
+    if err:
+        flash(err, 'error')
+        return redirect(url_for('admin_users'))
     if len(new) < 8:
         flash('密碼至少 8 個字元。', 'error')
         return redirect(url_for('admin_users'))

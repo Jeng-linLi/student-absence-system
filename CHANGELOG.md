@@ -7,6 +7,29 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [0.5.0] — 2026-10-13
+
+在 v0.4.0（模組拆分、待辦分頁、單元測試）之上，補齊兩項安全強化。資料庫結構未變動，既有資料可直接沿用。
+
+### Added ｜新增
+
+- **防點擊劫持**：所有回應加上 `X-Frame-Options: DENY`，並於 `Content-Security-Policy` 加入
+  `frame-ancestors 'none'`，防止系統被嵌入惡意 iframe 進行點擊劫持。
+- **密碼強度策略（落地）**：新增常數 `MIN_PASSWORD_LEN = 8` 與 `validate_password()`，於「修改密碼」
+  （`/password`）、「管理員重置密碼」（`/admin/users/<uid>/reset-password`）、「新增用戶」
+  （`/admin/users/add`）三處強制最小長度。此前 v0.4.0 文件已聲稱「長度至少 8 碼」，本版正式在後端實作。
+
+### Changed ｜變更
+
+- 冒煙測試由 60 項擴充至 **66 項**（新增防點擊劫持標頭、密碼強度策略——含管理員新增短密碼被拒、
+  學生改短密碼不生效等檢查）。
+
+### Notes ｜備註
+
+- 密碼策略目前僅檢查最小長度；上生產前建議再補「不得與帳號相同、須含大小寫與數字」等規則。
+
+---
+
 ## [0.4.0] — 2026-10-07
 
 原型系統模組化重構與測試補強。資料庫結構未變動，既有資料可直接沿用。
