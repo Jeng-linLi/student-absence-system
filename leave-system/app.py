@@ -9,6 +9,7 @@ import io
 import hmac
 import time
 import secrets
+import json
 import sqlite3
 from datetime import date, datetime, timedelta
 from functools import wraps
@@ -104,6 +105,102 @@ def init_db():
     with open(os.path.join(BASE_DIR, 'schema.sql'), encoding='utf-8') as f:
         get_db().executescript(f.read())
     get_db().commit()
+    # 向後相容：既存資料庫若缺少新欄位則補上（全新庫由 schema.sql 直接建立）
+    cols = [r['name'] for r in q("PRAGMA table_info(leave_requests)")]
+    if 'affected_courses' not in cols:
+        execute("ALTER TABLE leave_requests ADD COLUMN affected_courses TEXT NOT NULL DEFAULT ''")
+
+
+WEEKDAY_LABELS = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
+
+# 示範課表（demo 學生共用）。正式環境應由 SIS / LMS 同步，而非硬編碼。
+DEMO_TIMETABLE = [
+    # weekday, 開始, 結束, 課程代碼, 類型, 教室, 備註
+    (0, '10:30', '11:50', 'AIAA 2205-L01', 'Lecture', 'Rm 102, W4', ''),
+    (0, '13:30', '14:50', 'UFUG 2104-L01', 'Lecture', 'Rm 222, W1', ''),
+    (0, '16:30', '17:50', 'UCUG 1603-T01', 'Tutorial', 'Rm 103, E1', ''),
+    (1, '09:00', '11:50', 'UCUG 1800-L03', 'Lecture', 'Rm 147, E1', ''),
+    (1, '12:00', '12:50', 'UFUG 2104-T01', 'Tutorial', 'Rm 222, W1', ''),
+    (1, '16:30', '17:50', 'UCUG 1603-L01', 'Lecture', 'Rm 222, W1', ''),
+    (2, '10:30', '11:50', 'AIAA 2205-L01', 'Lecture', 'Rm 101, W1', ''),
+    (2, '13:30', '14:50', 'UFUG 2104-L01', 'Lecture', 'Rm 222, W1', ''),
+    (3, '12:30', '13:20', 'UFUG 1501-T01', 'Tutorial', 'Rm 233, W1', ''),
+    (3, '15:00', '16:50', 'UFUG 1501-LA01', 'Lab',
+     'Einstein Lab (E3-231B) / Newton Lab (E3-231C)', '以實際編班為準'),
+    (4, '09:00', '11:50', 'UFUG 1501-L01', 'Lecture', 'Rm 233, W1', ''),
+    (4, '12:00', '12:50', 'AIAA 1010-L01', 'Lecture', 'Lecture Hall B', ''),
+]
+
+
+def _day_halves(is_start, is_end, start_period, end_period):
+    """回傳某一天受影響的上午 / 下午標記（依起訖時段推算）。"""
+    am = pm = False
+    if is_start and is_end:            # 單日假
+        if start_period == 'AM':
+            am = True
+            pm = (end_period == 'PM')
+        else:                          # 起於下午
+            pm = True
+            am = (end_period == 'AM')  # 下午→上午 視為涵蓋全天
+    elif is_start:                     # 首日的剩餘時段
+        if start_period == 'AM':
+            am = pm = True
+        else:
+            pm = True
+    elif is_end:                       # 末日的上午時段
+        if end_period == 'PM':
+            am = pm = True
+        else:
+            am = True
+    else:                              # 中間日：全天
+        am = pm = True
+    return am, pm
+
+
+def affected_courses_for(student_id, start_date, end_date,
+                        start_period='AM', end_period='PM'):
+    """依學生課表，算出請假區間內受影響的課程（按半天粒度）。"""
+    try:
+        s = date.fromisoformat(start_date)
+        e = date.fromisoformat(end_date)
+    except (ValueError, TypeError):
+        return []
+    if s > e:
+        s, e = e, s
+    rows = q('SELECT weekday, start_time, end_time, course_code, kind, room, note '
+             'FROM timetable WHERE student_id=? ORDER BY weekday, start_time',
+             (student_id,))
+    by_wd = {}
+    for r in rows:
+        by_wd.setdefault(r['weekday'], []).append(dict(r))
+    out = []
+    d = s
+    while d <= e:
+        wd = d.weekday()
+        am, pm = _day_halves(d == s, d == e, start_period, end_period)
+        day_courses = []
+        for c in by_wd.get(wd, []):
+            is_am = c['start_time'] < '12:00'
+            if (is_am and am) or ((not is_am) and pm):
+                day_courses.append(c)
+        if day_courses:
+            period = 'AM' if (am and not pm) else ('PM' if (pm and not am) else 'FULL')
+            out.append({'date': d.isoformat(), 'weekday': wd,
+                        'weekday_label': WEEKDAY_LABELS[wd], 'period': period,
+                        'courses': day_courses})
+        d += timedelta(days=1)
+    return out
+
+
+def seed_timetable():
+    """寫入示範課表（冪等：已存在則跳過）。正式環境請由 SIS / LMS 同步。"""
+    if q('SELECT 1 FROM timetable LIMIT 1'):
+        return
+    for sid in q('SELECT id FROM users WHERE role=?', ('student',)):
+        for wd, st, et, code, kind, room, note in DEMO_TIMETABLE:
+            execute('INSERT INTO timetable (student_id, weekday, start_time, end_time, '
+                    'course_code, kind, room, note) VALUES (?,?,?,?,?,?,?,?)',
+                    (sid['id'], wd, st, et, code, kind, room, note))
 
 
 # --------------------------------------------------------------------------
@@ -589,12 +686,16 @@ def new_request():
             return render_template('new_request.html', types=types, form=request.form)
 
         level = required_level_for(days, ltype)
+        affected = affected_courses_for(u['id'], start_date.isoformat(),
+                                        end_date.isoformat(), sp, ep)
+        affected_json = json.dumps(affected, ensure_ascii=False)
         rid = execute(
             'INSERT INTO leave_requests (student_id, leave_type_id, start_date, end_date, '
             'start_period, end_period, days, reason, attachment, contact_phone, '
-            'status, current_level, required_level) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            'affected_courses, status, current_level, required_level) '
+            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             (u['id'], type_id, start_date.isoformat(), end_date.isoformat(), sp, ep,
-             days, reason, attachment, phone, 'pending', 1, level))
+             days, reason, attachment, phone, affected_json, 'pending', 1, level))
         execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 1, 'pending'))
         if level == 2:
             execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 2, 'pending'))
@@ -606,6 +707,20 @@ def new_request():
         return redirect(url_for('detail', rid=rid))
 
     return render_template('new_request.html', types=types, form={})
+
+
+@app.route('/api/affected_courses')
+@login_required
+def api_affected_courses():
+    u = current_user()
+    if u['role'] != 'student':
+        return jsonify([])
+    sd = request.args.get('start_date', '')
+    ed = request.args.get('end_date', '')
+    sp = request.args.get('start_period', 'AM')
+    ep = request.args.get('end_period', 'PM')
+    data = affected_courses_for(u['id'], sd, ed, sp, ep)
+    return jsonify(data)
 
 
 # --------------------------------------------------------------------------
@@ -648,8 +763,13 @@ def detail(rid):
         elif u['role'] == 'admin':
             can_approve = True
 
+    affected = []
+    try:
+        affected = json.loads(req['affected_courses'] or '[]')
+    except (ValueError, TypeError):
+        affected = []
     return render_template('request_detail.html', req=req, approvals=approvals,
-                           logs=logs, can_approve=can_approve)
+                           logs=logs, can_approve=can_approve, affected=affected)
 
 
 # --------------------------------------------------------------------------
@@ -1074,12 +1194,14 @@ def seed():
                                      datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
     execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid2, 2, 'pending'))
     notify(fac1, rid2, '張子謙 的 6.0 天病假待院系核複。')
+    seed_timetable()
     return True
 
 
 @app.cli.command('init-db')
 def init_db_command():
     init_db()
+    seed_timetable()
     print('資料庫已初始化。')
 
 
@@ -1089,4 +1211,5 @@ if __name__ == '__main__':
         created = seed()
         if created:
             print('已寫入示範資料。')
+        seed_timetable()
     app.run(host='127.0.0.1', port=5055, debug=True)

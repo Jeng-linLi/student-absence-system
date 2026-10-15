@@ -47,6 +47,22 @@
   </div>
 </div>
 
+{% if affected %}
+<div class="card">
+  <h3>受影響課程（依課表推算）</h3>
+  {% for r in affected %}
+    <div style="margin-bottom:10px">
+      <strong>{{ r.date }}（{{ r.weekday_label }} · {{ '上午' if r.period=='AM' else ('下午' if r.period=='PM' else '全天') }}）</strong>
+      <ul style="margin:4px 0 0;padding-left:18px">
+        {% for c in r.courses %}
+          <li>{{ c.course_code }} · {{ c.kind }} · {{ c.start_time }}–{{ c.end_time }} · {{ c.room }}{% if c.note %}（{{ c.note }}）{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if can_approve %}
 <div class="card">
   <h3>審批操作</h3>

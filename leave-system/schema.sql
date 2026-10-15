@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS leave_requests (
     reason         TEXT    NOT NULL,
     attachment     TEXT    NOT NULL DEFAULT '',     -- 證明文件檔名
     contact_phone  TEXT    NOT NULL DEFAULT '',
+    affected_courses TEXT  NOT NULL DEFAULT '',     -- 依課表算出的受影響課程（JSON）
     status         TEXT    NOT NULL DEFAULT 'pending'
                    CHECK (status IN ('pending','approved','rejected','withdrawn')),
     current_level  INTEGER NOT NULL DEFAULT 1,      -- 1=待導師  2=待院系
@@ -82,3 +83,18 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
+
+-- 課表（依學生每週上課時間，用於推算請假受影響課程）
+CREATE TABLE IF NOT EXISTS timetable (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id  INTEGER NOT NULL REFERENCES users(id),
+    weekday     INTEGER NOT NULL,                 -- 0=週一 .. 4=週五
+    start_time  TEXT    NOT NULL,                 -- HH:MM（24 小時制）
+    end_time    TEXT    NOT NULL,
+    course_code TEXT    NOT NULL,
+    kind        TEXT    NOT NULL DEFAULT '',      -- Lecture / Tutorial / Lab
+    room        TEXT    NOT NULL DEFAULT '',
+    note        TEXT    NOT NULL DEFAULT '',
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_tt_student ON timetable(student_id, weekday);

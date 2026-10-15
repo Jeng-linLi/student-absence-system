@@ -7,17 +7,17 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v0.5.0`**（2026-10-13）· MIT · CI passing
+**Prototype version ｜原型版本：`v0.6.0`**（2026-10-15）· MIT · CI passing
 
-v0.5.0 hardens the prototype further: clickjacking protection (`X-Frame-Options: DENY`
-+ CSP `frame-ancestors 'none'`) and a password-strength policy (`MIN_PASSWORD_LEN=8`,
-enforced on change / admin reset / add-user) — on top of v0.4.0's module split, todo
-pagination, unit tests, security headers, optional SMTP email channel, and "mark all read",
-alongside a 66-check smoke suite in CI.
+v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
+periods instantly previews the classes a leave would make a student miss (`GET
+/api/affected_courses`), and the affected courses are saved onto each request for approvers
+to see. It builds on v0.5.0's clickjacking protection and password-strength policy, v0.4.0's
+module split / pagination / unit tests, and a 73-check smoke suite in CI.
 
 | Folder | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v0.5.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control, 66-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限 |
+| `leave-system/` | Flask + SQLite prototype (**v0.6.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control, timetable-based affected-course preview, 73-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限、課表受影響課程 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
@@ -27,7 +27,7 @@ alongside a 66-check smoke suite in CI.
 # 原型系統
 cd leave-system
 python app.py            # http://127.0.0.1:5055
-python smoke_test.py     # 66 項全鏈路冒煙測試
+python smoke_test.py     # 73 項全鏈路冒煙測試
 
 # 設計提案包（靜態站）
 cd saas
@@ -40,8 +40,8 @@ Demo accounts (password `Pass@123`): student `2024001`, advisor `T001`, faculty 
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — v0.5.0 adds clickjacking protection and a password-strength
-policy, alongside a 66-check smoke suite.
+See [`CHANGELOG.md`](CHANGELOG.md) — v0.6.0 links the leave form to the student timetable
+(affected-course preview + persistence), alongside a 73-check smoke suite.
 
 完整變更記錄見 [`CHANGELOG.md`](CHANGELOG.md)。
 

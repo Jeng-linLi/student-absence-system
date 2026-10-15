@@ -67,6 +67,12 @@
   </ul>
 </div>
 
+<div class="card" id="courses-card" style="display:none">
+  <h3>受影響課程（依你的課表推算）</h3>
+  <p class="muted" style="margin:0 0 8px" id="courses-empty">選擇起訖日期與時段後，這裡會列出請假期間你會錯過的課。</p>
+  <div id="courses-list"></div>
+</div>
+
 <script>
 // 天數試算（與後端 calc_days 同邏輯，僅供提交前預覽）
 function calcDays(){
@@ -102,5 +108,48 @@ document.getElementById('lt').addEventListener('change', function(){
   else msg.push('請假超過 {{ FACULTY_THRESHOLD_DAYS }} 天會自動送院系複核。');
   hint.innerHTML = msg.join('<br>');
 });
+
+// 受影響課程預覽（依課表，僅供填表時參考；提交時後端會重新計算並存檔）
+function loadCourses(){
+  var sd = document.querySelector('[name=start_date]').value;
+  var ed = document.querySelector('[name=end_date]').value;
+  var card = document.getElementById('courses-card');
+  var list = document.getElementById('courses-list');
+  var empty = document.getElementById('courses-empty');
+  if(!sd || !ed){ card.style.display='none'; list.innerHTML=''; return; }
+  var sp = document.querySelector('[name=start_period]').value;
+  var ep = document.querySelector('[name=end_period]').value;
+  var url = '/api/affected_courses?start_date=' + encodeURIComponent(sd) +
+            '&end_date=' + encodeURIComponent(ed) +
+            '&start_period=' + sp + '&end_period=' + ep;
+  fetch(url).then(function(r){ return r.json(); }).then(function(rows){
+    if(!rows.length){
+      card.style.display='block'; list.innerHTML='';
+      empty.style.display='block';
+      empty.textContent='這段期間沒有排課（週末或無課日）。';
+      return;
+    }
+    empty.style.display='none';
+    var wl = ['週一','週二','週三','週四','週五','週六','週日'];
+    var html = '';
+    rows.forEach(function(r){
+      var periodTxt = r.period==='AM' ? '上午' : (r.period==='PM' ? '下午' : '全天');
+      html += '<div style="margin-bottom:10px"><strong>' + r.date + '（' +
+              (r.weekday_label || wl[r.weekday]) + ' · ' + periodTxt + '）</strong><ul style="margin:4px 0 0;padding-left:18px">';
+      r.courses.forEach(function(c){
+        html += '<li>' + c.course_code + ' · ' + c.kind + ' · ' +
+                c.start_time + '–' + c.end_time + ' · ' + c.room +
+                (c.note ? '（' + c.note + '）' : '') + '</li>';
+      });
+      html += '</ul></div>';
+    });
+    list.innerHTML = html;
+    card.style.display = 'block';
+  });
+}
+['start_date','end_date','start_period','end_period'].forEach(function(n){
+  document.querySelector('[name=' + n + ']').addEventListener('change', loadCourses);
+});
+loadCourses();
 </script>
 {% endblock %}

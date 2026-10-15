@@ -325,5 +325,43 @@ _lg2 = _tc.post('/login', data={'username': '2024001', 'password': '123'},
 _chk('學生改密：短密碼不生效',
      not _lg2.headers.get('Location', '').endswith('/dashboard'))
 
+# ---- v0.6.0 新增檢查：課表與受影響課程 ----
+from app import affected_courses_for as _acf, seed_timetable as _st
+import json as _json
+
+app.app_context().push()  # 讓直接呼叫 q() 的函式（seed_timetable / affected_courses_for）有上下文
+_st()  # 確保示範課表存在（冪等）
+_stu = db_query("SELECT id FROM users WHERE username='2024001'")[0]['id']
+_chk('示範課表已寫入（2024001，≥12 堂/週）',
+     db_query('SELECT COUNT(*) c FROM timetable WHERE student_id=?', (_stu,))[0]['c'] >= 12)
+
+# 取未來的週一，避免與既有假單重疊；週一整天應有 3 堂
+_m1 = TODAY + datetime.timedelta(days=70)
+_m1 = _m1 - datetime.timedelta(days=_m1.weekday())
+_m2 = _m1 + datetime.timedelta(days=7)
+_m1f = _acf(_stu, _m1.isoformat(), _m1.isoformat(), 'AM', 'PM')
+_chk('受影響課程：單週一整天 = 1 天 3 堂',
+     len(_m1f) == 1 and len(_m1f[0]['courses']) == 3)
+_chk('受影響課程含 AIAA 2205-L01（週一 10:30）',
+     any(c['course_code'] == 'AIAA 2205-L01' for d in _m1f for c in d['courses']))
+_m2am = _acf(_stu, _m2.isoformat(), _m2.isoformat(), 'AM', 'AM')
+_chk('受影響課程：單週一上午 = 1 堂（僅 AIAA 2205-L01）',
+     len(_m2am) == 1 and _m2am[0]['courses'][0]['course_code'] == 'AIAA 2205-L01')
+
+# API 端點（已登入學生）
+login('2024001')
+_r = c.get(f"/api/affected_courses?start_date={_m1.isoformat()}&end_date={_m1.isoformat()}"
+           f"&start_period=AM&end_period=PM")
+_api = _json.loads(_r.get_data(as_text=True))
+_chk('API /api/affected_courses 回傳 JSON 清單（1 天）', isinstance(_api, list) and len(_api) == 1)
+_chk('API 回傳含 UFUG 2104-L01（週一 13:30）',
+     any(c['course_code'] == 'UFUG 2104-L01' for d in _api for c in d['courses']))
+
+# 提交單週一整天的假，確認受影響課程寫入庫
+_rid, _ = submit('2024001', 1, _m1, _m1, '課程衝突自測', 'AM', 'PM')
+_saved = db_query('SELECT affected_courses FROM leave_requests WHERE id=?', (_rid,))[0]['affected_courses']
+_saved = _json.loads(_saved or '[]')
+_chk('提交後受影響課程已存檔（1 天 3 堂）', len(_saved) == 1 and len(_saved[0]['courses']) == 3)
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')
