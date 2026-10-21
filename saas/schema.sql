@@ -122,6 +122,24 @@ CREATE TABLE enrollments (
     UNIQUE (student_id, course_id)
 );
 
+-- 每週課表時段（夜間自 SIS / LMS 同步），用於推算請假區間受影響的課程，
+-- 與原型 leave-system 的 timetable 對應；正式環境以本表為準，不寫死示範資料。
+CREATE TABLE timetable (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_id    UUID REFERENCES courses(id),             -- 可選：關聯正式課程主數據
+    weekday      SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),  -- 0=週一
+    start_time   TIME NOT NULL,
+    end_time     TIME NOT NULL,
+    session_type VARCHAR(16) NOT NULL DEFAULT 'Lecture',  -- Lecture|Tutorial|Lab
+    venue        VARCHAR(120),
+    note         VARCHAR(200) NOT NULL DEFAULT '',
+    source       VARCHAR(16) NOT NULL DEFAULT 'sis',      -- sis|lms|manual
+    synced_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_tt_time_range CHECK (end_time > start_time)
+);
+
 -- 考評行事曆（夜間自 SIS / Canvas 同步）
 CREATE TABLE assessments (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -155,6 +173,7 @@ CREATE TABLE absence_requests (
     days             NUMERIC(4,1) NOT NULL,            -- 半天計 0.5
     reason           TEXT NOT NULL,
     contact_phone    VARCHAR(32),
+    affected_courses JSONB NOT NULL DEFAULT '[]',       -- 依課表推算的受影響課程（與原型 leave_requests.affected_courses 對應）
     status           request_status NOT NULL DEFAULT 'pending',
     route_code       VARCHAR(20) NOT NULL,             -- A-MED / B-OFFICIAL / C-LONG …
     route_version    INTEGER NOT NULL DEFAULT 1,
@@ -374,6 +393,7 @@ CREATE INDEX idx_event_dates           ON events (start_date, end_date) WHERE st
 -- 修讀與考評
 CREATE INDEX idx_enrollment_student    ON enrollments (student_id) WHERE status = 'enrolled';
 CREATE INDEX idx_enrollment_course     ON enrollments (course_id);
+CREATE INDEX idx_tt_student            ON timetable (student_id, weekday);
 CREATE INDEX idx_assessment_course_dt  ON assessments (course_id, assessment_date);
 -- 文件
 CREATE INDEX idx_document_request      ON documents (request_id);

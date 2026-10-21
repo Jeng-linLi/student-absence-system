@@ -44,3 +44,19 @@ def init_db():
     with open(os.path.join(BASE_DIR, 'schema.sql'), encoding='utf-8') as f:
         get_db().executescript(f.read())
     get_db().commit()
+    apply_migrations()
+
+
+# 向後相容遷移：舊版資料庫缺少的欄位列於此，啟動時自動補上（不影響既有資料）。
+# 全新庫已由 schema.sql 直接建立，這裡只對歷史庫生效。
+MIGRATIONS = [
+    ('leave_requests', 'affected_courses', "TEXT NOT NULL DEFAULT ''"),
+]
+
+
+def apply_migrations():
+    """依 MIGRATIONS 清單為既存資料表補齊缺少的欄位（冪等）。"""
+    for table, column, ddl in MIGRATIONS:
+        cols = [r['name'] for r in q(f'PRAGMA table_info({table})')]
+        if column not in cols:
+            execute(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}')

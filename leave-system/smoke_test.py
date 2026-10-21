@@ -169,9 +169,16 @@ check('院系審批人可下載該附件', c.get(f'/uploads/{att}').status_code 
 print('\n[7] 帳號與密碼')
 login('2024001')
 check('修改密碼頁可達', '目前密碼' in get('/password'))
-r = c.post('/password', data={'old_password': 'Pass@123', 'new_password': 'WrongConfirm',
-                              'confirm_password': 'DifferentOne'})
+# 兩者都通過強度策略，但彼此不一致 → 應被「不一致」擋下
+r = c.post('/password', data={'old_password': 'Pass@123', 'new_password': 'WrongConfirm9',
+                              'confirm_password': 'DifferentOne9'})
 check('兩次新密碼不一致被擋', '不一致' in r.get_data(as_text=True))
+# 新密碼缺少數字 → 應被強度策略擋下（且不生效）
+r = c.post('/password', data={'old_password': 'Pass@123', 'new_password': 'OnlyLetters',
+                              'confirm_password': 'OnlyLetters'})
+check('缺數字密碼被強度策略擋下', '大寫' in r.get_data(as_text=True))
+r = c.post('/login', data={'username': '2024001', 'password': 'OnlyLetters'})
+check('被擋下的密碼無法登入', r.status_code != 302)
 c.post('/password', data={'old_password': 'Pass@123', 'new_password': 'NewPass@2026',
                           'confirm_password': 'NewPass@2026'})
 r = c.post('/login', data={'username': '2024001', 'password': 'NewPass@2026'})
@@ -362,6 +369,37 @@ _rid, _ = submit('2024001', 1, _m1, _m1, '課程衝突自測', 'AM', 'PM')
 _saved = db_query('SELECT affected_courses FROM leave_requests WHERE id=?', (_rid,))[0]['affected_courses']
 _saved = _json.loads(_saved or '[]')
 _chk('提交後受影響課程已存檔（1 天 3 堂）', len(_saved) == 1 and len(_saved[0]['courses']) == 3)
+
+# ---- v0.7.0 新增檢查：密碼策略補齊 / CSV 公式注入 / 統計範圍 / healthz ----
+from app import temp_password as _tp
+
+print('\n[+3] 密碼強度策略（v0.7.0 補齊）')
+_chk('密碼不可與帳號相同', _vp('2024001', '2024001') is not None)
+_chk('須含大寫、小寫與數字',
+     _vp('onlyletters') is not None and _vp('NOLOWER123') is not None)
+_chk('臨時密碼產生器必符合策略',
+     _vp(_tp()) is None and _vp(_tp(), 'someone') is None)
+
+print('\n[+4] CSV 匯出公式注入防護')
+_d85 = TODAY + datetime.timedelta(days=85)
+_rid_c, _ = submit('2024001', 1, _d85, _d85, "=cmd|' /C calc'!A0")
+_chk('公式注入事由可提交（內容不過濾，只在使用端防護）', _rid_c is not None)
+login('T001')   # 2024001 的導師
+_csv = c.get('/export').get_data(as_text=True)
+_chk("CSV 中 = 開頭的事由已加 ' 前綴", "'=" in _csv)
+_chk('CSV 不含其他導師學生的假單（範圍隔離）', '2024004' not in _csv)
+
+print('\n[+5] 統計頁範圍隔離')
+login('T001')
+_chk('導師統計頁只含自己的學生（不含 2024004）', '2024004' not in get('/stats'))
+login('T002')
+_chk('導師統計頁只含自己的學生（不含 2024001）', '2024001' not in get('/stats'))
+
+print('\n[+6] /healthz 健康檢查')
+_hz = c.get('/healthz')
+_chk('未登入也可探測（200）', _hz.status_code == 200)
+_chk('回傳 JSON 狀態（status: ok）',
+     '"status"' in _hz.get_data(as_text=True) and 'ok' in _hz.get_data(as_text=True))
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

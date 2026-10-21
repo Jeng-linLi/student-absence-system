@@ -2,6 +2,8 @@
 """
 線上請假系統（原型）
 學生提交 → 導師審批 → （必要時）院系審批 → 核准
+
+本檔只放路由與業務流程；常數與純函式在 utils.py，SQLite 連線／查詢在 db.py。
 """
 import os
 import csv
@@ -10,45 +12,27 @@ import hmac
 import time
 import secrets
 import json
-import sqlite3
 from datetime import date, datetime, timedelta
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for, session,
-                   g, flash, jsonify, send_from_directory, Response, abort)
+                   flash, jsonify, send_from_directory, Response, abort)
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 import smtplib
 from email.message import EmailMessage
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# 可用環境變數指向另一個資料庫／上傳目錄（測試時隔離用）
-DB_PATH = os.environ.get('LEAVE_DB') or os.path.join(BASE_DIR, 'leave_system.db')
-UPLOAD_DIR = os.environ.get('LEAVE_UPLOAD_DIR') or os.path.join(BASE_DIR, 'uploads')
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# 審批分流門檻：超過此天數需院系複核
-FACULTY_THRESHOLD_DAYS = 3
-ALLOWED_EXT = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
-
-# 表單校驗邊界
-MAX_BACKDATE_DAYS = 30     # 最多可回溯補請的天數（病假補件等情境）
-MAX_SINGLE_DAYS = 90       # 單張假單天數上限，防止日期填錯
-MAX_ATTACHMENT_MB = 8
-
-# 自由文字長度上限（防止超長內容撐爆版面／儲存）
-MAX_REASON_LEN = 500
-MAX_COMMENT_LEN = 300
-MAX_PHONE_LEN = 30
-MIN_PASSWORD_LEN = 8
-
-# 登入限流
-LOGIN_MAX_ATTEMPTS = 8
-LOGIN_WINDOW_SEC = 300
-
-# 學年起始月份（9 月），用於統計「本學年已核准天數」
-ACADEMIC_YEAR_START_MONTH = 9
+from db import (BASE_DIR, DB_PATH, UPLOAD_DIR, get_db, close_db,  # noqa: F401
+                q, execute, init_db)
+from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
+                   MAX_BACKDATE_DAYS, MAX_SINGLE_DAYS, MAX_ATTACHMENT_MB,
+                   MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN,
+                   MIN_PASSWORD_LEN, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
+                   ACADEMIC_YEAR_START_MONTH,
+                   parse_date, calc_days, required_level_for,
+                   academic_year_start, allowed_file,
+                   validate_password, temp_password, csv_safe)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -68,47 +52,9 @@ if os.environ.get('LEAVE_SECRET') is None:
           '僅限本地開發，切勿直接上線。')
 
 
-# --------------------------------------------------------------------------
-# 資料庫
-# --------------------------------------------------------------------------
-def get_db():
-    if 'db' not in g:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA foreign_keys = ON')
-        g.db = conn
-    return g.db
-
-
 @app.teardown_appcontext
-def close_db(e=None):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
-
-
-def q(sql, args=(), one=False):
-    cur = get_db().execute(sql, args)
-    rv = cur.fetchall()
-    cur.close()
-    return (rv[0] if rv else None) if one else rv
-
-
-def execute(sql, args=()):
-    db = get_db()
-    cur = db.execute(sql, args)
-    db.commit()
-    return cur.lastrowid
-
-
-def init_db():
-    with open(os.path.join(BASE_DIR, 'schema.sql'), encoding='utf-8') as f:
-        get_db().executescript(f.read())
-    get_db().commit()
-    # 向後相容：既存資料庫若缺少新欄位則補上（全新庫由 schema.sql 直接建立）
-    cols = [r['name'] for r in q("PRAGMA table_info(leave_requests)")]
-    if 'affected_courses' not in cols:
-        execute("ALTER TABLE leave_requests ADD COLUMN affected_courses TEXT NOT NULL DEFAULT ''")
+def _close_db(e=None):
+    close_db(e)
 
 
 WEEKDAY_LABELS = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
@@ -206,30 +152,6 @@ def seed_timetable():
 # --------------------------------------------------------------------------
 # 工具
 # --------------------------------------------------------------------------
-def parse_date(s):
-    return datetime.strptime(s, '%Y-%m-%d').date()
-
-
-def calc_days(start_date, end_date, start_period, end_period):
-    """按半天粒度計算請假天數。"""
-    if end_date < start_date:
-        return 0
-    full = (end_date - start_date).days - 1          # 中間的完整天
-    head = 0.5 if start_period == 'PM' else 1.0
-    tail = 0.5 if end_period == 'AM' else 1.0
-    if start_date == end_date:
-        if start_period == 'AM' and end_period == 'PM':
-            return 1.0
-        return 0.5
-    return max(full, 0) + head + tail
-
-
-def required_level_for(days, leave_type):
-    if leave_type and leave_type['needs_faculty']:
-        return 2
-    return 2 if days > FACULTY_THRESHOLD_DAYS else 1
-
-
 def _smtp_configured():
     """僅當三個必要變數都齊全才啟用 Email 通道。"""
     return bool(os.environ.get('LEAVE_SMTP_HOST') and os.environ.get('LEAVE_SMTP_USER')
@@ -266,20 +188,9 @@ def notify(user_id, request_id, message):
                 send_email(u['email'], '線上請假系統通知', message)
 
 
-def validate_password(pw):
-    """回傳錯誤訊息（字串）或 None。原型僅檢查最小長度。"""
-    if not pw or len(pw) < MIN_PASSWORD_LEN:
-        return f'密碼長度至少需 {MIN_PASSWORD_LEN} 個字元。'
-    return None
-
-
 def log_action(request_id, actor_id, action, detail=''):
     execute('INSERT INTO audit_logs (request_id, actor_id, action, detail) VALUES (?,?,?,?)',
             (request_id, actor_id, action, detail))
-
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
 
 
 # --------------------------------------------------------------------------
@@ -360,11 +271,16 @@ def overlapping_requests(student_id, start_date, end_date, exclude_id=None):
     return q(sql, args)
 
 
-def academic_year_start(today=None):
-    """回傳當前學年的起始日（9/1）。"""
-    today = today or date.today()
-    year = today.year if today.month >= ACADEMIC_YEAR_START_MONTH else today.year - 1
-    return date(year, ACADEMIC_YEAR_START_MONTH, 1)
+def role_scope(u):
+    """統計／匯出的資料範圍：導師只看自己的學生、院系只看本院系、管理員看全部。
+
+    回傳 (條件列表, args)，可直接組成 WHERE 子句。
+    """
+    if u['role'] == 'advisor':
+        return ['s.advisor_id=?'], [u['id']]
+    if u['role'] == 'faculty':
+        return ['s.department=?'], [u['department']]
+    return [], []
 
 
 def current_user():
@@ -479,14 +395,12 @@ def change_password():
         old = request.form.get('old_password', '')
         new = request.form.get('new_password', '')
         confirm = request.form.get('confirm_password', '')
-        err = validate_password(new)
+        err = validate_password(new, u['username'])
         if err:
+            # 與其他錯誤路徑一致：flash 後直接重渲染表單（不中斷使用者操作）
             flash(err, 'error')
-            return redirect(url_for('change_password'))
-        if not check_password_hash(u['password_hash'], old):
+        elif not check_password_hash(u['password_hash'], old):
             flash('目前密碼不正確。', 'error')
-        elif len(new) < 8:
-            flash('新密碼至少 8 個字元。', 'error')
         elif new != confirm:
             flash('兩次輸入的新密碼不一致。', 'error')
         else:
@@ -496,15 +410,6 @@ def change_password():
             flash('密碼已更新，請用新密碼重新登入。', 'success')
             return redirect(url_for('logout'))
     return render_template('change_password.html')
-
-
-def paginate(rows, page, per_page=20):
-    """簡易分頁：回傳 (當頁資料, 總頁數, 當前頁)。"""
-    per_page = max(int(per_page), 1)
-    total_pages = max((len(rows) + per_page - 1) // per_page, 1)
-    page = min(max(int(page), 1), total_pages)
-    start = (page - 1) * per_page
-    return rows[start:start + per_page], total_pages, page
 
 
 def count_todo(u):
@@ -546,13 +451,13 @@ def dashboard():
     else:
         ctx['todo'] = count_todo(u)
         ctx['recent'] = todo_requests(u, limit=5)
-
-    ctx['stats'] = {
-        'total': q('SELECT COUNT(*) c FROM leave_requests', one=True)['c'],
-        'pending': q("SELECT COUNT(*) c FROM leave_requests WHERE status='pending'", one=True)['c'],
-        'approved': q("SELECT COUNT(*) c FROM leave_requests WHERE status='approved'", one=True)['c'],
-        'rejected': q("SELECT COUNT(*) c FROM leave_requests WHERE status='rejected'", one=True)['c'],
-    }
+        # 全系統統計只給審批者／管理員看；學生沒有必要知道別人的請假彙總
+        ctx['stats'] = {
+            'total': q('SELECT COUNT(*) c FROM leave_requests', one=True)['c'],
+            'pending': q("SELECT COUNT(*) c FROM leave_requests WHERE status='pending'", one=True)['c'],
+            'approved': q("SELECT COUNT(*) c FROM leave_requests WHERE status='approved'", one=True)['c'],
+            'rejected': q("SELECT COUNT(*) c FROM leave_requests WHERE status='rejected'", one=True)['c'],
+        }
     return render_template('dashboard.html', **ctx)
 
 
@@ -655,17 +560,19 @@ def new_request():
             err = f'單張假單不得超過 {MAX_SINGLE_DAYS} 天，請確認日期是否填錯。'
         elif (today - end_date).days > MAX_BACKDATE_DAYS:
             err = f'不可補請超過 {MAX_BACKDATE_DAYS} 天前的假單。'
-        elif overlapping_requests(u['id'], start_date, end_date):
-            clash = overlapping_requests(u['id'], start_date, end_date)[0]
-            err = (f'你在此區間已有假單 #{clash["id"]}'
-                   f'（{clash["start_date"]} ~ {clash["end_date"]}），'
-                   '請先撤回或修改日期。')
         elif not reason:
             err = '請填寫請假事由。'
         elif len(reason) > MAX_REASON_LEN:
             err = f'請假事由過長（上限 {MAX_REASON_LEN} 字）。'
         elif len(phone) > MAX_PHONE_LEN:
             err = f'聯絡電話過長（上限 {MAX_PHONE_LEN} 字）。'
+        else:
+            # 其餘校驗都通過才查資料庫（整個流程只查一次重疊）
+            clashes = overlapping_requests(u['id'], start_date, end_date)
+            if clashes:
+                err = (f'你在此區間已有假單 #{clashes[0]["id"]}'
+                       f'（{clashes[0]["start_date"]} ~ {clashes[0]["end_date"]}），'
+                       '請先撤回或修改日期。')
         if err:
             flash(err, 'error')
             return render_template('new_request.html', types=types, form=request.form)
@@ -919,13 +826,8 @@ def notifications_read_all():
 @role_required('advisor', 'faculty', 'admin')
 def stats():
     u = current_user()
-    where, args = '', []
-    if u['role'] == 'advisor':
-        where = 'WHERE s.advisor_id=?'
-        args = [u['id']]
-    elif u['role'] == 'faculty':
-        where = 'WHERE s.department=?'
-        args = [u['department']]
+    conds, args = role_scope(u)
+    where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
     rows = q(f'SELECT s.id, s.name, s.username, s.class_name, s.department, '
              f'COUNT(r.id) total_cnt, '
              f"COALESCE(SUM(CASE WHEN r.status='approved' THEN r.days ELSE 0 END),0) approved_days, "
@@ -934,9 +836,14 @@ def stats():
              f'FROM users s LEFT JOIN leave_requests r ON r.student_id=s.id '
              f"{where} GROUP BY s.id HAVING total_cnt>0 ORDER BY approved_days DESC", args)
 
+    # 假別統計同樣受範圍限制（導師只看自己的學生、院系只看本院系）
+    type_conds, type_args = role_scope(u)
+    type_conds.append("r.status='approved'")
     by_type = q("SELECT t.name, COUNT(r.id) cnt, COALESCE(SUM(r.days),0) days "
                 'FROM leave_requests r JOIN leave_types t ON t.id=r.leave_type_id '
-                "WHERE r.status='approved' GROUP BY t.id ORDER BY days DESC")
+                'JOIN users s ON s.id=r.student_id '
+                f"WHERE {' AND '.join(type_conds)} GROUP BY t.id ORDER BY days DESC",
+                type_args)
     return render_template('stats.html', rows=rows, by_type=by_type)
 
 
@@ -945,13 +852,8 @@ def stats():
 @role_required('advisor', 'faculty', 'admin')
 def export_csv():
     u = current_user()
-    where, args = '', []
-    if u['role'] == 'advisor':
-        where = 'WHERE s.advisor_id=?'
-        args = [u['id']]
-    elif u['role'] == 'faculty':
-        where = 'WHERE s.department=?'
-        args = [u['department']]
+    conds, args = role_scope(u)
+    where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
     rows = q('SELECT r.id, s.username, s.name, s.class_name, s.department, t.name type_name, '
              'r.start_date, r.end_date, r.days, r.reason, r.status, r.current_level, r.created_at '
              'FROM leave_requests r JOIN users s ON s.id=r.student_id '
@@ -964,10 +866,12 @@ def export_csv():
     w.writerow(['假單號', '學號', '姓名', '班級', '院系', '假別', '開始', '結束',
                 '天數', '事由', '狀態', '目前層級', '提交時間'])
     for r in rows:
-        w.writerow([r['id'], r['username'], r['name'], r['class_name'], r['department'],
-                    r['type_name'], r['start_date'], r['end_date'], r['days'],
-                    r['reason'], STATUS_LABEL.get(r['status'], r['status']),
-                    r['current_level'], r['created_at']])
+        # csv_safe：事由等自由文字若是 = + - @ 開頭，在 Excel 會被當公式執行
+        w.writerow([csv_safe(v) if isinstance(v, str) else v
+                    for v in (r['id'], r['username'], r['name'], r['class_name'], r['department'],
+                              r['type_name'], r['start_date'], r['end_date'], r['days'],
+                              r['reason'], STATUS_LABEL.get(r['status'], r['status']),
+                              r['current_level'], r['created_at'])])
     return Response(buf.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition':
                              f'attachment; filename=leave_{date.today():%Y%m%d}.csv'})
@@ -1005,7 +909,7 @@ def admin_add_user():
     email = request.form.get('email', '').strip()
     advisor_id = request.form.get('advisor_id') or None
     password = request.form.get('password') or 'Pass@123'
-    err = validate_password(password)
+    err = validate_password(password, username)
     if err:
         flash(err, 'error')
         return redirect(url_for('admin_users'))
@@ -1036,18 +940,15 @@ def admin_toggle_user(uid):
 @login_required
 @role_required('admin')
 def admin_reset_password(uid):
-    """管理員重設密碼。未填寫時自動產生一組隨機臨時密碼。"""
+    """管理員重設密碼。未填寫時自動產生一組符合強度策略的隨機臨時密碼。"""
     target = q('SELECT id, username FROM users WHERE id=?', (uid,), one=True)
     if not target:
         flash('找不到該帳號。', 'error')
         return redirect(url_for('admin_users'))
-    new = request.form.get('password', '').strip() or secrets.token_urlsafe(10)
-    err = validate_password(new)
+    new = request.form.get('password', '').strip() or temp_password()
+    err = validate_password(new, target['username'])
     if err:
         flash(err, 'error')
-        return redirect(url_for('admin_users'))
-    if len(new) < 8:
-        flash('密碼至少 8 個字元。', 'error')
         return redirect(url_for('admin_users'))
     execute('UPDATE users SET password_hash=? WHERE id=?', (generate_password_hash(new), uid))
     log_action(None, current_user()['id'], 'reset_password', f"重設 {target['username']} 的密碼")
@@ -1104,6 +1005,16 @@ def admin_add_type():
              1 if request.form.get('needs_faculty') else 0))
     flash(f'已新增假別「{name}」。', 'success')
     return redirect(url_for('admin_types'))
+
+
+@app.route('/healthz')
+def healthz():
+    """健康檢查（無需登入）：供負載均衡 / 容器探測 / CI 使用。"""
+    try:
+        q('SELECT 1')
+        return jsonify({'status': 'ok', 'db': 'up'})
+    except Exception as exc:  # noqa: BLE001 — 探針只需回報狀態，不吐堆疊
+        return jsonify({'status': 'error', 'db': str(exc)}), 503
 
 
 @app.route('/uploads/<path:filename>')

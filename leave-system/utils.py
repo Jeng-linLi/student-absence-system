@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """純函式與常數：不依賴 Flask / 資料庫，便於單元測試。"""
+import secrets
 from datetime import date, datetime
 
 # 審批分流門檻：超過此天數需院系複核
@@ -15,6 +16,7 @@ MAX_ATTACHMENT_MB = 8
 MAX_REASON_LEN = 500
 MAX_COMMENT_LEN = 300
 MAX_PHONE_LEN = 30
+MIN_PASSWORD_LEN = 8
 
 # 登入限流
 LOGIN_MAX_ATTEMPTS = 8
@@ -60,3 +62,38 @@ def academic_year_start(today=None):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
+
+
+def validate_password(pw, username=None):
+    """密碼強度策略：長度 ≥ 8、不得與帳號相同、須含大寫、小寫與數字。
+
+    回傳錯誤訊息（字串）或 None。username 可選；提供時會一併檢查是否與帳號相同。
+    """
+    if not pw or len(pw) < MIN_PASSWORD_LEN:
+        return f'密碼長度至少需 {MIN_PASSWORD_LEN} 個字元。'
+    if username and pw.strip().lower() == username.strip().lower():
+        return '密碼不可與帳號相同。'
+    if not (any(c.isupper() for c in pw)
+            and any(c.islower() for c in pw)
+            and any(c.isdigit() for c in pw)):
+        return '密碼需同時包含大寫字母、小寫字母與數字。'
+    return None
+
+
+def temp_password():
+    """產生一組必定通過 validate_password 的隨機臨時密碼。"""
+    return f"Rst{secrets.token_hex(5)}9"
+
+
+# CSV 公式注入：以這些字元開頭的儲存格在 Excel / Sheets 會被當公式執行
+_CSV_DANGER_PREFIXES = ('=', '+', '-', '@')
+
+
+def csv_safe(value):
+    """CSV 公式注入防護：= + - @ 開頭的字串加 ' 前綴（試算表視為純文字）。
+
+    非字串或安全開頭的值原樣回傳。
+    """
+    if isinstance(value, str) and value[:1] in _CSV_DANGER_PREFIXES:
+        return "'" + value
+    return value

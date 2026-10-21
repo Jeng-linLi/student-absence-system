@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v0.6.1）
+# 線上請假系統（原型 v0.7.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -53,8 +53,9 @@
 | Session | 登入成功時重設 session（防 fixation）；cookie 設 `HttpOnly` + `SameSite=Lax` |
 | 登入限流 | 同一 IP + 帳號 5 分鐘內失敗 8 次即鎖定（進程內計數，多進程請改用 Redis） |
 | 附件存取 | 僅本人、該生導師、同院系審批人、管理員可下載；檔名含隨機字串防枚舉 |
-| 密碼 | 長度至少 8 碼（後端 `validate_password` 於修改／管理員重設／新增用戶強制）；使用者可自行修改，管理員可重設（未填則產生隨機臨時密碼） |
+| 密碼 | 長度至少 8 碼、須含大寫／小寫字母與數字、不可與帳號相同（後端 `validate_password` 於修改／管理員重設／新增用戶強制）；使用者可自行修改，管理員可重設（未填則產生符合策略的隨機臨時密碼） |
 | SQL | 全部參數化查詢 |
+| CSV 匯出 | 自由文字若以 `= + - @` 開頭會加 `'` 前綴，防止 Excel／Sheets 公式注入 |
 
 > `SECRET_KEY` 預設為開發用值，部署前請設環境變數 `LEAVE_SECRET`；
 > 走 HTTPS 時再加 `LEAVE_COOKIE_SECURE=1`。
@@ -69,17 +70,18 @@
 | 管理員 | 帳號增刪/停用/編輯、重設密碼、假別管理（是否需證明、是否需院系） |
 
 共通：站內通知（可選 Email 通道，需設定 `LEAVE_SMTP_*`）、操作日誌（誰在何時做了什麼）、淺色/深色主題切換。
+維運：`GET /healthz` 健康檢查（無需登入，回傳 JSON，資料庫異常時回 503）。
 
 ## 目錄結構
 
 ```
 leave-system/
-  app.py              路由與業務流程
-  utils.py            純函式與常數（calc_days 等，可單元測試）
-  db.py               SQLite 連線 / 查詢輔助
+  app.py              路由與業務流程（常數與純函式、DB 輔助分別見 utils.py / db.py）
+  utils.py            純函式與常數（calc_days、validate_password、csv_safe 等，可單元測試）
+  db.py               SQLite 連線 / 查詢輔助 / 通用 migrate
   schema.sql          資料庫結構
-  smoke_test.py       全鏈路冒煙測試（73 項）
-  tests/              單元測試（pytest，16 項）
+  smoke_test.py       全鏈路冒煙測試（85 項）
+  tests/              單元測試（pytest，26 項）
   start.bat           一鍵啟動
   templates/          Jinja2 頁面模板
   static/css/         樣式
@@ -90,8 +92,8 @@ leave-system/
 ## 測試
 
 ```bash
-python -m pytest tests/ -v   # 16 項單元測試（calc_days / 審批層級 / 學年 / 副檔名）
-python smoke_test.py         # 73 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限、分頁、受影響課程等
+python -m pytest tests/ -v   # 26 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全）
+python smoke_test.py         # 85 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz
 ```
 
 測試會使用**全新的暫存資料庫**，不會動到 `leave_system.db`。
