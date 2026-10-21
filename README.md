@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v0.7.0`**（2026-10-21）· MIT · CI passing
+**Prototype version ｜原型版本：`v0.8.0`**（2026-10-21）· MIT · CI passing
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
 periods instantly previews the classes a leave would make a student miss (`GET
@@ -16,12 +16,15 @@ to see. v0.6.1 trims that preview and detail list to course code, type and time 
 the room is no longer shown. v0.7.0 consolidates the module split (single source of truth
 for constants and pure functions), fixes a stats-scope leak, hardens the CSV export against
 formula injection, completes the password-strength policy, and adds a `/healthz` probe.
-It builds on v0.5.0's clickjacking protection, v0.4.0's pagination / unit tests, and an
-85-check smoke suite in CI.
+v0.8.0 hardens authentication and account administration: login throttling now persists in
+SQLite (survives restarts and multi-worker deployments), password resets invalidate every
+existing session, idle sessions expire, and admins can no longer lock themselves out of the
+back office. It builds on v0.5.0's clickjacking protection, v0.4.0's pagination / unit
+tests, and a 93-check smoke suite in CI.
 
 | Folder | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v0.7.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control, timetable-based affected-course preview, 85-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限、課表受影響課程 |
+| `leave-system/` | Flask + SQLite prototype (**v0.8.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control, timetable-based affected-course preview, DB-persisted login throttle, session invalidation on password change, 93-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限、課表受影響課程、限流持久化、改密碼登出所有 session |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
@@ -31,7 +34,7 @@ It builds on v0.5.0's clickjacking protection, v0.4.0's pagination / unit tests,
 # 原型系統
 cd leave-system
 python app.py            # http://127.0.0.1:5055
-python smoke_test.py     # 85 項全鏈路冒煙測試
+python smoke_test.py     # 93 項全鏈路冒煙測試
 
 # 設計提案包（靜態站）
 cd saas
@@ -44,9 +47,11 @@ Demo accounts (password `Pass@123`): student `2024001`, advisor `T001`, faculty 
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — v0.7.0 consolidates the module split, fixes a
-stats-scope leak, hardens CSV export against formula injection, completes the password
-policy, and adds a `/healthz` probe (smoke suite now 85 checks).
+See [`CHANGELOG.md`](CHANGELOG.md) — v0.8.0 hardens authentication and account administration
+(persistent login throttling, session invalidation on password change, idle-session expiry,
+admin lockout guards); v0.7.0 consolidates the module split, fixes a stats-scope leak, hardens
+CSV export against formula injection, completes the password policy, and adds a `/healthz`
+probe (smoke suite now 93 checks).
 
 完整變更記錄見 [`CHANGELOG.md`](CHANGELOG.md)。
 

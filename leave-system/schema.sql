@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT    NOT NULL UNIQUE,          -- 登入帳號（學號或教工號）
     password_hash TEXT    NOT NULL,
+    pwd_changed_at TEXT,                            -- 密碼最後變更時間；登入早於此時間的 session 作廢
     name          TEXT    NOT NULL,
     role          TEXT    NOT NULL CHECK (role IN ('student','advisor','faculty','admin')),
     department    TEXT    NOT NULL DEFAULT '',      -- 所屬院系
@@ -83,6 +84,14 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
+
+-- 登入限流紀錄。持久化到資料庫：跨進程、重啟後仍有效
+-- （僅存進程內記憶體的話，多 worker 部署下限流形同虛設）
+CREATE TABLE IF NOT EXISTS login_attempts (
+    key TEXT    NOT NULL,                          -- 來源 IP + 帳號
+    ts  REAL    NOT NULL                           -- Unix timestamp
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_key ON login_attempts(key, ts);
 
 -- 課表（依學生每週上課時間，用於推算請假受影響課程）
 CREATE TABLE IF NOT EXISTS timetable (

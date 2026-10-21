@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """純函式與常數：不依賴 Flask / 資料庫，便於單元測試。"""
+import os
+import re
 import secrets
 from datetime import date, datetime
 
@@ -24,6 +26,14 @@ LOGIN_WINDOW_SEC = 300
 
 # 學年起始月份（9 月），用於統計「本學年已核准天數」
 ACADEMIC_YEAR_START_MONTH = 9
+
+# 角色白名單（與 schema.sql 的 CHECK 約束一致）
+VALID_ROLES = ('student', 'advisor', 'faculty', 'admin')
+_USERNAME_RE = re.compile(r'[A-Za-z0-9._@-]{1,50}')
+
+# 閒置 session 逾時（分鐘）：超過此時間無操作即需重新登入。
+# session 是簽名 cookie，服務端無法主動逐出，只能以時間戳記在每次請求時檢驗。
+SESSION_IDLE_MINUTES = int(os.environ.get('LEAVE_SESSION_IDLE_MINUTES', '480'))
 
 
 def parse_date(s):
@@ -62,6 +72,16 @@ def academic_year_start(today=None):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
+
+
+def valid_role(role):
+    """角色白名單校驗：表單傳入的角色必須是四種合法角色之一。"""
+    return role in VALID_ROLES
+
+
+def valid_username(username):
+    """帳號格式：1–50 字元，僅允許字母、數字與 . _ - @。"""
+    return bool(_USERNAME_RE.fullmatch(username or ''))
 
 
 def validate_password(pw, username=None):

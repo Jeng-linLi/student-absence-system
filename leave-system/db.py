@@ -51,6 +51,7 @@ def init_db():
 # 全新庫已由 schema.sql 直接建立，這裡只對歷史庫生效。
 MIGRATIONS = [
     ('leave_requests', 'affected_courses', "TEXT NOT NULL DEFAULT ''"),
+    ('users', 'pwd_changed_at', 'TEXT'),
 ]
 
 

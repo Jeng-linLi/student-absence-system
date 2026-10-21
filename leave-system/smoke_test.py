@@ -188,11 +188,16 @@ r = c.post('/login', data={'username': '2024001', 'password': 'NewPass@2026'})
 c.post('/password', data={'old_password': 'NewPass@2026', 'new_password': 'Pass@123',
                           'confirm_password': 'Pass@123'})
 
+# v0.8.0：2024002 先登入；管理員重設密碼後，其舊 session 應立即失效
+_stu_c = app.test_client()
+_stu_c.post('/login', data={'username': '2024002', 'password': 'Pass@123'})
+check('2024002 登入後可訪問首頁', _stu_c.get('/').status_code == 200)
 login('admin')
 uid = db_query("SELECT id FROM users WHERE username='2024002'")[0]['id']
 r = c.post(f'/admin/users/{uid}/reset-password', data={'password': 'TempPass@99'},
            follow_redirects=True)
 check('管理員可重設密碼', '已重設' in r.get_data(as_text=True))
+check('重設密碼後 2024002 的舊 session 立即失效', _stu_c.get('/').status_code == 302)
 r = c.post('/login', data={'username': '2024002', 'password': 'TempPass@99'})
 check('重設後的密碼可登入', r.status_code == 302)
 login('admin')
@@ -230,6 +235,8 @@ for _ in range(12):
     c.post('/login', data={'username': '2024002', 'password': 'definitely-wrong'})
 r = c.post('/login', data={'username': '2024002', 'password': 'TempPass@99'})
 check('連續失敗後觸發限流', r.status_code == 429)
+check('限流紀錄寫入資料庫（進程重啟／多 worker 仍有效）',
+      db_query("SELECT COUNT(*) c FROM login_attempts WHERE key LIKE '%2024002'")[0]['c'] >= 8)
 
 print('\n[10] 頁面可達性與分頁')
 for u, paths in [('T001', ['/', '/stats', '/export', '/approvals?scope=all',
@@ -400,6 +407,23 @@ _hz = c.get('/healthz')
 _chk('未登入也可探測（200）', _hz.status_code == 200)
 _chk('回傳 JSON 狀態（status: ok）',
      '"status"' in _hz.get_data(as_text=True) and 'ok' in _hz.get_data(as_text=True))
+
+# ---- v0.8.0 新增檢查：管理員停用保護 / 帳號與角色校驗 ----
+print('\n[+7] 管理員停用保護與帳號校驗')
+login('admin')
+_uid_self = db_query("SELECT id FROM users WHERE username='admin'")[0]['id']
+_r2 = c.post(f'/admin/users/{_uid_self}/toggle', follow_redirects=True)
+_chk('管理員不可停用自己', '不可停用目前登入中的自己' in _r2.get_data(as_text=True))
+_chk('被阻擋後仍可正常使用後台', c.get('/admin/users').status_code == 200)
+_r3 = c.post('/admin/users/add', data={'username': 'badrole', 'password': 'Pass@123',
+             'name': '壞角色', 'role': 'superuser'}, follow_redirects=True)
+_chk('新增帳號：非法角色被擋', '角色不合法' in _r3.get_data(as_text=True))
+_r4 = c.post('/admin/users/add', data={'username': 'a' * 51, 'password': 'Pass@123',
+             'name': '超長帳號', 'role': 'student'}, follow_redirects=True)
+_chk('新增帳號：帳號格式不合法被擋', '帳號格式不合法' in _r4.get_data(as_text=True))
+_chk('被擋的帳號未建立',
+     db_query("SELECT id FROM users WHERE username='badrole'") == []
+     and db_query("SELECT id FROM users WHERE username=?", ('a' * 51,)) == [])
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

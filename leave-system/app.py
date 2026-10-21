@@ -29,10 +29,11 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    MAX_BACKDATE_DAYS, MAX_SINGLE_DAYS, MAX_ATTACHMENT_MB,
                    MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN,
                    MIN_PASSWORD_LEN, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
-                   ACADEMIC_YEAR_START_MONTH,
+                   ACADEMIC_YEAR_START_MONTH, SESSION_IDLE_MINUTES,
                    parse_date, calc_days, required_level_for,
                    academic_year_start, allowed_file,
-                   validate_password, temp_password, csv_safe)
+                   validate_password, temp_password, csv_safe,
+                   valid_role, valid_username)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -237,23 +238,23 @@ def security_headers(resp):
 
 
 # --------------------------------------------------------------------------
-# 登入限流（進程內計數，重啟即清零；多進程部署時請改用 Redis）
+# 登入限流（寫入資料庫：跨進程、重啟後仍有效）
+# 舊版以進程內 dict 計數——重啟即清零，多 worker 部署時每個進程各記一份，
+# 限流形同虛設；改以 SQLite 持久化（正式環境換 Redis 時沿用同一組介面即可）。
 # --------------------------------------------------------------------------
-_LOGIN_ATTEMPTS = {}
-
-
 def login_throttled(key):
-    attempts = [t for t in _LOGIN_ATTEMPTS.get(key, []) if time.time() - t < LOGIN_WINDOW_SEC]
-    _LOGIN_ATTEMPTS[key] = attempts
-    return len(attempts) >= LOGIN_MAX_ATTEMPTS
+    cutoff = time.time() - LOGIN_WINDOW_SEC
+    execute('DELETE FROM login_attempts WHERE ts < ?', (cutoff,))
+    row = q('SELECT COUNT(*) c FROM login_attempts WHERE key=?', (key,), one=True)
+    return row['c'] >= LOGIN_MAX_ATTEMPTS
 
 
 def login_failed(key):
-    _LOGIN_ATTEMPTS.setdefault(key, []).append(time.time())
+    execute('INSERT INTO login_attempts (key, ts) VALUES (?,?)', (key, time.time()))
 
 
 def login_succeeded(key):
-    _LOGIN_ATTEMPTS.pop(key, None)
+    execute('DELETE FROM login_attempts WHERE key=?', (key,))
 
 
 # --------------------------------------------------------------------------
@@ -283,10 +284,45 @@ def role_scope(u):
     return [], []
 
 
+def _now_str():
+    """統一時間字串格式（含微秒：auth_at 與 pwd_changed_at 只差不到一秒時
+    秒級格式會判為相等，導致「重設密碼後舊 session 仍有效」的競態）。"""
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+
+
+def _parse_ts(s):
+    """容忍有無微秒兩種格式。"""
+    try:
+        return datetime.strptime(s, '%Y-%m-%d %H:%M:%S.%f')
+    except ValueError:
+        return datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
+
+
 def current_user():
+    """回傳目前登入者；session 閒置逾時或登入後密碼被改過則一律視為未登入。"""
     if 'uid' not in session:
         return None
-    return q('SELECT * FROM users WHERE id=? AND active=1', (session['uid'],), one=True)
+    u = q('SELECT * FROM users WHERE id=? AND active=1', (session['uid'],), one=True)
+    if not u:
+        return None
+    now = datetime.now()
+    # 閒置逾時：session 是簽名 cookie，服務端無法主動逐出，
+    # 只能每次請求刷新／檢驗 last_seen 時間戳記。
+    last_seen = session.get('last_seen')
+    if last_seen:
+        try:
+            idle = (now - _parse_ts(last_seen)).total_seconds()
+        except ValueError:
+            idle = 0
+        if idle > SESSION_IDLE_MINUTES * 60:
+            session.clear()
+            return None
+    # 本次登入後密碼被改過（管理員重設、或於別處改密碼）→ 舊 session 即時作廢
+    if u['pwd_changed_at'] and session.get('auth_at', '') < u['pwd_changed_at']:
+        session.clear()
+        return None
+    session['last_seen'] = now.strftime('%Y-%m-%d %H:%M:%S.%f')
+    return u
 
 
 def login_required(f):
@@ -359,6 +395,10 @@ app.jinja_env.globals.update(status_view=status_view,
 # --------------------------------------------------------------------------
 # 登入 / 登出
 # --------------------------------------------------------------------------
+# 時序均化：帳號不存在時也執行一次雜湊比對，避免以回應時間差枚舉有效帳號
+_DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(16))
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -374,7 +414,12 @@ def login():
             session.clear()                       # 防 session fixation
             session['uid'] = user['id']
             session['csrf_token'] = secrets.token_hex(32)
+            session['auth_at'] = _now_str()
+            session['last_seen'] = session['auth_at']
             return redirect(url_for('dashboard'))
+        if not user:
+            # 帳號不存在也跑一次雜湊比對，拉平與「帳號存在但密碼錯誤」的時間差
+            check_password_hash(_DUMMY_PASSWORD_HASH, password)
         login_failed(key)
         flash('帳號或密碼錯誤。', 'error')
     return render_template('login.html')
@@ -401,11 +446,13 @@ def change_password():
             flash(err, 'error')
         elif not check_password_hash(u['password_hash'], old):
             flash('目前密碼不正確。', 'error')
+        elif new == old:
+            flash('新密碼不可與目前密碼相同。', 'error')
         elif new != confirm:
             flash('兩次輸入的新密碼不一致。', 'error')
         else:
-            execute('UPDATE users SET password_hash=? WHERE id=?',
-                    (generate_password_hash(new), u['id']))
+            execute('UPDATE users SET password_hash=?, pwd_changed_at=? WHERE id=?',
+                    (generate_password_hash(new), _now_str(), u['id']))
             log_action(None, u['id'], 'change_password', '使用者自行修改密碼')
             flash('密碼已更新，請用新密碼重新登入。', 'success')
             return redirect(url_for('logout'))
@@ -917,6 +964,12 @@ def admin_add_user():
     if not username or not name:
         flash('帳號與姓名必填。', 'error')
         return redirect(url_for('admin_users'))
+    if not valid_username(username):
+        flash('帳號格式不合法（1–50 字元，僅字母、數字與 . _ - @）。', 'error')
+        return redirect(url_for('admin_users'))
+    if not valid_role(role):
+        flash('角色不合法（限 student / advisor / faculty / admin）。', 'error')
+        return redirect(url_for('admin_users'))
     if q('SELECT id FROM users WHERE username=?', (username,), one=True):
         flash(f'帳號 {username} 已存在。', 'error')
         return redirect(url_for('admin_users'))
@@ -928,11 +981,42 @@ def admin_add_user():
     return redirect(url_for('admin_users'))
 
 
+def toggle_user_error(me, target):
+    """停用／啟用帳號的前置保護，回傳錯誤訊息或 None。
+
+    - 不可停用目前登入中的自己；
+    - 不可停用最後一位在職管理員（正常流程下登入者本身就是管理員，
+      這條是錦上添花的深度防禦，防止腳本／未來角色改動造成鎖死）。
+    """
+    if target['id'] == me['id']:
+        return '不可停用目前登入中的自己。'
+    if target['role'] == 'admin' and target['active'] == 1:
+        others = q("SELECT COUNT(*) c FROM users WHERE role='admin' AND active=1 AND id<>?",
+                   (target['id'],), one=True)['c']
+        if others == 0:
+            return '系統至少需保留一位在職管理員。'
+    return None
+
+
 @app.route('/admin/users/<int:uid>/toggle', methods=['POST'])
 @login_required
 @role_required('admin')
 def admin_toggle_user(uid):
-    execute('UPDATE users SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?', (uid,))
+    """停用／啟用帳號（含防呆保護，見 toggle_user_error）。"""
+    me = current_user()
+    target = q('SELECT id, username, role, active FROM users WHERE id=?', (uid,), one=True)
+    if not target:
+        flash('找不到該帳號。', 'error')
+        return redirect(url_for('admin_users'))
+    err = toggle_user_error(me, target)
+    if err:
+        flash(err, 'error')
+        return redirect(url_for('admin_users'))
+    new_active = 0 if target['active'] == 1 else 1
+    execute('UPDATE users SET active=? WHERE id=?', (new_active, uid))
+    log_action(None, me['id'], 'toggle_user',
+               f"{'停用' if new_active == 0 else '啟用'} {target['username']}")
+    flash(f"已{'停用' if new_active == 0 else '啟用'} {target['username']}。", 'success')
     return redirect(url_for('admin_users'))
 
 
@@ -950,7 +1034,10 @@ def admin_reset_password(uid):
     if err:
         flash(err, 'error')
         return redirect(url_for('admin_users'))
-    execute('UPDATE users SET password_hash=? WHERE id=?', (generate_password_hash(new), uid))
+    # 更新密碼的同時刷新 pwd_changed_at：該帳號所有舊 session 立即作廢
+    # （session 是簽名 cookie，不靠服務端黑名單，只能以時間戳記檢驗）
+    execute('UPDATE users SET password_hash=?, pwd_changed_at=? WHERE id=?',
+            (generate_password_hash(new), _now_str(), uid))
     log_action(None, current_user()['id'], 'reset_password', f"重設 {target['username']} 的密碼")
     flash(f"已重設 {target['username']} 的密碼為：{new}", 'success')
     return redirect(url_for('admin_users'))
@@ -1012,6 +1099,7 @@ def healthz():
     """健康檢查（無需登入）：供負載均衡 / 容器探測 / CI 使用。"""
     try:
         q('SELECT 1')
+        q('SELECT COUNT(*) c FROM users')      # schema 完整性：核心表可查
         return jsonify({'status': 'ok', 'db': 'up'})
     except Exception as exc:  # noqa: BLE001 — 探針只需回報狀態，不吐堆疊
         return jsonify({'status': 'error', 'db': str(exc)}), 503
