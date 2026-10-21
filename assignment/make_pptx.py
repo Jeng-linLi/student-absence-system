@@ -151,7 +151,7 @@ def build():
         add_textbox(s, x, 3.3, 2.9, 0.5, label, size=14, bold=True, color=RGBColor(0xFF, 0xFF, 0xFF), align=PP_ALIGN.CENTER)
     add_textbox(s, 0.45, 4.6, 12, 0.35, 'Johnny, Jeng-lin Li · HKUST(GZ)',
                 size=14, color=INK)
-    add_textbox(s, 0.45, 5.0, 12, 0.3, 'Sept 2026 · ≈ 1,030 words + 1 figure + 6 references',
+    add_textbox(s, 0.45, 5.0, 12, 0.3, 'Sept 2026 · ≈ 1,610 words + 1 figure + 8 references',
                 size=11, color=MUTE)
     add_textbox(s, 0.45, 6.75, 11, 0.45,
                 'For the SAAS design package: see /saas/index.html  ·  Flask prototype: http://127.0.0.1:5055',
@@ -296,17 +296,19 @@ def build():
     add_title_bar(s, '7 · Business Value', 'An institutional licence; measurable cost becomes visible')
     # left bullets
     add_bullets(s, 0.55, 1.4, 7.6, 5.4, [
-        '• Customer & payer: the university, not the student — Registry and IT office '
-          'buy an annual licence sized by student population.',
-        '• Users (students, instructors) pay in time, not money.',
-        '• Value: makes an unmeasured cost measurable.',
-        '   – Instructor hours on absence email',
-        '   – Administrative effort on disputes',
-        '   – Compliance risk of holding no record',
-        '• Differentiator: policy-configuration layer + portability — same product serves '
-          'HKUST(GZ), HKUST, CUHK(SZ) and other institutions whose thresholds differ.',
-        '• Needed complements: campus SSO, SIS / LMS vendors, Microsoft for delivery, '
-          'cross-campus policy owners willing to harmonise.',
+        '• Payer: the university (Registry + IT), annual licence by student population; '
+          'students & instructors pay only in time.',
+        '• Business model: 3 revenue lines — annual licence + implementation fee + '
+          'configuration support.',
+        '• Value: makes an invisible cost visible, then reduces it.',
+        '   – Instructor hours on absence email & ad-hoc negotiation',
+        '   – Admin effort on disputes, duplicate records, manual audits',
+        '   – Compliance risk of holding no defensible record',
+        '• Indicative scale: 10k students / 800 faculty → several thousand fragmented '
+          'hours / yr; 30–50% reduction is material (illustrative).',
+        '• Moat: policy-configuration layer + portability across HKUST(GZ)/HKUST/CUHK(SZ).',
+        '• Compliance as a driver: UKVI / ESOS / FERPA → "regulatory defensibility" '
+          'shortens sales cycles & widens the market.',
     ], size=12)
 
     add_rect(s, 8.35, 1.4, 4.6, 5.4, fill=RGBColor(0xF0, 0xEB, 0xFA))
@@ -327,12 +329,14 @@ def build():
     add_rect(s, 0.55, 1.4, 6.0, 4.6, fill=RGBColor(0xE7, 0xF5, 0xEC))
     add_textbox(s, 0.65, 1.5, 5.8, 0.35, 'Positive impact', size=12, bold=True, color=GREEN)
     add_bullets(s, 0.65, 1.85, 5.8, 4.0, [
-        '• Equity: outcome stops depending on which instructor you ask or how persuasive '
+        '• Equity by structure: outcome stops depending on who you ask or how persuasive '
           'your email is.',
         '• Recurring-need students (chronic illness, caregiving, visa, athletes) gain most — '
           'the system carries context instead of forcing retellings.',
-        '• Early-warning rules can reach a struggling student before failure appears in grades.',
-        '• Unavoidable date absences (visa appointments) cannot be rejected on grounds of date.',
+        '• Protects international students: visa attendance duties (UKVI / ESOS) — a '
+          'legitimate absence should not become a compliance breach.',
+        '• Early-warning rules can reach a struggling student before grades fail — an '
+          'administrative record becomes a welfare signal.',
     ], size=11)
 
     # risks

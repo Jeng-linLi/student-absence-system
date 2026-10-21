@@ -133,7 +133,7 @@ def main():
 
     # footer note
     add_p(doc, 'Word count of the main body (Sections 1–5 plus Final Reflection, '
-               'excluding the title block, figure caption and references): ≈ 1,030 words.',
+               'excluding the title block, figure caption and references): ≈ 1,610 words.',
           size=9.5, italic=True, color=MUTE, space_after=0)
 
     doc.save(DOC)
