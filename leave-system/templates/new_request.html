@@ -138,7 +138,7 @@ function loadCourses(){
               (r.weekday_label || wl[r.weekday]) + ' · ' + periodTxt + '）</strong><ul style="margin:4px 0 0;padding-left:18px">';
       r.courses.forEach(function(c){
         html += '<li>' + c.course_code + ' · ' + c.kind + ' · ' +
-                c.start_time + '–' + c.end_time + ' · ' + c.room +
+                c.start_time + '–' + c.end_time +
                 (c.note ? '（' + c.note + '）' : '') + '</li>';
       });
       html += '</ul></div>';

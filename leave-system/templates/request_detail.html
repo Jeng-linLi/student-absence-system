@@ -55,7 +55,7 @@
       <strong>{{ r.date }}（{{ r.weekday_label }} · {{ '上午' if r.period=='AM' else ('下午' if r.period=='PM' else '全天') }}）</strong>
       <ul style="margin:4px 0 0;padding-left:18px">
         {% for c in r.courses %}
-          <li>{{ c.course_code }} · {{ c.kind }} · {{ c.start_time }}–{{ c.end_time }} · {{ c.room }}{% if c.note %}（{{ c.note }}）{% endif %}</li>
+          <li>{{ c.course_code }} · {{ c.kind }} · {{ c.start_time }}–{{ c.end_time }}{% if c.note %}（{{ c.note }}）{% endif %}</li>
         {% endfor %}
       </ul>
     </div>
