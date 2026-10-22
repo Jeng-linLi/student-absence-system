@@ -28,7 +28,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '0.9.0'
+APP_VERSION = '0.9.1'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')
@@ -50,6 +50,10 @@ COMMON_PASSWORDS = frozenset({
 # 角色白名單（與 schema.sql 的 CHECK 約束一致）
 VALID_ROLES = ('student', 'advisor', 'faculty', 'admin')
 _USERNAME_RE = re.compile(r'[A-Za-z0-9._@-]{1,50}')
+
+# 假別代號格式與名稱長度上限
+_TYPE_CODE_RE = re.compile(r'[A-Za-z0-9_-]{1,20}')
+MAX_TYPE_NAME_LEN = 30
 
 # 閒置 session 逾時（分鐘）：超過此時間無操作即需重新登入。
 # session 是簽名 cookie，服務端無法主動逐出，只能以時間戳記在每次請求時檢驗。
@@ -124,6 +128,11 @@ def valid_role(role):
 def valid_username(username):
     """帳號格式：1–50 字元，僅允許字母、數字與 . _ - @。"""
     return bool(_USERNAME_RE.fullmatch(username or ''))
+
+
+def valid_type_code(code):
+    """假別代號格式：1–20 字元，僅字母、數字與 - _。"""
+    return bool(_TYPE_CODE_RE.fullmatch(code or ''))
 
 
 _EMAIL_RE = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')

@@ -30,11 +30,12 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN,
                    MIN_PASSWORD_LEN, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
                    ACADEMIC_YEAR_START_MONTH, SESSION_IDLE_MINUTES,
-                   APP_VERSION, LEAVE_STATUSES,
+                   APP_VERSION, LEAVE_STATUSES, MAX_TYPE_NAME_LEN,
                    parse_date, calc_days, required_level_for,
                    academic_year_start, allowed_file,
                    validate_password, temp_password, csv_safe,
-                   valid_role, valid_username, valid_email, sniff_allowed_type)
+                   valid_role, valid_username, valid_email, sniff_allowed_type,
+                   valid_type_code)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -608,10 +609,14 @@ def new_request():
         except (KeyError, ValueError):
             flash('表單填寫有誤，請檢查日期。', 'error')
             return render_template('new_request.html', types=types, form=request.form)
+        if sp not in ('AM', 'PM') or ep not in ('AM', 'PM'):
+            flash('上午／下午時段不合法。', 'error')
+            return render_template('new_request.html', types=types, form=request.form)
 
         reason = request.form.get('reason', '').strip()
         phone = request.form.get('contact_phone', '').strip()
-        ltype = q('SELECT * FROM leave_types WHERE id=?', (type_id,), one=True)
+        # active=1：停用的假別不只在表單裡隱藏，直 POST 也提交不進來
+        ltype = q('SELECT * FROM leave_types WHERE id=? AND active=1', (type_id,), one=True)
         days = calc_days(start_date, end_date, sp, ep)
 
         today = date.today()
@@ -712,7 +717,7 @@ def detail(rid):
     u = current_user()
     req = q('SELECT r.*, t.name type_name, t.requires_attachment, '
             's.name student_name, s.username student_no, s.class_name, s.department, '
-            'a.name advisor_name '
+            's.advisor_id, a.name advisor_name '
             'FROM leave_requests r '
             'JOIN leave_types t ON t.id=r.leave_type_id '
             'JOIN users s ON s.id=r.student_id '
@@ -724,6 +729,15 @@ def detail(rid):
 
     if u['role'] == 'student' and req['student_id'] != u['id']:
         flash('你沒有權限查看他人的假單。', 'error')
+        return redirect(url_for('dashboard'))
+    # v0.9.1：導師只看自己的學生、院系只看本院系、管理員看全部。
+    # 此前只擋了學生——任何導師都能翻開別人的病假事由、聯絡電話與附件，
+    # 而 decide 的審批權限本來就限定範圍，查看權限不該比審批權限還寬。
+    if u['role'] == 'advisor' and req['advisor_id'] != u['id']:
+        flash('你沒有權限查看該假單。', 'error')
+        return redirect(url_for('dashboard'))
+    if u['role'] == 'faculty' and req['department'] != u['department']:
+        flash('你沒有權限查看該假單。', 'error')
         return redirect(url_for('dashboard'))
 
     approvals = q('SELECT ap.*, u.name approver_name, u.role approver_role '
@@ -852,15 +866,21 @@ def approvals():
     total_pages = 1
 
     if scope == 'all':
-        total = q('SELECT COUNT(*) c FROM leave_requests', one=True)['c']
+        # 範圍隔離：導師只看自己的學生、院系只看本院系、管理員看全部。
+        # v0.9.0 複審發現此分支漏了 role_scope——/stats 與 /export 在 v0.7.0
+        # 就修了，唯獨「全部假單」漏網，任何導師都能翻遍全系統的請假事由。
+        conds, sargs = role_scope(u)
+        where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
+        total = q('SELECT COUNT(*) c FROM leave_requests r '
+                  'JOIN users s ON s.id=r.student_id ' + where, sargs, one=True)['c']
         total_pages = max((total + per_page - 1) // per_page, 1)
         page = min(max(page, 1), total_pages)
         rows = q('SELECT r.*, t.name type_name, s.name student_name, s.class_name, s.department '
                  'FROM leave_requests r '
                  'JOIN leave_types t ON t.id=r.leave_type_id '
                  'JOIN users s ON s.id=r.student_id '
-                 'ORDER BY r.created_at DESC LIMIT ? OFFSET ?',
-                 (per_page, (page - 1) * per_page))
+                 f'{where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?',
+                 sargs + [per_page, (page - 1) * per_page])
     else:
         rows = todo_requests(u)
         page = 1
@@ -1169,11 +1189,41 @@ def admin_add_type():
     if not code or not name:
         flash('代號與名稱必填。', 'error')
         return redirect(url_for('admin_types'))
+    if not valid_type_code(code):
+        flash('代號格式不合法（1–20 字元，僅字母、數字與 - _）。', 'error')
+        return redirect(url_for('admin_types'))
+    if len(name) > MAX_TYPE_NAME_LEN:
+        flash(f'假別名稱過長（上限 {MAX_TYPE_NAME_LEN} 字）。', 'error')
+        return redirect(url_for('admin_types'))
+    # 預先查重：leave_types.code 有 UNIQUE 約束，直接 INSERT 重複代號
+    # 會撞 IntegrityError 變成 500（v0.9.1 修）
+    if q('SELECT id FROM leave_types WHERE code=?', (code,), one=True):
+        flash(f'代號 {code} 已存在。', 'error')
+        return redirect(url_for('admin_types'))
     execute('INSERT INTO leave_types (code, name, requires_attachment, needs_faculty) '
             'VALUES (?,?,?,?)',
             (code, name, 1 if request.form.get('requires_attachment') else 0,
              1 if request.form.get('needs_faculty') else 0))
+    log_action(None, current_user()['id'], 'add_type', f'新增假別 {code}')
     flash(f'已新增假別「{name}」。', 'success')
+    return redirect(url_for('admin_types'))
+
+
+@app.route('/admin/types/<int:tid>/toggle', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_toggle_type(tid):
+    """停用／啟用假別。停用後不出現在學生提交表單；既有假單不受影響
+    （查詢依 id JOIN，與 active 旗標無關）。"""
+    target = q('SELECT id, code, name, active FROM leave_types WHERE id=?', (tid,), one=True)
+    if not target:
+        flash('找不到該假別。', 'error')
+        return redirect(url_for('admin_types'))
+    new_active = 0 if target['active'] else 1
+    execute('UPDATE leave_types SET active=? WHERE id=?', (new_active, tid))
+    log_action(None, current_user()['id'], 'toggle_type',
+               f'{"停用" if target["active"] else "啟用"}假別 {target["code"]}')
+    flash(f'已{"停用" if target["active"] else "啟用"}假別「{target["name"]}」。', 'success')
     return redirect(url_for('admin_types'))
 
 

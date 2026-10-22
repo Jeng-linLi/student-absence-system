@@ -26,16 +26,25 @@
 <div class="card">
   <h3>現有假別</h3>
   <table>
-    <thead><tr><th>代號</th><th>名稱</th><th>需證明</th><th>需院系</th><th>狀態</th></tr></thead>
+    <thead><tr><th>代號</th><th>名稱</th><th>需證明</th><th>需院系</th><th>狀態</th><th></th></tr></thead>
     <tbody>
     {% for t in types %}
       <tr><td class="mono">{{ t.code }}</td><td>{{ t.name }}</td>
         <td>{{ '是' if t.requires_attachment else '—' }}</td>
         <td>{{ '是' if t.needs_faculty else '—' }}</td>
         <td>{% if t.active %}<span class="tag green">啟用</span>
-            {% else %}<span class="tag grey">停用</span>{% endif %}</td></tr>
+            {% else %}<span class="tag grey">停用</span>{% endif %}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_toggle_type', tid=t.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn sm ghost" type="submit"
+              onclick="return confirm('確定{{ '停用' if t.active else '啟用' }}假別「{{ t.name }}」？');">
+              {{ '停用' if t.active else '啟用' }}</button>
+          </form>
+        </td></tr>
     {% endfor %}
     </tbody>
   </table>
+  <p class="muted" style="margin:10px 0 0">停用後不出現在學生提交表單；既有假單不受影響。</p>
 </div>
 {% endblock %}

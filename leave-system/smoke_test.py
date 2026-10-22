@@ -494,5 +494,56 @@ _chk('後台新增帳號同受弱密碼擋鎖约束', '常見' in _rr.get_data(a
 _chk('被擋下的帳號未建立',
      db_query("SELECT id FROM users WHERE username='weakpw_smoke'") == [])
 
+print('\n[+11] 範圍隔離、假別查重與停用')
+_rid1 = db_query("SELECT r.id FROM leave_requests r JOIN users s ON s.id=r.student_id "
+                 "WHERE s.username='2024001' ORDER BY r.id LIMIT 1")[0]['id']
+login('T002')
+_body_t2 = get('/approvals?scope=all')
+_chk('導師的全部假單看不到別位導師的學生', '李政霖' not in _body_t2)
+login('T001')
+_chk('導師的全部假單看得到自己的學生', '李政霖' in get('/approvals?scope=all'))
+login('T002')
+_chk('導師無法翻開他人學生的假單詳情', c.get(f'/request/{_rid1}').status_code == 302)
+login('T001')
+_chk('自己學生的假單詳情可正常查看', c.get(f'/request/{_rid1}').status_code == 200)
+login('admin')
+c.post('/admin/users/add', data={'username': 'F002_smoke', 'password': 'Fac2@2026',
+                                 'name': '別系院辦', 'role': 'faculty',
+                                 'department': '管理學院'})
+login('F002_smoke', 'Fac2@2026')
+_chk('院系無法查看跨院系假單詳情', c.get(f'/request/{_rid1}').status_code == 302)
+login('F001')
+_chk('同院系院辦可查看假單詳情', c.get(f'/request/{_rid1}').status_code == 200)
+login('admin')
+_rdup = c.post('/admin/types/add', data={'code': 'sick', 'name': '病假重複'})
+_chk('重複假別代號回傳重導向而非 500', _rdup.status_code == 302)
+_chk('重複假別代號有明確錯誤訊息',
+     '代號 sick 已存在' in get('/admin/types'))
+_chk('重複假別代號不會寫入資料庫',
+     db_query("SELECT COUNT(*) c FROM leave_types WHERE code='sick'")[0]['c'] == 1)
+_rbad = c.post('/admin/types/add', data={'code': 'bad code!', 'name': '怪代號'},
+               follow_redirects=True)
+_chk('非法假別代號被擋下', '代號格式不合法' in _rbad.get_data(as_text=True))
+c.post('/admin/types/add', data={'code': 'smoke_temp', 'name': '臨時假別'})
+_tid = db_query("SELECT id FROM leave_types WHERE code='smoke_temp'")[0]['id']
+c.post(f'/admin/types/{_tid}/toggle')
+login('2024001')
+_chk('停用的假別不出現在學生表單', '臨時假別' not in get('/new'))
+_rstop = c.post('/new', data={'leave_type_id': str(_tid),
+                              'start_date': TODAY.isoformat(), 'end_date': TODAY.isoformat(),
+                              'start_period': 'AM', 'end_period': 'PM',
+                              'reason': '停用假別直 POST', 'contact_phone': '13800000001'})
+_chk('停用的假別直 POST 也被擋下', '請選擇有效的假別' in _rstop.get_data(as_text=True))
+_chk('被擋下的假單未寫入資料庫',
+     db_query("SELECT COUNT(*) c FROM leave_requests WHERE reason='停用假別直 POST'")[0]['c'] == 0)
+_rperiod = c.post('/new', data={'leave_type_id': '1',
+                                'start_date': TODAY.isoformat(), 'end_date': TODAY.isoformat(),
+                                'start_period': 'XX', 'end_period': 'PM',
+                                'reason': '時段旗標測試', 'contact_phone': '13800000001'})
+_chk('上午／下午時段走白名單', '上午／下午時段不合法' in _rperiod.get_data(as_text=True))
+login('admin')
+c.post(f'/admin/types/{_tid}/toggle')
+db_exec('DELETE FROM leave_types WHERE id=?', (_tid,))
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

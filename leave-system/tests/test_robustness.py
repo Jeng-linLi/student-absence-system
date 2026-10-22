@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""v0.9.0 健壯性測試：通知分頁、附件內容嗅探、快取標頭、
-狀態篩選白名單、Email／導師欄位校驗。
+"""v0.9.0／v0.9.1 健壯性測試：通知分頁、附件內容嗅探、快取標頭、
+狀態篩選白名單、Email／導師欄位校驗，以及範圍隔離（審批清單、假單詳情）、
+假別代號查重、假別停用／啟用。
 
 沿用 conftest 的共用臨時資料庫與種子資料。為了不與其他測試檔搶帳號
 （test_auth_hardening 會改動 2024001／2024002／2024005 的密碼），
@@ -230,3 +231,139 @@ def test_parse_advisor_id():
     assert _parse_advisor_id('99999')[1] is not None
     # 學生 id 不是導師 → 擋下
     assert _parse_advisor_id(str(stu['id']))[1] is not None
+
+
+# --------------------------------------------------------------------------
+# v0.9.1：範圍隔離——審批清單（scope=all）與假單詳情
+# --------------------------------------------------------------------------
+def _seed_request_id(username):
+    """取某學生的第一張假單 id（種子資料有 2024001／2024002 各一張）。"""
+    row = q('SELECT r.id FROM leave_requests r JOIN users s ON s.id=r.student_id '
+            'WHERE s.username=? ORDER BY r.id LIMIT 1', (username,), one=True)
+    assert row is not None, f'種子資料應有 {username} 的假單'
+    return row['id']
+
+
+def test_approvals_scope_all_advisor_isolation():
+    """導師的「全部假單」只能看到自己學生的單（v0.9.0 複審漏網處）。"""
+    _seed_request_id('2024001')                            # 確認種子假單存在
+    t2 = app.test_client()
+    assert _login(t2, 'T002', 'Demo@2026').status_code == 302
+    r = t2.get('/approvals?scope=all')
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert '李政霖' not in body            # 2024001 是 T001 的學生
+    assert '張子謙' not in body            # 2024002 也是 T001 的學生
+
+    t1 = app.test_client()
+    assert _login(t1, 'T001', 'Demo@2026').status_code == 302
+    body = t1.get('/approvals?scope=all').get_data(as_text=True)
+    assert '李政霖' in body                # 自己的學生看得見
+
+    admin = app.test_client()
+    assert _login(admin, 'admin', 'Demo@2026').status_code == 302
+    body = admin.get('/approvals?scope=all').get_data(as_text=True)
+    assert '李政霖' in body                # 管理員看全部
+
+
+def test_detail_advisor_cross_scope_denied():
+    """導師不能翻開別位導師學生的假單詳情（查看權限不寬於審批權限）。"""
+    rid = _seed_request_id('2024001')
+    t2 = app.test_client()
+    assert _login(t2, 'T002', 'Demo@2026').status_code == 302
+    r = t2.get(f'/request/{rid}')
+    assert r.status_code == 302
+    assert r.headers['Location'] == '/'          # 導回 dashboard（根路徑）
+
+    t1 = app.test_client()
+    assert _login(t1, 'T001', 'Demo@2026').status_code == 302
+    assert t1.get(f'/request/{rid}').status_code == 200
+
+
+def test_detail_faculty_cross_department_denied():
+    """院系只能看本院系學生假單；跨院系一律擋下。"""
+    rid = _seed_request_id('2024001')
+    # 自建一位別院系的院辦帳號（種子資料全院系都是「人工智能學域」）
+    admin = app.test_client()
+    assert _login(admin, 'admin', 'Demo@2026').status_code == 302
+    if not q("SELECT id FROM users WHERE username='F002'", one=True):
+        admin.post('/admin/users/add', data={'username': 'F002', 'password': 'Fac2@2026',
+                                             'name': '別系院辦', 'role': 'faculty',
+                                             'department': '管理學院'})
+    f2 = app.test_client()
+    assert _login(f2, 'F002', 'Fac2@2026').status_code == 302
+    r = f2.get(f'/request/{rid}')
+    assert r.status_code == 302
+    assert r.headers['Location'] == '/'          # 跨院系 → 導回 dashboard
+
+    f1 = app.test_client()
+    assert _login(f1, 'F001', 'Demo@2026').status_code == 302
+    assert f1.get(f'/request/{rid}').status_code == 200   # 同院系看得見
+
+
+def test_student_cannot_view_others_detail():
+    rid = _seed_request_id('2024001')
+    c = app.test_client()
+    _login(c)
+    r = c.get(f'/request/{rid}')
+    assert r.status_code == 302
+    assert r.headers['Location'] == '/'
+
+
+# --------------------------------------------------------------------------
+# v0.9.1：假別代號查重（UNIQUE 撞鍵不再變 500）
+# --------------------------------------------------------------------------
+def test_admin_add_type_duplicate_code():
+    admin = _admin()
+    before = q('SELECT COUNT(*) c FROM leave_types', one=True)['c']
+    r = admin.post('/admin/types/add', data={'code': 'sick', 'name': '病假重複'},
+                   follow_redirects=True)
+    assert r.status_code == 200
+    assert '代號 sick 已存在' in r.get_data(as_text=True)
+    assert q('SELECT COUNT(*) c FROM leave_types', one=True)['c'] == before
+
+
+def test_admin_add_type_invalid_code():
+    admin = _admin()
+    r = admin.post('/admin/types/add', data={'code': 'sick leave!', 'name': '怪代號'},
+                   follow_redirects=True)
+    assert r.status_code == 200
+    assert '代號格式不合法' in r.get_data(as_text=True)
+    assert q("SELECT id FROM leave_types WHERE code='sick leave!'", one=True) is None
+
+
+# --------------------------------------------------------------------------
+# v0.9.1：假別停用／啟用
+# --------------------------------------------------------------------------
+def test_deactivated_type_cannot_be_submitted(stu):
+    """停用的假別：不出現在學生表單、直 POST 也提交不進來。"""
+    admin = _admin()
+    admin.post('/admin/types/add', data={'code': 'temp_type', 'name': '臨時假別'})
+    tid = q("SELECT id FROM leave_types WHERE code='temp_type'", one=True)['id']
+    try:
+        admin.post(f'/admin/types/{tid}/toggle')          # 停用
+        assert q('SELECT active FROM leave_types WHERE id=?', (tid,), one=True)['active'] == 0
+
+        c = app.test_client()
+        _login(c)
+        assert '臨時假別' not in c.get('/new').get_data(as_text=True)
+
+        today = datetime.date.today().isoformat()
+        r = c.post('/new', data={'leave_type_id': str(tid), 'start_date': today,
+                                 'end_date': today, 'start_period': 'AM',
+                                 'end_period': 'PM', 'reason': '測試停用假別'})
+        assert '請選擇有效的假別' in r.get_data(as_text=True)
+        assert q('SELECT COUNT(*) c FROM leave_requests WHERE reason=?',
+                 ('測試停用假別',), one=True)['c'] == 0
+
+        # 上午／下午時段白名單
+        r2 = c.post('/new', data={'leave_type_id': '1', 'start_date': today,
+                                  'end_date': today, 'start_period': 'XX',
+                                  'end_period': 'PM', 'reason': '測試時段旗標'})
+        assert '上午／下午時段不合法' in r2.get_data(as_text=True)
+
+        admin.post(f'/admin/types/{tid}/toggle')          # 復原
+        assert q('SELECT active FROM leave_types WHERE id=?', (tid,), one=True)['active'] == 1
+        assert '臨時假別' in c.get('/new').get_data(as_text=True)
+    finally:
+        execute('DELETE FROM leave_types WHERE id=?', (tid,))

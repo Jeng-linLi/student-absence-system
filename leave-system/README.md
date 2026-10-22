@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v0.9.0）
+# 線上請假系統（原型 v0.9.1）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -83,8 +83,8 @@ leave-system/
   utils.py            純函式與常數（calc_days、validate_password、csv_safe 等，可單元測試）
   db.py               SQLite 連線 / 查詢輔助 / 通用 migrate
   schema.sql          資料庫結構
-  smoke_test.py       全鏈路冒煙測試（113 項）
-  tests/              單元測試（pytest，64 項）
+  smoke_test.py       全鏈路冒煙測試（127 項）
+  tests/              單元測試（pytest，71 項）
   start.bat           一鍵啟動
   templates/          Jinja2 頁面模板
   static/css/         樣式
@@ -95,8 +95,8 @@ leave-system/
 ## 測試
 
 ```bash
-python -m pytest tests/ -v   # 64 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性）
-python smoke_test.py         # 113 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼
+python -m pytest tests/ -v   # 71 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離）
+python smoke_test.py         # 127 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼、範圍隔離、假別管理
 ```
 
 測試會使用**全新的暫存資料庫**，不會動到 `leave_system.db`。
