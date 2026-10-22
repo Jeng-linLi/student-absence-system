@@ -18,7 +18,7 @@
   <h1>你好，{{ current_user.name }}</h1>
   <div class="grid g4" style="margin-bottom:18px">
     <div class="stat"><div class="n">{{ todo }}</div><div class="l">待我審批</div></div>
-    <div class="stat"><div class="n">{{ stats.pending }}</div><div class="l">全校審批中</div></div>
+    <div class="stat"><div class="n">{{ stats.pending }}</div><div class="l">{{ scope_label }}審批中</div></div>
     <div class="stat"><div class="n">{{ stats.approved }}</div><div class="l">已核准</div></div>
     <div class="stat"><div class="n">{{ stats.rejected }}</div><div class="l">已駁回</div></div>
   </div>

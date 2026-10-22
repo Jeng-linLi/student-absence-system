@@ -545,5 +545,38 @@ login('admin')
 c.post(f'/admin/types/{_tid}/toggle')
 db_exec('DELETE FROM leave_types WHERE id=?', (_tid,))
 
+print('\n[+12] v1.0.0：儀表板範圍、approvals 角色下限、同時段矛盾、撤回通知、稽核日誌')
+login('T001')
+_html_t1 = get('/')
+check('導師儀表板只統計自己的學生', '我的學生審批中' in _html_t1)
+check('導師儀表板不再顯示全校統計', '全校審批中' not in _html_t1)
+login('admin')
+check('管理員儀表板顯示全校統計', '全校審批中' in get('/'))
+login('2024003')
+check('學生進入待我審批被拒', c.get('/approvals').status_code == 302)
+_r_scope = c.get('/approvals', follow_redirects=True)
+check('被拒時有明確提示', '沒有權限' in _r_scope.get_data(as_text=True))
+_r_pmam = c.post('/new', data={'leave_type_id': '1',
+                               'start_date': (TODAY + datetime.timedelta(days=300)).isoformat(),
+                               'end_date': (TODAY + datetime.timedelta(days=300)).isoformat(),
+                               'start_period': 'PM', 'end_period': 'AM',
+                               'reason': '同時段矛盾', 'contact_phone': '13800000001'},
+                 content_type='multipart/form-data')
+check('同日「下午→上午」矛盾時段被擋', '不可早於' in _r_pmam.get_data(as_text=True))
+check('被擋下的假單未寫入資料庫',
+      db_query("SELECT COUNT(*) c FROM leave_requests WHERE reason='同時段矛盾'")[0]['c'] == 0)
+_rid_w, _ = submit('2024005', 1, TODAY + datetime.timedelta(days=301),
+                   TODAY + datetime.timedelta(days=301), '撤回通知測試')
+c.post(f'/request/{_rid_w}/withdraw')
+login('T002')
+check('撤回假單後導師收到通知', '撤回' in get('/notifications'))
+login('admin')
+_logs_html = get('/admin/logs')
+check('後台稽核日誌頁可達', '稽核日誌' in _logs_html)
+check('日誌頁列出動作標籤', '提交假單' in _logs_html)
+check('日誌頁越界頁碼不收例外', c.get('/admin/logs?page=999').status_code == 200)
+login('2024003')
+check('學生不可進入稽核日誌頁', c.get('/admin/logs').status_code == 302)
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

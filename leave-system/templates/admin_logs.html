@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}稽核日誌 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>稽核日誌</h1>
+
+<div class="card">
+  <div class="actions" style="margin:0 0 12px">
+    <a class="btn sm {{ '' if not cur_action else 'ghost' }}" href="{{ url_for('admin_logs') }}">全部</a>
+    {% for a in actions %}
+      <a class="btn sm {{ '' if cur_action == a else 'ghost' }}"
+         href="{{ url_for('admin_logs', action=a) }}">{{ audit_labels.get(a, a) }}</a>
+    {% endfor %}
+  </div>
+
+  {% if logs %}
+  <table>
+    <thead><tr><th class="tnum">時間</th><th>動作</th><th>操作者</th><th>內容</th><th></th></tr></thead>
+    <tbody>
+    {% for l in logs %}
+      <tr>
+        <td class="tnum muted">{{ l.created_at[:19] }}</td>
+        <td><span class="tag grey">{{ audit_labels.get(l.action, l.action) }}</span></td>
+        <td>{{ l.actor_name or '系統' }}{% if l.actor_username %}
+          <div class="muted">{{ l.actor_username }}</div>{% endif %}</td>
+        <td>{{ l.detail }}</td>
+        <td>{% if l.request_id %}
+          <a class="btn sm ghost" href="{{ url_for('detail', rid=l.request_id) }}">假單</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if total_pages > 1 %}
+    <div class="pager">
+      {% if page > 1 %}
+        <a class="btn sm ghost" href="{{ url_for('admin_logs', action=cur_action, page=page-1) }}">← 上一頁</a>
+      {% endif %}
+      <span class="muted">第 {{ page }} / {{ total_pages }} 頁（共 {{ total }} 筆）</span>
+      {% if page < total_pages %}
+        <a class="btn sm ghost" href="{{ url_for('admin_logs', action=cur_action, page=page+1) }}">下一頁 →</a>
+      {% endif %}
+    </div>
+  {% endif %}
+  {% else %}<div class="empty">暫無紀錄。</div>{% endif %}
+</div>
+
+<p class="muted" style="margin:10px 2px 0">稽核日誌記錄提交／核准／駁回／撤回、帳號與假別管理、
+密碼變更等操作；假單相關動作的完整時序也可在假單詳情頁查看。</p>
+{% endblock %}

@@ -28,7 +28,8 @@ from db import (BASE_DIR, DB_PATH, UPLOAD_DIR, get_db, close_db,  # noqa: F401
 from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    MAX_BACKDATE_DAYS, MAX_SINGLE_DAYS, MAX_ATTACHMENT_MB,
                    MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN,
-                   MIN_PASSWORD_LEN, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
+                   MIN_PASSWORD_LEN, MAX_PASSWORD_LEN,
+                   LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
                    ACADEMIC_YEAR_START_MONTH, SESSION_IDLE_MINUTES,
                    APP_VERSION, LEAVE_STATUSES, MAX_TYPE_NAME_LEN,
                    parse_date, calc_days, required_level_for,
@@ -225,6 +226,14 @@ def bad_request(e):
     return redirect(request.referrer or url_for('dashboard'))
 
 
+@app.errorhandler(413)
+def too_large(e):
+    """請求體過大（附件超過 MAX_ATTACHMENT_MB）：Werkzeug 預設會回一篇
+    白底錯誤頁，改成 flash 提示並導回原頁面（v1.0.0）。"""
+    flash(f'上傳內容過大（上限 {MAX_ATTACHMENT_MB} MB），請壓縮或改傳較小檔案。', 'error')
+    return redirect(request.referrer or url_for('dashboard'))
+
+
 @app.after_request
 def security_headers(resp):
     """加上基本安全標頭；CSP 允許本專案所需的 inline style / script。"""
@@ -305,7 +314,12 @@ def _parse_ts(s):
 
 
 def current_user():
-    """回傳目前登入者；session 閒置逾時或登入後密碼被改過則一律視為未登入。"""
+    """回傳目前登入者；session 閒置逾時或登入後密碼被改過則一律視為未登入。
+
+    注意：不可在 flask.g 上快取——g 的生命週期是 app context，而同一 app
+    context 可能服務多個請求（測試或 CLI 常見），快取會把上一個請求的使用者
+    身份帶進下一個請求（v1.0.0 實測踩坑，已回退）。
+    """
     if 'uid' not in session:
         return None
     u = q('SELECT * FROM users WHERE id=? AND active=1', (session['uid'],), one=True)
@@ -516,12 +530,28 @@ def dashboard():
     else:
         ctx['todo'] = count_todo(u)
         ctx['recent'] = todo_requests(u, limit=5)
-        # 全系統統計只給審批者／管理員看；學生沒有必要知道別人的請假彙總
+        # v1.0.0：彙總數字同樣套用範圍隔離——導師只看自己的學生、院系只看本院系、
+        # 管理員看全部。此前不論角色一律顯示全系統統計，與 /stats、/export、
+        # /approvals 的矛盾原則：聚合數字雖不含事由，仍能推測他人的請假規模。
+        conds, sargs = role_scope(u)
+        ctx['scope_label'] = {'advisor': '我的學生', 'faculty': '本院系',
+                              'admin': '全校'}[u['role']]
+
+        def _count(extra=''):
+            w = list(conds)
+            a = list(sargs)
+            if extra:
+                w.append(extra)
+            sql = ('SELECT COUNT(*) c FROM leave_requests r '
+                   'JOIN users s ON s.id=r.student_id'
+                   + ((' WHERE ' + ' AND '.join(w)) if w else ''))
+            return q(sql, a, one=True)['c']
+
         ctx['stats'] = {
-            'total': q('SELECT COUNT(*) c FROM leave_requests', one=True)['c'],
-            'pending': q("SELECT COUNT(*) c FROM leave_requests WHERE status='pending'", one=True)['c'],
-            'approved': q("SELECT COUNT(*) c FROM leave_requests WHERE status='approved'", one=True)['c'],
-            'rejected': q("SELECT COUNT(*) c FROM leave_requests WHERE status='rejected'", one=True)['c'],
+            'total': _count(),
+            'pending': _count("r.status='pending'"),
+            'approved': _count("r.status='approved'"),
+            'rejected': _count("r.status='rejected'"),
         }
     return render_template('dashboard.html', **ctx)
 
@@ -612,6 +642,11 @@ def new_request():
         if sp not in ('AM', 'PM') or ep not in ('AM', 'PM'):
             flash('上午／下午時段不合法。', 'error')
             return render_template('new_request.html', types=types, form=request.form)
+        # 同日「下午→上午」是矛盾輸入：calc_days 只算 0.5 天，受影響課程卻按
+        # 全天計，兩個口徑對不起來——乾脆在入口擋掉（v1.0.0）。
+        if start_date == end_date and sp == 'PM' and ep == 'AM':
+            flash('同一天請假時，結束時段不可早於開始時段。', 'error')
+            return render_template('new_request.html', types=types, form=request.form)
 
         reason = request.form.get('reason', '').strip()
         phone = request.form.get('contact_phone', '').strip()
@@ -662,8 +697,15 @@ def new_request():
                       'error')
                 return render_template('new_request.html', types=types, form=request.form)
             # 檔名加隨機字串，避免附件 URL 被猜測枚舉
+            # 原檔名過長時先截斷：secure_filename 不限制長度，組合後的檔名
+            # 可能超過檔案系統 255 位元組上限，save() 直接 OSError 變 500（v1.0.0）
+            raw_name = secure_filename(file.filename)
+            stem, dot, ext = raw_name.rpartition('.')
+            if len(stem) > 80:
+                stem = stem[:80]
+            safe_name = f'{stem}{dot}{ext}' if dot else stem
             fn = secure_filename(
-                f"{u['username']}_{datetime.now():%Y%m%d%H%M%S}_{secrets.token_hex(6)}_{file.filename}")
+                f"{u['username']}_{datetime.now():%Y%m%d%H%M%S}_{secrets.token_hex(6)}_{safe_name}")
             file.save(os.path.join(UPLOAD_DIR, fn))
             attachment = fn
         if ltype['requires_attachment'] and not attachment:
@@ -849,6 +891,12 @@ def withdraw(rid):
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     execute("UPDATE leave_requests SET status='withdrawn', updated_at=? WHERE id=?", (now, rid))
     log_action(rid, u['id'], 'withdraw', '學生撤回')
+    # v1.0.0：撤回後通知導師——否則導師點開假單才發現已被撤回，
+    # 待辦清單裡的數字也與實際對不上。
+    stu = q('SELECT advisor_id FROM users WHERE id=?', (u['id'],), one=True)
+    if stu and stu['advisor_id']:
+        notify(stu['advisor_id'], rid,
+               f"{u['name']} 撤回了假單 #{rid}（{req['start_date']} ~ {req['end_date']}）。")
     flash('假單已撤回。', 'success')
     return redirect(url_for('my_requests'))
 
@@ -858,6 +906,7 @@ def withdraw(rid):
 # --------------------------------------------------------------------------
 @app.route('/approvals')
 @login_required
+@role_required('advisor', 'faculty', 'admin')
 def approvals():
     u = current_user()
     scope = request.args.get('scope', 'todo')
@@ -1121,7 +1170,7 @@ def admin_toggle_user(uid):
 @role_required('admin')
 def admin_reset_password(uid):
     """管理員重設密碼。未填寫時自動產生一組符合強度策略的隨機臨時密碼。"""
-    target = q('SELECT id, username FROM users WHERE id=?', (uid,), one=True)
+    target = q('SELECT id, username, password_hash FROM users WHERE id=?', (uid,), one=True)
     if not target:
         flash('找不到該帳號。', 'error')
         return redirect(url_for('admin_users'))
@@ -1129,6 +1178,10 @@ def admin_reset_password(uid):
     err = validate_password(new, target['username'])
     if err:
         flash(err, 'error')
+        return redirect(url_for('admin_users'))
+    # v1.0.0：重設成與目前相同的密碼是無效操作，還給人「已經重設過」的錯覺
+    if check_password_hash(target['password_hash'], new):
+        flash('新密碼不可與目前密碼相同。', 'error')
         return redirect(url_for('admin_users'))
     # 更新密碼的同時刷新 pwd_changed_at：該帳號所有舊 session 立即作廢
     # （session 是簽名 cookie，不靠服務端黑名單，只能以時間戳記檢驗）
@@ -1225,6 +1278,45 @@ def admin_toggle_type(tid):
                f'{"停用" if target["active"] else "啟用"}假別 {target["code"]}')
     flash(f'已{"停用" if target["active"] else "啟用"}假別「{target["name"]}」。', 'success')
     return redirect(url_for('admin_types'))
+
+
+# 稽核日誌動作的人間可讀標籤（模板與篩選器共用）
+AUDIT_ACTION_LABEL = {
+    'submit': '提交假單', 'approve': '核准', 'reject': '駁回', 'withdraw': '撤回',
+    'add_user': '新增帳號', 'toggle_user': '停用／啟用帳號',
+    'reset_password': '重設密碼', 'edit_user': '編輯帳號', 'change_password': '修改密碼',
+    'add_type': '新增假別', 'toggle_type': '停用／啟用假別',
+}
+
+
+@app.route('/admin/logs')
+@login_required
+@role_required('admin')
+def admin_logs():
+    """後台稽核日誌（v1.0.0）：audit_logs 此前只能在假單詳情頁逐張查看，
+    帳號與假別管理的操作更是散在各處——這裡依動作篩選、統一翻頁。"""
+    action = request.args.get('action', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 30
+
+    where = 'WHERE 1=1'
+    args = []
+    if action:
+        where += ' AND l.action=?'
+        args.append(action)
+    total = q('SELECT COUNT(*) c FROM audit_logs l ' + where, args, one=True)['c']
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    page = min(max(page, 1), total_pages)
+    rows = q('SELECT l.*, u.name actor_name, u.username actor_username '
+             'FROM audit_logs l LEFT JOIN users u ON u.id=l.actor_id '
+             f'{where} ORDER BY l.created_at DESC, l.id DESC LIMIT ? OFFSET ?',
+             tuple(args) + (per_page, (page - 1) * per_page))
+    actions = [r['action'] for r in
+               q('SELECT DISTINCT action FROM audit_logs ORDER BY action')]
+    return render_template('admin_logs.html', logs=rows, page=page,
+                           total_pages=total_pages, total=total,
+                           cur_action=action, actions=actions,
+                           audit_labels=AUDIT_ACTION_LABEL)
 
 
 @app.route('/healthz')

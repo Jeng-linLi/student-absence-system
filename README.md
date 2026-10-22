@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v0.9.1`**（2026-10-22）· MIT · CI passing
+**Prototype version ｜原型版本：`v1.0.0`**（2026-10-22）· MIT · CI passing
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
 periods instantly previews the classes a leave would make a student miss (`GET
@@ -27,13 +27,18 @@ per-username login-throttle key, and `Cache-Control: no-store` on dynamic pages.
 finishes the scope-isolation line the v0.7.0 audit started — advisors and faculty can no
 longer browse the whole system's leave reasons (`/approvals?scope=all`) or open other
 people's request detail pages — and cleans up leave-type administration (duplicate codes
-no longer 500, deactivation is a real toggle, AM/PM periods are whitelisted). It builds on
-v0.5.0's clickjacking protection, v0.4.0's pagination / unit tests, and a 127-check
-smoke suite in CI.
+no longer 500, deactivation is a real toggle, AM/PM periods are whitelisted). **v1.0.0**
+closes the last two scope-isolation gaps found in re-audit (students could open
+`/approvals` and read every pending request system-wide; advisor/faculty dashboards showed
+system-wide aggregates), adds an admin audit-log page with action filters, notifies the
+advisor when a student withdraws a request, and cleans up edge cases (friendly 413 for
+oversized uploads, long attachment filenames, same-day PM→AM period conflicts, a password
+length cap). It builds on v0.5.0's clickjacking protection, v0.4.0's pagination / unit
+tests, and a 139-check smoke suite in CI.
 
 | Folder | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v0.9.1**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications, scope isolation on approvals/detail, leave-type administration, 127-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁 |
+| `leave-system/` | Flask + SQLite prototype (**v1.0.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, 139-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁、範圍隔離（審批／詳情／儀表板）、後台稽核日誌 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
@@ -43,7 +48,7 @@ smoke suite in CI.
 # 原型系統
 cd leave-system
 python app.py            # http://127.0.0.1:5055
-python smoke_test.py     # 127 項全鏈路冒煙測試
+python smoke_test.py     # 139 項全鏈路冒煙測試
 
 # 設計提案包（靜態站）
 cd saas
@@ -56,17 +61,23 @@ Demo accounts (password `Demo@2026`): student `2024001`, advisor `T001`, faculty
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — v0.9.1 completes scope isolation (advisors and
-faculty can no longer browse every leave reason via `/approvals?scope=all` or open other
-people's request detail pages) and cleans up leave-type administration (duplicate codes no
-longer 500, deactivation is a real toggle, AM/PM periods whitelisted); v0.9.0 completes the
-password and notification experience (common-weak-password blocklist, one-time password
-display outside the session cookie, paginated notifications, upload content sniffing,
-per-username login throttle, no-store cache headers); v0.8.0 hardens authentication and
-account administration (persistent login throttling, session invalidation on password
-change, idle-session expiry, admin lockout guards); v0.7.0 consolidates the module split,
-fixes a stats-scope leak, hardens CSV export against formula injection, completes the
-password policy, and adds a `/healthz` probe (smoke suite now 127 checks).
+See [`CHANGELOG.md`](CHANGELOG.md) — **v1.0.0** closes the last two scope-isolation gaps
+found in re-audit (students could open `/approvals` and read every pending request
+system-wide; advisor/faculty dashboards showed system-wide aggregates), adds an admin
+audit-log page with action filters, notifies the advisor when a student withdraws a
+request, and cleans up edge cases (friendly 413 for oversized uploads, long attachment
+filenames, same-day PM→AM period conflicts, a password length cap); v0.9.1 completes scope
+isolation (advisors and faculty can no longer browse every leave reason via
+`/approvals?scope=all` or open other people's request detail pages) and cleans up
+leave-type administration (duplicate codes no longer 500, deactivation is a real toggle,
+AM/PM periods whitelisted); v0.9.0 completes the password and notification experience
+(common-weak-password blocklist, one-time password display outside the session cookie,
+paginated notifications, upload content sniffing, per-username login throttle, no-store
+cache headers); v0.8.0 hardens authentication and account administration (persistent login
+throttling, session invalidation on password change, idle-session expiry, admin lockout
+guards); v0.7.0 consolidates the module split, fixes a stats-scope leak, hardens CSV export
+against formula injection, completes the password policy, and adds a `/healthz` probe
+(smoke suite now 139 checks).
 
 完整變更記錄見 [`CHANGELOG.md`](CHANGELOG.md)。
 

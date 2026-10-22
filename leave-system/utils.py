@@ -19,6 +19,7 @@ MAX_REASON_LEN = 500
 MAX_COMMENT_LEN = 300
 MAX_PHONE_LEN = 30
 MIN_PASSWORD_LEN = 8
+MAX_PASSWORD_LEN = 128   # 上限：超長密碼只會拖慢雜湊運算，沒有安全增益
 
 # 登入限流
 LOGIN_MAX_ATTEMPTS = 8
@@ -28,7 +29,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '0.9.1'
+APP_VERSION = '1.0.0'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')
@@ -144,13 +145,15 @@ def valid_email(email):
 
 
 def validate_password(pw, username=None):
-    """密碼強度策略：長度 ≥ 8、不得與帳號相同、須含大寫、小寫與數字、
+    """密碼強度策略：長度 8–128、不得與帳號相同、須含大寫、小寫與數字、
     不可為常見弱密碼。
 
     回傳錯誤訊息（字串）或 None。username 可選；提供時會一併檢查是否與帳號相同。
     """
     if not pw or len(pw) < MIN_PASSWORD_LEN:
         return f'密碼長度至少需 {MIN_PASSWORD_LEN} 個字元。'
+    if len(pw) > MAX_PASSWORD_LEN:
+        return f'密碼長度不可超過 {MAX_PASSWORD_LEN} 個字元。'
     if pw.lower() in COMMON_PASSWORDS:
         return '此密碼過於常見（已被列入弱密碼擋鎖），請換一組。'
     if username and pw.strip().lower() == username.strip().lower():

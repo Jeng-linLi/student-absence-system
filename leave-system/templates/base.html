@@ -35,6 +35,7 @@
     {% if current_user.role == 'admin' %}
       <a href="{{ url_for('admin_users') }}">帳號管理</a>
       <a href="{{ url_for('admin_types') }}">假別管理</a>
+      <a href="{{ url_for('admin_logs') }}">稽核日誌</a>
     {% endif %}
     <a href="{{ url_for('notifications') }}">通知
       {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}</a>
