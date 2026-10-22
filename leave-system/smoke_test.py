@@ -39,7 +39,7 @@ def check(label, cond):
     print(f'  ✓ {label}')
 
 
-def login(u, password='Pass@123'):
+def login(u, password='Demo@2026'):
     """登入。會先抓登入頁的 CSRF token，因此 CSRF 開關兩種狀態下都能用。"""
     html = c.get('/login').get_data(as_text=True)
     token = ''
@@ -63,7 +63,9 @@ def submit(username, type_id, start, end, reason='事由', sp='AM', ep='PM', att
             'end_date': end.isoformat(), 'start_period': sp, 'end_period': ep,
             'reason': reason, 'contact_phone': '13800000001'}
     if attach:
-        data['attachment'] = (io.BytesIO(b'fake-proof'), attach)
+        # 檔頭帶真的 PDF magic bytes——v0.9.0 起附件會做內容嗅探，
+        # 只有副檔名對、內容不對的上傳會被擋下
+        data['attachment'] = (io.BytesIO(b'%PDF-1.4\nfake proof for smoke test'), attach)
     r = c.post('/new', data=data, content_type='multipart/form-data')
     html = r.get_data(as_text=True)
     loc = dict(r.headers).get('Location', '')
@@ -79,6 +81,13 @@ def db_query(sql, args=()):
     rows = conn.execute(sql, args).fetchall()
     conn.close()
     return rows
+
+
+def db_exec(sql, args=()):
+    conn = sqlite3.connect(os.environ['LEAVE_DB'])
+    conn.execute(sql, args)
+    conn.commit()
+    conn.close()
 
 
 print('\n[1] 天數計算')
@@ -170,27 +179,27 @@ print('\n[7] 帳號與密碼')
 login('2024001')
 check('修改密碼頁可達', '目前密碼' in get('/password'))
 # 兩者都通過強度策略，但彼此不一致 → 應被「不一致」擋下
-r = c.post('/password', data={'old_password': 'Pass@123', 'new_password': 'WrongConfirm9',
+r = c.post('/password', data={'old_password': 'Demo@2026', 'new_password': 'WrongConfirm9',
                               'confirm_password': 'DifferentOne9'})
 check('兩次新密碼不一致被擋', '不一致' in r.get_data(as_text=True))
 # 新密碼缺少數字 → 應被強度策略擋下（且不生效）
-r = c.post('/password', data={'old_password': 'Pass@123', 'new_password': 'OnlyLetters',
+r = c.post('/password', data={'old_password': 'Demo@2026', 'new_password': 'OnlyLetters',
                               'confirm_password': 'OnlyLetters'})
 check('缺數字密碼被強度策略擋下', '大寫' in r.get_data(as_text=True))
 r = c.post('/login', data={'username': '2024001', 'password': 'OnlyLetters'})
 check('被擋下的密碼無法登入', r.status_code != 302)
-c.post('/password', data={'old_password': 'Pass@123', 'new_password': 'NewPass@2026',
+c.post('/password', data={'old_password': 'Demo@2026', 'new_password': 'NewPass@2026',
                           'confirm_password': 'NewPass@2026'})
 r = c.post('/login', data={'username': '2024001', 'password': 'NewPass@2026'})
 check('新密碼可登入', r.status_code == 302)
 # 改回來，避免影響後續測試
 r = c.post('/login', data={'username': '2024001', 'password': 'NewPass@2026'})
-c.post('/password', data={'old_password': 'NewPass@2026', 'new_password': 'Pass@123',
-                          'confirm_password': 'Pass@123'})
+c.post('/password', data={'old_password': 'NewPass@2026', 'new_password': 'Demo@2026',
+                          'confirm_password': 'Demo@2026'})
 
 # v0.8.0：2024002 先登入；管理員重設密碼後，其舊 session 應立即失效
 _stu_c = app.test_client()
-_stu_c.post('/login', data={'username': '2024002', 'password': 'Pass@123'})
+_stu_c.post('/login', data={'username': '2024002', 'password': 'Demo@2026'})
 check('2024002 登入後可訪問首頁', _stu_c.get('/').status_code == 200)
 login('admin')
 uid = db_query("SELECT id FROM users WHERE username='2024002'")[0]['id']
@@ -317,11 +326,11 @@ _chk("CSP 含 frame-ancestors 'none'",
 
 print('\n[+2] 密碼強度策略')
 _chk('短密碼被 validate_password 拒絕', _vp('123') is not None)
-_chk('合格密碼通過 validate_password', _vp('Pass@123') is None)
+_chk('合格密碼通過 validate_password', _vp('Demo@2026') is None)
 
 app.config['CSRF_ENABLED'] = False
 # 管理員：短密碼新增用戶應被拒絕（隨後用該帳號登入應失敗）
-_tc.post('/login', data={'username': 'admin', 'password': 'Pass@123'})
+_tc.post('/login', data={'username': 'admin', 'password': 'Demo@2026'})
 _tc.post('/admin/users/add', data={'username': 'tstshort', 'password': '123',
         'name': '短密測試', 'role': 'student', 'department': 'TEST',
         'class_name': 'T1', 'email': 't@x.io', 'advisor_id': ''})
@@ -331,8 +340,8 @@ _chk('管理員新增短密碼用戶被拒絕',
      not _lg.headers.get('Location', '').endswith('/dashboard'))
 
 # 學生：改密短密碼不生效（用新密碼登入應失敗）
-_tc.post('/login', data={'username': '2024001', 'password': 'Pass@123'})
-_tc.post('/password', data={'old_password': 'Pass@123', 'new_password': '123',
+_tc.post('/login', data={'username': '2024001', 'password': 'Demo@2026'})
+_tc.post('/password', data={'old_password': 'Demo@2026', 'new_password': '123',
         'confirm_password': '123'})
 _lg2 = _tc.post('/login', data={'username': '2024001', 'password': '123'},
                follow_redirects=False)
@@ -415,15 +424,75 @@ _uid_self = db_query("SELECT id FROM users WHERE username='admin'")[0]['id']
 _r2 = c.post(f'/admin/users/{_uid_self}/toggle', follow_redirects=True)
 _chk('管理員不可停用自己', '不可停用目前登入中的自己' in _r2.get_data(as_text=True))
 _chk('被阻擋後仍可正常使用後台', c.get('/admin/users').status_code == 200)
-_r3 = c.post('/admin/users/add', data={'username': 'badrole', 'password': 'Pass@123',
+_r3 = c.post('/admin/users/add', data={'username': 'badrole', 'password': 'Demo@2026',
              'name': '壞角色', 'role': 'superuser'}, follow_redirects=True)
 _chk('新增帳號：非法角色被擋', '角色不合法' in _r3.get_data(as_text=True))
-_r4 = c.post('/admin/users/add', data={'username': 'a' * 51, 'password': 'Pass@123',
+_r4 = c.post('/admin/users/add', data={'username': 'a' * 51, 'password': 'Demo@2026',
              'name': '超長帳號', 'role': 'student'}, follow_redirects=True)
 _chk('新增帳號：帳號格式不合法被擋', '帳號格式不合法' in _r4.get_data(as_text=True))
 _chk('被擋的帳號未建立',
      db_query("SELECT id FROM users WHERE username='badrole'") == []
      and db_query("SELECT id FROM users WHERE username=?", ('a' * 51,)) == [])
+
+# ---- v0.9.0 新增檢查：弱密碼擋鎖 / 通知分頁 / 附件嗅探 / 快取標頭 / 一次性密碼 ----
+print('\n[+8] 常見弱密碼擋鎖')
+_chk('舊預設密碼 Pass@123 現已擋鎖', _vp('Pass@123') is not None and '常見' in _vp('Pass@123'))
+_chk('通過組成策略的常見組合同樣擋鎖', _vp('Password1') is not None)
+_chk('大小寫不影響擋鎖', _vp('PASS@123') is not None)
+_chk('示範密碼 Demo@2026 可通過策略', _vp('Demo@2026') is None)
+# 路由層：把自己的密碼改成弱密碼不生效
+login('2024001')
+_r = c.post('/password', data={'old_password': 'Demo@2026', 'new_password': 'Pass@123',
+                              'confirm_password': 'Pass@123'})
+_chk('使用者無法把密碼改成常見弱密碼', '常見' in _r.get_data(as_text=True))
+_lg3 = c.post('/login', data={'username': '2024001', 'password': 'Pass@123'},
+              follow_redirects=False)
+_chk('被擋下的弱密碼無法登入', _lg3.status_code != 302)
+
+print('\n[+9] 通知分頁與未讀篩選')
+login('T001')
+_tid = db_query("SELECT id FROM users WHERE username='T001'")[0]['id']
+for _i in range(25):     # 灌超過一頁（每頁 20 筆）的通知
+    db_exec('INSERT INTO notifications (user_id, message, is_read, created_at) '
+            'VALUES (?,?,?,?)',
+            (_tid, f'v09 測試通知 {_i}', 1 if _i >= 3 else 0,
+             f'2026-10-2{1 + _i % 9} 10:00:00'))
+_nhtml = get('/notifications')
+_chk('通知頁出現分頁元件', '下一頁' in _nhtml and '共' in _nhtml and '筆' in _nhtml)
+_chk('第二頁可達', c.get('/notifications?page=2').status_code == 200)
+_chk('超出範圍的頁碼不收例外', c.get('/notifications?page=999').status_code == 200)
+_uhtml = get('/notifications?filter=unread')
+_chk('未讀篩選只列未讀', 'v09 測試通知 0' in _uhtml and 'v09 測試通知 24' not in _uhtml)
+_chk('非法篩選值回落為全部', c.get('/notifications?filter=bogus').status_code == 200)
+
+print('\n[+10] 附件內容嗅探、快取標頭、一次性密碼呈現')
+login('2024001')
+_fut = TODAY + datetime.timedelta(days=80)
+_rf = c.post('/new', data={'leave_type_id': '1',
+                           'start_date': _fut.isoformat(), 'end_date': _fut.isoformat(),
+                           'reason': '假冒的 PDF', 'contact_phone': '13800000001',
+                           'attachment': (io.BytesIO(b'MZ\x90\x00 this is not a pdf'), 'evil.pdf')},
+             content_type='multipart/form-data')
+_chk('副檔名說謊的附件被內容嗅探擋下', '格式不符' in _rf.get_data(as_text=True))
+_rt, _ = submit('2024001', 1, _fut, _fut, '真正的 PDF', 'AM', 'PM', attach='real.pdf')
+_chk('真 PDF 檔頭的附件可提交', _rt is not None)
+_h = c.get('/')
+_chk('動態頁面帶 Cache-Control: no-store', _h.headers.get('Cache-Control') == 'no-store')
+_hs = c.get('/static/css/style.css')
+_chk('靜態資源不設 no-store', 'no-store' not in (_hs.headers.get('Cache-Control') or ''))
+login('admin')
+_ro = c.post('/admin/users/add', data={'username': 'onetime_smoke', 'password': 'SecretPass9',
+                                       'name': '一次性', 'role': 'student'})
+_chk('新增帳號成功路徑改為直接呈現（200）', _ro.status_code == 200)
+_chk('密碼在回應中呈現一次', 'SecretPass9' in _ro.get_data(as_text=True))
+with c.session_transaction() as _sess:
+    _chk('明文密碼不落進 session cookie', 'SecretPass9' not in repr(_sess))
+_rr = c.post('/admin/users/add', data={'username': 'weakpw_smoke', 'password': 'Pass@123',
+                                       'name': '弱密碼', 'role': 'student'},
+             follow_redirects=True)
+_chk('後台新增帳號同受弱密碼擋鎖约束', '常見' in _rr.get_data(as_text=True))
+_chk('被擋下的帳號未建立',
+     db_query("SELECT id FROM users WHERE username='weakpw_smoke'") == [])
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

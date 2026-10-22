@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-"""v0.8.0 認證與帳號管理加固的測試。
+"""v0.8.0 認證與帳號管理加固的測試；v0.9.0 追加按帳號限流鍵與
+「明文密碼不進 session cookie」的檢查。
 
 涵蓋：登入限流持久化、帳號枚舉時序均化、密碼重設後舊 session 失效、
-閒置 session 逾時、管理員停用保護、角色／帳號格式白名單。
+閒置 session 逾時、管理員停用保護、角色／帳號格式白名單、
+雙鑰匙限流、一次性密碼呈現。
 
 注意：各測試共用同一份種子資料（conftest 建立），改過密碼的測試請使用
 其他測試不會再次登入的帳號，避免互相干擾。
@@ -12,7 +14,7 @@ import time
 import pytest
 
 from app import app, q, execute, toggle_user_error
-from utils import valid_role, valid_username
+from utils import valid_role, valid_username, validate_password
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +40,7 @@ def test_db_throttle_blocks_even_correct_password():
     for _ in range(8):
         assert _login(c, 'throttle_user', 'WrongPass1').status_code == 200
     # 第 9 次即使密碼正確也應被 429 擋下
-    r = _login(c, 'throttle_user', 'Pass@123')
+    r = _login(c, 'throttle_user', 'Demo@2026')
     assert r.status_code == 429
 
 
@@ -49,7 +51,7 @@ def test_throttle_state_survives_new_client():
     for _ in range(8):
         _login(c1, 'persist_user', 'WrongPass1')
     c2 = _new_client()
-    assert _login(c2, 'persist_user', 'Pass@123').status_code == 429
+    assert _login(c2, 'persist_user', 'Demo@2026').status_code == 429
 
 
 def test_throttle_window_expiry():
@@ -59,7 +61,7 @@ def test_throttle_window_expiry():
     for _ in range(8):
         execute('INSERT INTO login_attempts (key, ts) VALUES (?,?)', (key, old))
     c = _new_client()
-    r = _login(c, 'window_user', 'Pass@123')
+    r = _login(c, 'window_user', 'Demo@2026')
     assert r.status_code == 200        # 未被限流（密碼本身是錯的，但走的是正常失敗路徑）
 
 
@@ -92,14 +94,16 @@ def test_nonexistent_user_still_runs_hash_check(monkeypatch):
 # --------------------------------------------------------------------------
 def test_password_reset_invalidates_existing_session():
     student = _new_client()
-    assert _login(student, '2024001', 'Pass@123').status_code == 302
+    assert _login(student, '2024001', 'Demo@2026').status_code == 302
     assert student.get('/').status_code == 200
 
     admin = _new_client()
-    assert _login(admin, 'admin', 'Pass@123').status_code == 302
+    assert _login(admin, 'admin', 'Demo@2026').status_code == 302
     uid = q("SELECT id FROM users WHERE username='2024001'", one=True)['id']
+    # v0.9.0：成功路徑改為直接渲染（一次性呈現新密碼），不再 redirect
     r = admin.post(f'/admin/users/{uid}/reset-password', data={'password': 'Reset@2026x'})
-    assert r.status_code == 302
+    assert r.status_code == 200
+    assert 'Reset@2026x' in r.get_data(as_text=True)
 
     # 學生舊 session 應已失效：首頁被導回登入頁
     resp = student.get('/')
@@ -111,10 +115,10 @@ def test_password_reset_invalidates_existing_session():
 
 def test_self_password_change_sets_pwd_changed_at():
     c = _new_client()
-    assert _login(c, '2024002', 'Pass@123').status_code == 302
+    assert _login(c, '2024002', 'Demo@2026').status_code == 302
     before = q("SELECT pwd_changed_at FROM users WHERE username='2024002'",
                one=True)['pwd_changed_at']
-    r = c.post('/password', data={'old_password': 'Pass@123',
+    r = c.post('/password', data={'old_password': 'Demo@2026',
                                   'new_password': 'NewPass2026',
                                   'confirm_password': 'NewPass2026'})
     assert r.status_code == 302      # 成功後導向登出
@@ -125,14 +129,14 @@ def test_self_password_change_sets_pwd_changed_at():
 
 def test_new_password_cannot_equal_old():
     c = _new_client()
-    _login(c, '2024005', 'Pass@123')
-    r = c.post('/password', data={'old_password': 'Pass@123',
-                                  'new_password': 'Pass@123',
-                                  'confirm_password': 'Pass@123'})
+    _login(c, '2024005', 'Demo@2026')
+    r = c.post('/password', data={'old_password': 'Demo@2026',
+                                  'new_password': 'Demo@2026',
+                                  'confirm_password': 'Demo@2026'})
     assert '不可與目前密碼相同' in r.get_data(as_text=True)
     # 密碼沒被改動：舊密碼仍可登入
     c2 = _new_client()
-    assert _login(c2, '2024005', 'Pass@123').status_code == 302
+    assert _login(c2, '2024005', 'Demo@2026').status_code == 302
 
 
 # --------------------------------------------------------------------------
@@ -140,7 +144,7 @@ def test_new_password_cannot_equal_old():
 # --------------------------------------------------------------------------
 def test_idle_session_expires():
     c = _new_client()
-    assert _login(c, '2024003', 'Pass@123').status_code == 302
+    assert _login(c, '2024003', 'Demo@2026').status_code == 302
     with c.session_transaction() as sess:
         sess['last_seen'] = '2020-01-01 00:00:00'      # 模擬閒置多年
     resp = c.get('/')
@@ -150,7 +154,7 @@ def test_idle_session_expires():
 
 def test_fresh_session_survives():
     c = _new_client()
-    assert _login(c, '2024003', 'Pass@123').status_code == 302
+    assert _login(c, '2024003', 'Demo@2026').status_code == 302
     assert c.get('/').status_code == 200
 
 
@@ -159,7 +163,7 @@ def test_fresh_session_survives():
 # --------------------------------------------------------------------------
 def test_admin_cannot_disable_self():
     admin = _new_client()
-    assert _login(admin, 'admin', 'Pass@123').status_code == 302
+    assert _login(admin, 'admin', 'Demo@2026').status_code == 302
     uid = q("SELECT id FROM users WHERE username='admin'", one=True)['id']
     r = admin.post(f'/admin/users/{uid}/toggle', follow_redirects=True)
     assert '不可停用目前登入中的自己' in r.get_data(as_text=True)
@@ -169,10 +173,12 @@ def test_admin_cannot_disable_self():
 def test_second_admin_can_be_toggled():
     """再加一位管理員後，停用／啟用他都不應被誤擋（保護只鎖自己與最後一位）。"""
     admin = _new_client()
-    assert _login(admin, 'admin', 'Pass@123').status_code == 302
-    r = admin.post('/admin/users/add', data={'username': 'admin2', 'password': 'Pass@123',
+    assert _login(admin, 'admin', 'Demo@2026').status_code == 302
+    r = admin.post('/admin/users/add', data={'username': 'admin2', 'password': 'Demo@2026',
                                              'name': '二號管理員', 'role': 'admin'})
-    assert r.status_code == 302
+    # v0.9.0：成功路徑改為直接渲染（一次性呈現密碼），不再 redirect
+    assert r.status_code == 200
+    assert '已建立帳號 admin2' in r.get_data(as_text=True)
     uid2 = q("SELECT id FROM users WHERE username='admin2'", one=True)['id']
     r = admin.post(f'/admin/users/{uid2}/toggle', follow_redirects=True)
     assert '已停用' in r.get_data(as_text=True)
@@ -202,8 +208,8 @@ def test_last_admin_guard_logic():
 
 def test_add_user_rejects_invalid_role():
     admin = _new_client()
-    _login(admin, 'admin', 'Pass@123')
-    r = admin.post('/admin/users/add', data={'username': 'badrole', 'password': 'Pass@123',
+    _login(admin, 'admin', 'Demo@2026')
+    r = admin.post('/admin/users/add', data={'username': 'badrole', 'password': 'Demo@2026',
                                              'name': '壞角色', 'role': 'superuser'},
                    follow_redirects=True)
     assert '角色不合法' in r.get_data(as_text=True)
@@ -212,12 +218,12 @@ def test_add_user_rejects_invalid_role():
 
 def test_add_user_rejects_invalid_username():
     admin = _new_client()
-    _login(admin, 'admin', 'Pass@123')
-    r = admin.post('/admin/users/add', data={'username': 'a' * 51, 'password': 'Pass@123',
+    _login(admin, 'admin', 'Demo@2026')
+    r = admin.post('/admin/users/add', data={'username': 'a' * 51, 'password': 'Demo@2026',
                                              'name': '超長帳號', 'role': 'student'},
                    follow_redirects=True)
     assert '帳號格式不合法' in r.get_data(as_text=True)
-    r = admin.post('/admin/users/add', data={'username': 'has space', 'password': 'Pass@123',
+    r = admin.post('/admin/users/add', data={'username': 'has space', 'password': 'Demo@2026',
                                              'name': '空白帳號', 'role': 'student'},
                    follow_redirects=True)
     assert '帳號格式不合法' in r.get_data(as_text=True)
@@ -243,3 +249,88 @@ def test_valid_role():
         assert valid_role(r)
     for r in ('', 'SuperUser', 'root', 'teacher'):
         assert not valid_role(r)
+
+
+# --------------------------------------------------------------------------
+# v0.9.0：按帳號維度的限流鍵（換 IP 也躲不掉）
+# --------------------------------------------------------------------------
+def test_per_username_throttle_key():
+    """僅帳號的限流鍵：IP+帳號 這把鎖乾淨，但帳號鎖已滿 → 仍應 429。
+
+    攻擊者換 IP／漫遊 Proxy 時，舊版（只有 IP+帳號）每個 IP 都能試滿 7 次。
+    """
+    key = 'user:dualkey_user'
+    for _ in range(8):
+        execute('INSERT INTO login_attempts (key, ts) VALUES (?,?)', (key, time.time()))
+    c = _new_client()
+    r = _login(c, 'dualkey_user', 'Demo@2026')
+    assert r.status_code == 429
+
+
+def test_successful_login_clears_both_keys():
+    """登入成功時兩把鎖都清掉，避免誤鎖正常使用者。"""
+    c = _new_client()
+    for _ in range(3):
+        _login(c, 'clearkeys_user', 'WrongPass1')
+    assert _login(c, 'clearkeys_user', 'Demo@2026').status_code == 200  # 帳號不存在→200 失敗頁
+    # 換個 client 再試正確密碼，不應被殘留紀錄擋下
+    # （2024004 無人改過它的密碼，是安全的選擇；2024001／2024002 分別被
+    #  test_password_reset_invalidates_existing_session／
+    #  test_self_password_change_sets_pwd_changed_at 改過）
+    c2 = _new_client()
+    assert _login(c2, '2024004', 'Demo@2026').status_code == 302
+
+
+# --------------------------------------------------------------------------
+# v0.9.0：明文密碼不進 session cookie
+# --------------------------------------------------------------------------
+def test_add_user_password_not_in_session_cookie():
+    """flash 存放在 session cookie 裡，而 cookie 只是簽名並非加密——
+    舊版把明文密碼寫進 flash，等於讓任何拿到 cookie 的人讀到密碼。
+    現在密碼只出現在回應本文一次，session 裡不落痕跡。"""
+    admin = _new_client()
+    _login(admin, 'admin', 'Demo@2026')
+    r = admin.post('/admin/users/add', data={'username': 'onetime_u', 'password': 'SecretPass9',
+                                             'name': '一次性', 'role': 'student'})
+    assert r.status_code == 200
+    assert 'SecretPass9' in r.get_data(as_text=True)      # 回應中呈現一次
+    with admin.session_transaction() as sess:
+        assert 'SecretPass9' not in repr(sess)            # 但不落進 session cookie
+
+
+def test_reset_password_not_in_session_cookie():
+    admin = _new_client()
+    _login(admin, 'admin', 'Demo@2026')
+    # 2024005 的密碼沒有被其他測試改過（改密碼都被自己的校驗擋下），是安全選擇
+    uid = q("SELECT id FROM users WHERE username='2024005'", one=True)['id']
+    r = admin.post(f'/admin/users/{uid}/reset-password', data={'password': 'AnotherSecret7'})
+    assert r.status_code == 200
+    assert 'AnotherSecret7' in r.get_data(as_text=True)
+    with admin.session_transaction() as sess:
+        assert 'AnotherSecret7' not in repr(sess)
+
+
+def test_add_user_rejects_common_password():
+    """v0.9.0：管理後台同樣受弱密碼擋鎖约束（舊預設值 Pass@123 正在鎖內）。"""
+    admin = _new_client()
+    _login(admin, 'admin', 'Demo@2026')
+    r = admin.post('/admin/users/add', data={'username': 'weakpw_u', 'password': 'Pass@123',
+                                             'name': '弱密碼', 'role': 'student'},
+                   follow_redirects=True)
+    assert '常見' in r.get_data(as_text=True)
+    assert q("SELECT id FROM users WHERE username='weakpw_u'", one=True) is None
+
+
+def test_add_user_blank_password_autogenerates():
+    """未填密碼時自動產生臨時密碼（舊版是寫死的弱預設值 Pass@123）。"""
+    admin = _new_client()
+    _login(admin, 'admin', 'Demo@2026')
+    r = admin.post('/admin/users/add', data={'username': 'autogen_u', 'password': '',
+                                             'name': '自動密碼', 'role': 'student'})
+    assert r.status_code == 200
+    import re
+    m = re.search(r'class="mono">([A-Za-z0-9]+)</code>', r.get_data(as_text=True))
+    assert m and validate_password(m.group(1)) is None
+    # 用這組自動密碼可以登入
+    c = _new_client()
+    assert _login(c, 'autogen_u', m.group(1)).status_code == 302

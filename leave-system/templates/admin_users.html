@@ -3,6 +3,14 @@
 {% block content %}
 <h1>帳號管理</h1>
 
+{% if onetime_secret %}
+<div class="flash success">
+  {{ onetime_headline }}
+  密碼（僅此一次顯示，請立即抄下轉交，並提醒使用者登入後修改）：
+  <code class="mono">{{ onetime_secret }}</code>
+</div>
+{% endif %}
+
 <div class="card">
   <h3>新增帳號</h3>
   <form method="post" action="{{ url_for('admin_add_user') }}">
@@ -10,8 +18,8 @@
     <div class="row" style="grid-template-columns:1fr 1fr 1fr">
       <div><label>帳號 *</label><input name="username" placeholder="學號 / 教工號" required></div>
       <div><label>姓名 *</label><input name="name" required></div>
-      <div><label>初始密碼</label><input name="password" placeholder="Pass@123"
-        title="至少 8 碼，需含大寫、小寫字母與數字，且不可與帳號相同；留空使用 Pass@123"></div>
+      <div><label>初始密碼</label><input name="password" placeholder="留空自動產生"
+        title="至少 8 碼，需含大寫、小寫字母與數字，不可與帳號相同、不可為常見弱密碼；留空則自動產生隨機臨時密碼"></div>
     </div>
     <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr">
       <div><label>角色</label>

@@ -30,10 +30,11 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN,
                    MIN_PASSWORD_LEN, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
                    ACADEMIC_YEAR_START_MONTH, SESSION_IDLE_MINUTES,
+                   APP_VERSION, LEAVE_STATUSES,
                    parse_date, calc_days, required_level_for,
                    academic_year_start, allowed_file,
                    validate_password, temp_password, csv_safe,
-                   valid_role, valid_username)
+                   valid_role, valid_username, valid_email, sniff_allowed_type)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -234,6 +235,10 @@ def security_headers(resp):
         "default-src 'self'; img-src 'self' data:; "
         "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
         "frame-ancestors 'none'")
+    # 動態頁面（含個人請假資料、附件）不進瀏覽器快取：
+    # 登出後按「後退」不應復現資料，公共電腦也不留殘影。靜態資源除外。
+    if request.endpoint and request.endpoint != 'static':
+        resp.headers.setdefault('Cache-Control', 'no-store')
     return resp
 
 
@@ -357,7 +362,7 @@ def inject_globals():
         row = q('SELECT COUNT(*) c FROM notifications WHERE user_id=? AND is_read=0',
                 (u['id'],), one=True)
         unread = row['c']
-    return dict(current_user=u, unread_count=unread,
+    return dict(current_user=u, unread_count=unread, app_version=APP_VERSION,
                 now=datetime.now(), FACULTY_THRESHOLD_DAYS=FACULTY_THRESHOLD_DAYS,
                 min_date=(date.today() - timedelta(days=MAX_BACKDATE_DAYS)).isoformat(),
                 max_date=(date.today() + timedelta(days=365)).isoformat(),
@@ -404,13 +409,20 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        key = f"{request.remote_addr}:{username.lower()}"
-        if login_throttled(key):
-            flash('登入失敗次數過多，請 5 分鐘後再試。', 'error')
+        uname = username.lower()
+        # 兩把鎖：
+        #  ① IP + 帳號——阻斷單一來源對單一帳號的連續衝撞（v0.8.0 原有）；
+        #  ② 僅帳號——攻擊者換 IP／漫遊 Proxy 時，同一帳號的失敗仍累計。
+        # 只靠 ① 的話，分散式密碼填充可以每個 IP 試 7 次繞過。
+        key = f"{request.remote_addr}:{uname}"
+        user_key = f"user:{uname}"
+        if login_throttled(key) or login_throttled(user_key):
+            flash(f'登入失敗次數過多，請 {LOGIN_WINDOW_SEC // 60} 分鐘後再試。', 'error')
             return render_template('login.html'), 429
         user = q('SELECT * FROM users WHERE username=? AND active=1', (username,), one=True)
         if user and check_password_hash(user['password_hash'], password):
             login_succeeded(key)
+            login_succeeded(user_key)
             session.clear()                       # 防 session fixation
             session['uid'] = user['id']
             session['csrf_token'] = secrets.token_hex(32)
@@ -421,6 +433,7 @@ def login():
             # 帳號不存在也跑一次雜湊比對，拉平與「帳號存在但密碼錯誤」的時間差
             check_password_hash(_DUMMY_PASSWORD_HASH, password)
         login_failed(key)
+        login_failed(user_key)
         flash('帳號或密碼錯誤。', 'error')
     return render_template('login.html')
 
@@ -434,7 +447,11 @@ def logout():
 @app.route('/password', methods=['GET', 'POST'])
 @login_required
 def change_password():
-    """所有角色都共用初始密碼 Pass@123，必須能自行修改。"""
+    """所有角色都共用初始密碼 Demo@2026，必須能自行修改。
+
+    注意：舊版示範密碼 Pass@123 已列入弱密碼擋鎖（v0.9.0），
+    新舊帳號都不允許再把密碼改回它。
+    """
     u = current_user()
     if request.method == 'POST':
         old = request.form.get('old_password', '')
@@ -546,6 +563,8 @@ def todo_requests(u, limit=None):
 def my_requests():
     u = current_user()
     status = request.args.get('status', '')
+    if status not in LEAVE_STATUSES:      # 白名單外的一律視為不篩選
+        status = ''
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
@@ -629,6 +648,13 @@ def new_request():
         if file and file.filename:
             if not allowed_file(file.filename):
                 flash('證明文件格式不支援（僅 PDF/圖片/Word）。', 'error')
+                return render_template('new_request.html', types=types, form=request.form)
+            # 副檔名說謊防護：改檔名很容易，改檔案頭很難——依魔術位元組驗證真實格式
+            head = file.stream.read(8)
+            file.stream.seek(0)
+            if not sniff_allowed_type(head):
+                flash('證明文件內容與宣稱的格式不符（僅接受真正的 PDF／圖片／Word 文件）。',
+                      'error')
                 return render_template('new_request.html', types=types, form=request.form)
             # 檔名加隨機字串，避免附件 URL 被猜測枚舉
             fn = secure_filename(
@@ -849,10 +875,25 @@ def approvals():
 @login_required
 def notifications():
     u = current_user()
+    cur_filter = request.args.get('filter', 'all')
+    if cur_filter not in ('all', 'unread'):
+        cur_filter = 'all'
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    where = 'WHERE n.user_id=?'
+    args = [u['id']]
+    if cur_filter == 'unread':
+        where += ' AND n.is_read=0'
+    total = q(f'SELECT COUNT(*) c FROM notifications n {where}', args, one=True)['c']
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    page = min(max(page, 1), total_pages)
     rows = q('SELECT n.*, r.start_date FROM notifications n '
              'LEFT JOIN leave_requests r ON r.id=n.request_id '
-             'WHERE n.user_id=? ORDER BY n.created_at DESC, n.id DESC LIMIT 50', (u['id'],))
-    return render_template('notifications.html', items=rows)
+             f'{where} ORDER BY n.created_at DESC, n.id DESC LIMIT ? OFFSET ?',
+             tuple(args) + (per_page, (page - 1) * per_page))
+    return render_template('notifications.html', items=rows, page=page,
+                           total_pages=total_pages, total=total,
+                           cur_filter=cur_filter)
 
 
 @app.route('/notifications/read', methods=['POST'])
@@ -927,11 +968,8 @@ def export_csv():
 # --------------------------------------------------------------------------
 # 管理後台
 # --------------------------------------------------------------------------
-@app.route('/admin/users')
-@login_required
-@role_required('admin')
-def admin_users():
-    role = request.args.get('role', '')
+def _render_admin_users(role='', onetime=None):
+    """帳號管理頁的共用渲染（GET 與 POST 成功後的一次性呈現都用它）。"""
     sql = ('SELECT u.*, a.name advisor_name FROM users u '
            'LEFT JOIN users a ON a.id=u.advisor_id')
     args = []
@@ -941,7 +979,35 @@ def admin_users():
     sql += ' ORDER BY u.role, u.username'
     advisors = q("SELECT id, name FROM users WHERE role='advisor' AND active=1 ORDER BY name")
     return render_template('admin_users.html', users=q(sql, args),
-                           advisors=advisors, filter_role=role)
+                           advisors=advisors, filter_role=role,
+                           onetime_headline=onetime[0] if onetime else None,
+                           onetime_secret=onetime[1] if onetime else None)
+
+
+def _parse_advisor_id(raw):
+    """正規化表單傳入的 advisor_id。
+
+    回傳 (值, 錯誤訊息)。空值 → (None, None)；非整數、帳號不存在、
+    非導師角色或已停用 → (None, 錯誤訊息)。少了這層檢查，
+    亂填的 id 會撞外鍵約束直接 500。
+    """
+    if raw in (None, ''):
+        return None, None
+    try:
+        aid = int(raw)
+    except (TypeError, ValueError):
+        return None, '導師帳號不合法。'
+    row = q('SELECT id, role, active FROM users WHERE id=?', (aid,), one=True)
+    if not row or row['role'] != 'advisor' or not row['active']:
+        return None, '導師帳號不存在、非導師角色或已停用。'
+    return aid, None
+
+
+@app.route('/admin/users')
+@login_required
+@role_required('admin')
+def admin_users():
+    return _render_admin_users(request.args.get('role', ''))
 
 
 @app.route('/admin/users/add', methods=['POST'])
@@ -954,8 +1020,15 @@ def admin_add_user():
     department = request.form.get('department', '').strip()
     class_name = request.form.get('class_name', '').strip()
     email = request.form.get('email', '').strip()
-    advisor_id = request.form.get('advisor_id') or None
-    password = request.form.get('password') or 'Pass@123'
+    advisor_id, adv_err = _parse_advisor_id(request.form.get('advisor_id'))
+    if adv_err:
+        flash(adv_err, 'error')
+        return redirect(url_for('admin_users'))
+    if email and not valid_email(email):
+        flash('Email 格式不合法。', 'error')
+        return redirect(url_for('admin_users'))
+    # 未填密碼時自動產生一組必定通過策略的隨機臨時密碼
+    password = request.form.get('password', '').strip() or temp_password()
     err = validate_password(password, username)
     if err:
         flash(err, 'error')
@@ -977,8 +1050,11 @@ def admin_add_user():
             'class_name, email, advisor_id) VALUES (?,?,?,?,?,?,?,?)',
             (username, generate_password_hash(password), name, role,
              department, class_name, email, advisor_id))
-    flash(f'已建立帳號 {username}（初始密碼：{password}）', 'success')
-    return redirect(url_for('admin_users'))
+    log_action(None, current_user()['id'], 'add_user', f'新增帳號 {username}（{role}）')
+    # 明文密碼不進 flash：flash 存放在 session cookie 裡，而 cookie 只是簽名並非加密，
+    # 任何拿到 cookie 的人都能讀出密碼，且它會一直待到下次請求被消費。
+    # 改為僅在本次回應中呈現一次，任何地方都不留持久痕跡。
+    return _render_admin_users(onetime=(f'已建立帳號 {username}。', password))
 
 
 def toggle_user_error(me, target):
@@ -1039,8 +1115,8 @@ def admin_reset_password(uid):
     execute('UPDATE users SET password_hash=?, pwd_changed_at=? WHERE id=?',
             (generate_password_hash(new), _now_str(), uid))
     log_action(None, current_user()['id'], 'reset_password', f"重設 {target['username']} 的密碼")
-    flash(f"已重設 {target['username']} 的密碼為：{new}", 'success')
-    return redirect(url_for('admin_users'))
+    # 同新增帳號：明文密碼只在本次回應中呈現一次，不進 session cookie
+    return _render_admin_users(onetime=(f'已重設 {target["username"]} 的密碼。', new))
 
 
 @app.route('/admin/users/<int:uid>/edit', methods=['POST'])
@@ -1056,13 +1132,20 @@ def admin_edit_user(uid):
     if not name:
         flash('姓名不可為空。', 'error')
         return redirect(url_for('admin_users'))
-    advisor_id = request.form.get('advisor_id') or None
+    email = request.form.get('email', '').strip()
+    if email and not valid_email(email):
+        flash('Email 格式不合法。', 'error')
+        return redirect(url_for('admin_users'))
+    advisor_id, adv_err = _parse_advisor_id(request.form.get('advisor_id'))
+    if adv_err:
+        flash(adv_err, 'error')
+        return redirect(url_for('admin_users'))
     execute('UPDATE users SET name=?, department=?, class_name=?, email=?, advisor_id=? '
             'WHERE id=?',
             (name,
              request.form.get('department', '').strip(),
              request.form.get('class_name', '').strip(),
-             request.form.get('email', '').strip(),
+             email,
              advisor_id, uid))
     log_action(None, current_user()['id'], 'edit_user', f'修改帳號 #{uid} 資料')
     flash('帳號資料已更新。', 'success')
@@ -1137,7 +1220,10 @@ def uploaded_file(filename):
 def seed():
     if q('SELECT COUNT(*) c FROM users', one=True)['c']:
         return False
-    pw = generate_password_hash('Pass@123')
+    # 示範統一密碼。刻意不用 Pass@123：它已列進 COMMON_PASSWORDS 擋鎖，
+    # 種子資料雖然繞過 validate_password 直寫，但演示時「預設密碼本身違反
+    # 自家策略」會讓人困惑，也給了使用者一個改不回去的錯誤示範。
+    pw = generate_password_hash('Demo@2026')
     dept = '人工智能學域'
 
     admin = execute('INSERT INTO users (username, password_hash, name, role, department) '

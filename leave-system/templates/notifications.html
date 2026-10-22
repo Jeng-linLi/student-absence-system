@@ -10,6 +10,10 @@
   {% endif %}
 </h1>
 <div class="card">
+  <div class="actions" style="margin:0 0 12px">
+    <a class="btn sm {{ '' if cur_filter == 'all' else 'ghost' }}" href="{{ url_for('notifications') }}">全部</a>
+    <a class="btn sm {{ '' if cur_filter == 'unread' else 'ghost' }}" href="{{ url_for('notifications', filter='unread') }}">未讀{% if unread_count %}（{{ unread_count }}）{% endif %}</a>
+  </div>
   {% if items %}
   <table>
     <thead><tr><th class="tnum">時間</th><th>內容</th><th></th></tr></thead>
@@ -24,6 +28,17 @@
     {% endfor %}
     </tbody>
   </table>
+  {% if total_pages > 1 %}
+    <div class="pager">
+      {% if page > 1 %}
+        <a class="btn sm ghost" href="{{ url_for('notifications', filter=cur_filter, page=page-1) }}">← 上一頁</a>
+      {% endif %}
+      <span class="muted">第 {{ page }} / {{ total_pages }} 頁（共 {{ total }} 筆）</span>
+      {% if page < total_pages %}
+        <a class="btn sm ghost" href="{{ url_for('notifications', filter=cur_filter, page=page+1) }}">下一頁 →</a>
+      {% endif %}
+    </div>
+  {% endif %}
   {% else %}<div class="empty">暫無通知。</div>{% endif %}
 </div>
 {% endblock %}
