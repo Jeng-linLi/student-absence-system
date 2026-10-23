@@ -6,6 +6,7 @@
 """
 import os
 import io
+import re
 import sys
 import shutil
 import sqlite3
@@ -482,13 +483,15 @@ _hs = c.get('/static/css/style.css')
 _chk('靜態資源不設 no-store', 'no-store' not in (_hs.headers.get('Cache-Control') or ''))
 login('admin')
 _ro = c.post('/admin/users/add', data={'username': 'onetime_smoke', 'password': 'SecretPass9',
-                                       'name': '一次性', 'role': 'student'})
+                                       'name': '一次性', 'role': 'student',
+                                       'department': '人工智能學域'})
 _chk('新增帳號成功路徑改為直接呈現（200）', _ro.status_code == 200)
 _chk('密碼在回應中呈現一次', 'SecretPass9' in _ro.get_data(as_text=True))
 with c.session_transaction() as _sess:
     _chk('明文密碼不落進 session cookie', 'SecretPass9' not in repr(_sess))
 _rr = c.post('/admin/users/add', data={'username': 'weakpw_smoke', 'password': 'Pass@123',
-                                       'name': '弱密碼', 'role': 'student'},
+                                       'name': '弱密碼', 'role': 'student',
+                                       'department': '人工智能學域'},
              follow_redirects=True)
 _chk('後台新增帳號同受弱密碼擋鎖约束', '常見' in _rr.get_data(as_text=True))
 _chk('被擋下的帳號未建立',
@@ -577,6 +580,151 @@ check('日誌頁列出動作標籤', '提交假單' in _logs_html)
 check('日誌頁越界頁碼不收例外', c.get('/admin/logs?page=999').status_code == 200)
 login('2024003')
 check('學生不可進入稽核日誌頁', c.get('/admin/logs').status_code == 302)
+
+print('\n[+13] v1.1.0：待辦分頁、重複審批守衛、撤回院系通知、單則已讀、電話格式、referrer 防護、SMTP 逾時、院系必填')
+# 待辦分頁：直接插入 25 筆待審假單給 2024004（T002 的學生）
+for _i in range(25):
+    _d = TODAY + datetime.timedelta(days=400 + _i)
+    db_exec('INSERT INTO leave_requests (student_id, leave_type_id, start_date, end_date, '
+            'start_period, end_period, days, reason, status, current_level, required_level) '
+            'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            (db_query("SELECT id FROM users WHERE username='2024004'")[0]['id'], 1,
+             _d.isoformat(), _d.isoformat(), 'AM', 'PM', 1.0,
+             f'v11 分頁 {_i:02d}', 'pending', 1, 1))
+login('T002')
+_html_todo = get('/approvals')
+check('待辦清單顯示分頁頁碼', '第 1 / 2 頁' in _html_todo)
+check('待辦清單顯示總筆數', re.search(r'共 \d+ 筆', _html_todo) is not None)
+check('待辦第二頁可開啟', c.get('/approvals?page=2').status_code == 200)
+check('待辦越界頁碼收斂到末頁', c.get('/approvals?page=999').status_code == 200)
+check('全部假單視圖分頁不受影響', c.get('/approvals?scope=all&page=2').status_code == 200)
+db_exec("DELETE FROM leave_requests WHERE reason LIKE 'v11 分頁%'")
+
+# 重複審批守衛：核准後再 POST decide，被明確擋下
+login('2024004')
+_rid_dup, _ = submit('2024004', 1, TODAY + datetime.timedelta(days=420),
+                     TODAY + datetime.timedelta(days=420), '重複審批守衛')
+login('T002')
+c.post(f'/request/{_rid_dup}/decide', data={'action': 'approve', 'comment': 'ok'})
+_r_dup = c.post(f'/request/{_rid_dup}/decide',
+                data={'action': 'reject', 'comment': '再來一次'}, follow_redirects=True)
+check('重複審批被明確擋下', '無法再操作' in _r_dup.get_data(as_text=True))
+check('重複審批未改動假單狀態',
+      db_query('SELECT status FROM leave_requests WHERE id=?', (_rid_dup,))[0]['status'] == 'approved')
+
+# 撤回院系級假單：院系審批人也收到通知，重複撤回被擋
+login('2024004')
+_rid_w2, _ = submit('2024004', 1, TODAY + datetime.timedelta(days=440),
+                    TODAY + datetime.timedelta(days=445), '撤回院系通知')
+login('T002')
+c.post(f'/request/{_rid_w2}/decide', data={'action': 'approve', 'comment': '同意轉院系'})
+check('六天假單核准後轉入院系級', '待院系審批' in get(f'/request/{_rid_w2}'))
+login('2024004')
+c.post(f'/request/{_rid_w2}/withdraw')
+login('F001')
+check('撤回院系級假單後院辦收到通知', '撤回' in get('/notifications'))
+login('2024004')
+_r_dupw = c.post(f'/request/{_rid_w2}/withdraw', follow_redirects=True)
+check('重複撤回被擋下', '已結案' in _r_dupw.get_data(as_text=True))
+
+# 單則通知標為已讀：他人標不到、本人可以、重複標記友善提示
+login('T002')
+_t2id = db_query("SELECT id FROM users WHERE username='T002'")[0]['id']
+_unread = db_query('SELECT id FROM notifications WHERE user_id=? AND is_read=0 '
+                   'ORDER BY id DESC LIMIT 1', (_t2id,))
+check('T002 有未讀通知可測', len(_unread) == 1)
+_nid = _unread[0]['id']
+login('2024004')
+_r_cross = c.post(f'/notifications/{_nid}/read', follow_redirects=True)
+check('學生無法標記導師的通知', '找不到該通知' in _r_cross.get_data(as_text=True))
+check('他人的通知仍未讀',
+      db_query('SELECT is_read FROM notifications WHERE id=?', (_nid,))[0]['is_read'] == 0)
+login('T002')
+_r_n1 = c.post(f'/notifications/{_nid}/read')
+check('單則標為已讀導回通知頁',
+      _r_n1.status_code == 302 and '/notifications' in dict(_r_n1.headers).get('Location', ''))
+check('資料庫中該則已讀',
+      db_query('SELECT is_read FROM notifications WHERE id=?', (_nid,))[0]['is_read'] == 1)
+_r_n2 = c.post(f'/notifications/{_nid}/read', follow_redirects=True)
+check('重複標記給友善提示而不是 500', '找不到該通知' in _r_n2.get_data(as_text=True))
+
+# 電話格式校驗
+login('2024003')
+_r_phone = c.post('/new', data={'leave_type_id': '1',
+                                'start_date': (TODAY + datetime.timedelta(days=430)).isoformat(),
+                                'end_date': (TODAY + datetime.timedelta(days=430)).isoformat(),
+                                'reason': '電話格式', 'contact_phone': 'call-me-maybe'},
+                  content_type='multipart/form-data')
+check('非法電話格式被擋下', '格式不合法' in _r_phone.get_data(as_text=True))
+check('被擋下的假單未寫入資料庫',
+      db_query("SELECT COUNT(*) c FROM leave_requests WHERE reason='電話格式'")[0]['c'] == 0)
+_rid_ph, _ = submit('2024003', 1, TODAY + datetime.timedelta(days=431),
+                    TODAY + datetime.timedelta(days=431), '電話合法')
+check('正常電話格式仍可提交', _rid_ph is not None)
+
+# referrer 開放重定向防護
+app.config['CSRF_ENABLED'] = True
+_r_ref = c.post('/login', data={'username': 'x', 'password': 'y'},
+                headers={'Referer': 'http://evil.example.com/phish'})
+check('外部 referrer 不會被用來重導向',
+      'evil.example.com' not in dict(_r_ref.headers).get('Location', ''))
+_r_ref2 = c.post('/login', data={'username': 'x', 'password': 'y'},
+                 headers={'Referer': 'http://localhost/login'})
+check('同站 referrer 仍可沿用',
+      dict(_r_ref2.headers).get('Location', '') == 'http://localhost/login')
+app.config['CSRF_ENABLED'] = False
+
+# SMTP 連線逾時
+import smtplib as _smtplib
+_captured = {}
+
+
+class _FakeSMTP:
+    def __init__(self, host, port, timeout=None):
+        _captured['timeout'] = timeout
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def starttls(self):
+        pass
+
+    def login(self, *a):
+        pass
+
+    def send_message(self, *a):
+        pass
+
+
+_orig_smtp = _smtplib.SMTP
+_smtplib.SMTP = _FakeSMTP
+os.environ['LEAVE_SMTP_HOST'] = 'smtp.test.invalid'
+os.environ['LEAVE_SMTP_USER'] = 'u'
+os.environ['LEAVE_SMTP_FROM'] = 'f@test.invalid'
+try:
+    from app import send_email as _send_email
+    _send_email('to@test.invalid', 'subject', 'body')
+    check('SMTP 連線預設 10 秒逾時', _captured.get('timeout') == 10)
+    os.environ['LEAVE_SMTP_TIMEOUT'] = '3'
+    _send_email('to@test.invalid', 'subject', 'body')
+    check('LEAVE_SMTP_TIMEOUT 可覆寫逾時', _captured.get('timeout') == 3)
+finally:
+    _smtplib.SMTP = _orig_smtp
+    for _k in ('LEAVE_SMTP_HOST', 'LEAVE_SMTP_USER', 'LEAVE_SMTP_FROM', 'LEAVE_SMTP_TIMEOUT'):
+        os.environ.pop(_k, None)
+check('Email 通道恢復關閉', not _smtp_configured())
+
+# 學生／院系帳號必須填寫院系
+login('admin')
+_r_nodept = c.post('/admin/users/add', data={'username': 'nodept_smoke', 'password': 'GoodPass9',
+                                             'name': '無院系', 'role': 'student'},
+                   follow_redirects=True)
+check('無院系的學生帳號被擋下', '必須填寫所屬院系' in _r_nodept.get_data(as_text=True))
+check('被擋下的帳號未建立',
+      db_query("SELECT id FROM users WHERE username='nodept_smoke'") == [])
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

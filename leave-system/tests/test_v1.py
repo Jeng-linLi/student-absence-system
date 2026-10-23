@@ -46,7 +46,8 @@ def students():
         if not q('SELECT id FROM users WHERE username=?', (name,), one=True):
             r = admin.post('/admin/users/add', data={
                 'username': name, 'password': PW, 'name': f'v1 測試生 {name}',
-                'role': 'student', 'email': f'{name}@example.edu',
+                'role': 'student', 'department': '人工智能學域',
+                'email': f'{name}@example.edu',
                 'advisor_id': str(adv)})
             assert r.status_code == 200, f'建立 {name} 失敗'
     return {'t1': t1, 't2': t2,
@@ -92,7 +93,7 @@ def test_dashboard_stats_scoped_for_advisor(students):
     assert _login(t1, 'T001', 'Demo@2026').status_code == 302
     html = t1.get('/').get_data(as_text=True)
     m = re.search(r'<div class="n">(\d+)</div><div class="l">我的學生審批中</div>', html)
-    assert m, '儀表板缺少範圍感知的統計标签'
+    assert m, '儀表板缺少範圍感知的統計標籤'
     assert int(m.group(1)) == expected
     assert '全校審批中' not in html
 

@@ -37,6 +37,7 @@ def stu():
         admin.post('/login', data={'username': 'admin', 'password': 'Demo@2026'})
         admin.post('/admin/users/add', data={'username': STU, 'password': PW,
                                              'name': '健壯性測試生', 'role': 'student',
+                                             'department': '人工智能學域',
                                              'email': f'{STU}@example.edu'})
     return q('SELECT id FROM users WHERE username=?', (STU,), one=True)['id']
 
@@ -205,6 +206,7 @@ def test_add_user_rejects_bad_email():
     admin = _admin()
     r = admin.post('/admin/users/add', data={'username': 'bademail_u', 'password': 'GoodPass9',
                                              'name': '壞郵箱', 'role': 'student',
+                                             'department': '人工智能學域',
                                              'email': 'not-an-email'},
                    follow_redirects=True)
     assert 'Email' in r.get_data(as_text=True)
@@ -215,6 +217,7 @@ def test_add_user_rejects_unknown_advisor():
     admin = _admin()
     r = admin.post('/admin/users/add', data={'username': 'badvadv_u', 'password': 'GoodPass9',
                                              'name': '壞導師', 'role': 'student',
+                                             'department': '人工智能學域',
                                              'advisor_id': '99999'},
                    follow_redirects=True)
     assert '導師' in r.get_data(as_text=True)

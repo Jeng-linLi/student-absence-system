@@ -291,7 +291,8 @@ def test_add_user_password_not_in_session_cookie():
     admin = _new_client()
     _login(admin, 'admin', 'Demo@2026')
     r = admin.post('/admin/users/add', data={'username': 'onetime_u', 'password': 'SecretPass9',
-                                             'name': '一次性', 'role': 'student'})
+                                             'name': '一次性', 'role': 'student',
+                                             'department': '人工智能學域'})
     assert r.status_code == 200
     assert 'SecretPass9' in r.get_data(as_text=True)      # 回應中呈現一次
     with admin.session_transaction() as sess:
@@ -311,7 +312,7 @@ def test_reset_password_not_in_session_cookie():
 
 
 def test_add_user_rejects_common_password():
-    """v0.9.0：管理後台同樣受弱密碼擋鎖约束（舊預設值 Pass@123 正在鎖內）。"""
+    """v0.9.0：管理後台同樣受弱密碼擋鎖約束（舊預設值 Pass@123 正在鎖內）。"""
     admin = _new_client()
     _login(admin, 'admin', 'Demo@2026')
     r = admin.post('/admin/users/add', data={'username': 'weakpw_u', 'password': 'Pass@123',
@@ -326,7 +327,8 @@ def test_add_user_blank_password_autogenerates():
     admin = _new_client()
     _login(admin, 'admin', 'Demo@2026')
     r = admin.post('/admin/users/add', data={'username': 'autogen_u', 'password': '',
-                                             'name': '自動密碼', 'role': 'student'})
+                                             'name': '自動密碼', 'role': 'student',
+                                             'department': '人工智能學域'})
     assert r.status_code == 200
     import re
     m = re.search(r'class="mono">([A-Za-z0-9]+)</code>', r.get_data(as_text=True))

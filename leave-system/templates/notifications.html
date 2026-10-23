@@ -23,7 +23,12 @@
         <td class="tnum muted">{{ n.created_at[:16] }}</td>
         <td>{{ n.message }}</td>
         <td>{% if n.request_id %}
-          <a class="btn sm ghost" href="{{ url_for('detail', rid=n.request_id) }}">查看</a>{% endif %}</td>
+          <a class="btn sm ghost" href="{{ url_for('detail', rid=n.request_id) }}">查看</a>{% endif %}
+          {% if n.is_read == 0 %}
+          <form method="post" action="{{ url_for('notification_read', nid=n.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn sm ghost" type="submit">標為已讀</button>
+          </form>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

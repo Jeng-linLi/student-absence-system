@@ -29,7 +29,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '1.0.0'
+APP_VERSION = '1.1.0'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')
@@ -142,6 +142,18 @@ _EMAIL_RE = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 def valid_email(email):
     """Email 粗校驗：形式不合法就不寫入（通知通道依賴它）。"""
     return bool(_EMAIL_RE.fullmatch(email or ''))
+
+
+# 聯絡電話：數字與 + ( ) - 空格；長度上限沿用 MAX_PHONE_LEN
+_PHONE_RE = re.compile(r'[0-9+()\- ]{1,%d}' % MAX_PHONE_LEN)
+
+
+def valid_phone(phone):
+    """聯絡電話格式校驗（v1.1.0）。空值視為合法——電話非必填；
+    填了就必須像支電話，擋掉「abc」「<script>」之類的雜訊。"""
+    if not phone:
+        return True
+    return bool(_PHONE_RE.fullmatch(phone))
 
 
 def validate_password(pw, username=None):

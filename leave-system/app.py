@@ -14,9 +14,11 @@ import secrets
 import json
 from datetime import date, datetime, timedelta
 from functools import wraps
+from urllib.parse import urlsplit
 
 from flask import (Flask, render_template, request, redirect, url_for, session,
-                   flash, jsonify, send_from_directory, Response, abort)
+                   flash, jsonify, send_from_directory, Response, abort,
+                   make_response)
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -24,7 +26,7 @@ import smtplib
 from email.message import EmailMessage
 
 from db import (BASE_DIR, DB_PATH, UPLOAD_DIR, get_db, close_db,  # noqa: F401
-                q, execute, init_db)
+                q, execute, execute_guard, transaction, init_db)
 from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    MAX_BACKDATE_DAYS, MAX_SINGLE_DAYS, MAX_ATTACHMENT_MB,
                    MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN,
@@ -35,8 +37,8 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    parse_date, calc_days, required_level_for,
                    academic_year_start, allowed_file,
                    validate_password, temp_password, csv_safe,
-                   valid_role, valid_username, valid_email, sniff_allowed_type,
-                   valid_type_code)
+                   valid_role, valid_username, valid_email, valid_phone,
+                   sniff_allowed_type, valid_type_code)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -170,8 +172,13 @@ def send_email(to_addr, subject, body):
         msg['From'] = os.environ.get('LEAVE_SMTP_FROM', '')
         msg['To'] = to_addr
         msg.set_content(body)
+        # timeout 不可省略：SMTP 伺服器不可達（防火牆丟包）時，無逾時的
+        # SMTP() 會無限期阻塞，把整個 worker 拖死——每個會觸發 notify 的
+        # 請求都跟著掛（v1.1.0）。可用 LEAVE_SMTP_TIMEOUT 調整。
+        timeout = int(os.environ.get('LEAVE_SMTP_TIMEOUT', '10'))
         with smtplib.SMTP(os.environ['LEAVE_SMTP_HOST'],
-                          int(os.environ.get('LEAVE_SMTP_PORT', '587'))) as s:
+                          int(os.environ.get('LEAVE_SMTP_PORT', '587')),
+                          timeout=timeout) as s:
             if os.environ.get('LEAVE_SMTP_TLS', '1') == '1':
                 s.starttls()
             if os.environ.get('LEAVE_SMTP_USER'):
@@ -220,10 +227,26 @@ def csrf_protect():
         abort(400, description='CSRF 驗證失敗，請重新載入頁面後再試。')
 
 
+def _safe_referrer():
+    """request.referrer 是攻擊者可控的完整 URL——CSRF 失敗、413 之類的
+    處理若直接 redirect(referrer)，使用者會被送往外部網站（open redirect，
+    常用於釣魚：頁面長得跟真系統一樣）。只有 Host 與本站相同才沿用，
+    其餘一律回dashboard。"""
+    ref = request.referrer
+    if ref:
+        try:
+            parts = urlsplit(ref)
+        except ValueError:
+            parts = None
+        if parts and parts.scheme in ('http', 'https') and parts.netloc == request.host:
+            return ref
+    return url_for('dashboard')
+
+
 @app.errorhandler(400)
 def bad_request(e):
     flash(getattr(e, 'description', '請求無效。'), 'error')
-    return redirect(request.referrer or url_for('dashboard'))
+    return redirect(_safe_referrer())
 
 
 @app.errorhandler(413)
@@ -231,7 +254,7 @@ def too_large(e):
     """請求體過大（附件超過 MAX_ATTACHMENT_MB）：Werkzeug 預設會回一篇
     白底錯誤頁，改成 flash 提示並導回原頁面（v1.0.0）。"""
     flash(f'上傳內容過大（上限 {MAX_ATTACHMENT_MB} MB），請壓縮或改傳較小檔案。', 'error')
-    return redirect(request.referrer or url_for('dashboard'))
+    return redirect(_safe_referrer())
 
 
 @app.after_request
@@ -433,7 +456,9 @@ def login():
         user_key = f"user:{uname}"
         if login_throttled(key) or login_throttled(user_key):
             flash(f'登入失敗次數過多，請 {LOGIN_WINDOW_SEC // 60} 分鐘後再試。', 'error')
-            return render_template('login.html'), 429
+            resp = make_response(render_template('login.html'), 429)
+            resp.headers['Retry-After'] = str(LOGIN_WINDOW_SEC)
+            return resp
         user = q('SELECT * FROM users WHERE username=? AND active=1', (username,), one=True)
         if user and check_password_hash(user['password_hash'], password):
             login_succeeded(key)
@@ -556,8 +581,9 @@ def dashboard():
     return render_template('dashboard.html', **ctx)
 
 
-def todo_requests(u, limit=None):
-    """待當前用戶審批的假單。"""
+def todo_requests(u, limit=None, offset=0):
+    """待當前用戶審批的假單。limit/offset 供分頁使用（v1.1.0：待辦清單
+    此前一次載入全部待審假單，審批人學生一多頁面就無限變長）。"""
     if u['role'] == 'advisor':
         sql = ('SELECT r.*, t.name type_name, s.name student_name, s.class_name '
                'FROM leave_requests r '
@@ -582,7 +608,7 @@ def todo_requests(u, limit=None):
                "WHERE r.status='pending' ORDER BY r.created_at ASC")
         args = ()
     if limit:
-        sql += f' LIMIT {int(limit)}'
+        sql += f' LIMIT {int(limit)} OFFSET {max(int(offset or 0), 0)}'
     return q(sql, args)
 
 
@@ -672,6 +698,9 @@ def new_request():
             err = f'請假事由過長（上限 {MAX_REASON_LEN} 字）。'
         elif len(phone) > MAX_PHONE_LEN:
             err = f'聯絡電話過長（上限 {MAX_PHONE_LEN} 字）。'
+        elif not valid_phone(phone):
+            err = ('聯絡電話格式不合法（僅能包含數字與 + ( ) - 空格；'
+                   f'上限 {MAX_PHONE_LEN} 字）。')
         else:
             # 其餘校驗都通過才查資料庫（整個流程只查一次重疊）
             clashes = overlapping_requests(u['id'], start_date, end_date)
@@ -716,20 +745,23 @@ def new_request():
         affected = affected_courses_for(u['id'], start_date.isoformat(),
                                         end_date.isoformat(), sp, ep)
         affected_json = json.dumps(affected, ensure_ascii=False)
-        rid = execute(
-            'INSERT INTO leave_requests (student_id, leave_type_id, start_date, end_date, '
-            'start_period, end_period, days, reason, attachment, contact_phone, '
-            'affected_courses, status, current_level, required_level) '
-            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            (u['id'], type_id, start_date.isoformat(), end_date.isoformat(), sp, ep,
-             days, reason, attachment, phone, affected_json, 'pending', 1, level))
-        execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 1, 'pending'))
-        if level == 2:
-            execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 2, 'pending'))
+        # 假單＋兩級審批記錄＋稽核＋通知要麼全部寫入、要麼全部不寫——
+        # 逐句 commit 的話，中途失敗會留下「有假單沒有審批記錄」的孤兒。
+        with transaction():
+            rid = execute(
+                'INSERT INTO leave_requests (student_id, leave_type_id, start_date, end_date, '
+                'start_period, end_period, days, reason, attachment, contact_phone, '
+                'affected_courses, status, current_level, required_level) '
+                'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (u['id'], type_id, start_date.isoformat(), end_date.isoformat(), sp, ep,
+                 days, reason, attachment, phone, affected_json, 'pending', 1, level))
+            execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 1, 'pending'))
+            if level == 2:
+                execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 2, 'pending'))
 
-        log_action(rid, u['id'], 'submit', f"提交{ltype['name']} {days}天，審批層級{level}")
-        if u['advisor_id']:
-            notify(u['advisor_id'], rid, f"{u['name']} 提交了 {days} 天{ltype['name']}，待你審批。")
+            log_action(rid, u['id'], 'submit', f"提交{ltype['name']} {days}天，審批層級{level}")
+            if u['advisor_id']:
+                notify(u['advisor_id'], rid, f"{u['name']} 提交了 {days} 天{ltype['name']}，待你審批。")
         flash('假單已提交，等待導師審批。', 'success')
         return redirect(url_for('detail', rid=rid))
 
@@ -849,31 +881,42 @@ def decide(rid):
         return redirect(url_for('detail', rid=rid))
 
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    execute('UPDATE approvals SET action=?, approver_id=?, comment=?, acted_at=? '
-            'WHERE request_id=? AND level=?', (action, u['id'], comment, now, rid, level))
+    # v1.1.0：整個審批動作放進一個交易——approvals、leave_requests、
+    # audit_logs、notifications 四張表要麼全部生效、要麼全部不發生。
+    # approvals 的更新另加 action='pending' 條件守衛：兩位審批人同時點擊
+    # （或雙擊）時，只有第一位能寫入；第二位的影響列數是 0，明確告知
+    # 「已被處理」，而不是覆寫第一位結果、讓學生重複收到通知。
+    with transaction():
+        changed = execute_guard(
+            'UPDATE approvals SET action=?, approver_id=?, comment=?, acted_at=? '
+            "WHERE request_id=? AND level=? AND action='pending'",
+            (action, u['id'], comment, now, rid, level))
+        if not changed:
+            flash('該假單剛被其他人處理，請重新整理後再確認。', 'error')
+            return redirect(url_for('detail', rid=rid))
 
-    if action == 'reject':
-        execute("UPDATE leave_requests SET status='rejected', updated_at=? WHERE id=?", (now, rid))
-        log_action(rid, u['id'], 'reject', comment)
-        notify(req['student_id'], rid,
-               f"你的{req['type_name']}假單被{'導師' if level == 1 else '院系'}駁回：{comment}")
-        flash('已駁回該假單。', 'success')
-        return redirect(url_for('approvals'))
+        if action == 'reject':
+            execute("UPDATE leave_requests SET status='rejected', updated_at=? WHERE id=?", (now, rid))
+            log_action(rid, u['id'], 'reject', comment)
+            notify(req['student_id'], rid,
+                   f"你的{req['type_name']}假單被{'導師' if level == 1 else '院系'}駁回：{comment}")
+            flash('已駁回該假單。', 'success')
+            return redirect(url_for('approvals'))
 
-    # 核准
-    if level < req['required_level']:
-        execute('UPDATE leave_requests SET current_level=?, updated_at=? WHERE id=?',
-                (level + 1, now, rid))
-        log_action(rid, u['id'], 'approve', f'第{level}級核准，轉院系複核')
-        for f in q("SELECT id FROM users WHERE role='faculty' AND active=1 AND department=?",
-                   (req['department'],)):
-            notify(f['id'], rid, f"{req['student_name']} 的 {req['days']} 天{req['type_name']}待院系複核。")
-        flash('已核准，已轉交院系複核。', 'success')
-    else:
-        execute("UPDATE leave_requests SET status='approved', updated_at=? WHERE id=?", (now, rid))
-        log_action(rid, u['id'], 'approve', f'第{level}級核准，假單生效')
-        notify(req['student_id'], rid, f"你的{req['type_name']}假單已核准（{req['days']} 天）。")
-        flash('已核准該假單。', 'success')
+        # 核准
+        if level < req['required_level']:
+            execute('UPDATE leave_requests SET current_level=?, updated_at=? WHERE id=?',
+                    (level + 1, now, rid))
+            log_action(rid, u['id'], 'approve', f'第{level}級核准，轉院系複核')
+            for f in q("SELECT id FROM users WHERE role='faculty' AND active=1 AND department=?",
+                       (req['department'],)):
+                notify(f['id'], rid, f"{req['student_name']} 的 {req['days']} 天{req['type_name']}待院系複核。")
+            flash('已核准，已轉交院系複核。', 'success')
+        else:
+            execute("UPDATE leave_requests SET status='approved', updated_at=? WHERE id=?", (now, rid))
+            log_action(rid, u['id'], 'approve', f'第{level}級核准，假單生效')
+            notify(req['student_id'], rid, f"你的{req['type_name']}假單已核准（{req['days']} 天）。")
+            flash('已核准該假單。', 'success')
     return redirect(url_for('approvals'))
 
 
@@ -889,14 +932,32 @@ def withdraw(rid):
         flash('該假單已結案，無法撤回。', 'error')
         return redirect(url_for('detail', rid=rid))
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    execute("UPDATE leave_requests SET status='withdrawn', updated_at=? WHERE id=?", (now, rid))
-    log_action(rid, u['id'], 'withdraw', '學生撤回')
-    # v1.0.0：撤回後通知導師——否則導師點開假單才發現已被撤回，
-    # 待辦清單裡的數字也與實際對不上。
-    stu = q('SELECT advisor_id FROM users WHERE id=?', (u['id'],), one=True)
-    if stu and stu['advisor_id']:
-        notify(stu['advisor_id'], rid,
-               f"{u['name']} 撤回了假單 #{rid}（{req['start_date']} ~ {req['end_date']}）。")
+    # v1.1.0：status='pending' 直接寫進 WHERE——「讀取時仍待審」與
+    # 「寫入時仍待審」之間若有併發（導師剛好核准），影響列數為 0，
+    # 明確告知使用者，而不是覆寫掉剛發生的審批結果。
+    # 撤回＋紀錄＋通知同樣在一個交易內完成。
+    with transaction():
+        changed = execute_guard(
+            "UPDATE leave_requests SET status='withdrawn', updated_at=? "
+            "WHERE id=? AND status='pending'", (now, rid))
+        if not changed:
+            flash('該假單剛被處理，無法撤回。', 'error')
+            return redirect(url_for('detail', rid=rid))
+        log_action(rid, u['id'], 'withdraw', '學生撤回')
+        # v1.0.0：撤回後通知導師——否則導師點開假單才發現已被撤回，
+        # 待辦清單裡的數字也與實際對不上。
+        stu = q('SELECT advisor_id FROM users WHERE id=?', (u['id'],), one=True)
+        if stu and stu['advisor_id']:
+            notify(stu['advisor_id'], rid,
+                   f"{u['name']} 撤回了假單 #{rid}（{req['start_date']} ~ {req['end_date']}）。")
+        # v1.1.0：撤回時若已審到院系級，院系審批人也該收到通知——
+        # 他們的待辦數字同樣不能對不上。
+        if req['current_level'] == 2:
+            for f in q("SELECT id FROM users WHERE role='faculty' AND active=1 AND department=?",
+                       (u['department'],)):
+                notify(f['id'], rid,
+                       f"{u['name']} 撤回了待院系複核的假單 #{rid}"
+                       f"（{req['start_date']} ~ {req['end_date']}）。")
     flash('假單已撤回。', 'success')
     return redirect(url_for('my_requests'))
 
@@ -913,6 +974,7 @@ def approvals():
     page = request.args.get('page', 1, type=int)
     per_page = 20
     total_pages = 1
+    total = 0
 
     if scope == 'all':
         # 範圍隔離：導師只看自己的學生、院系只看本院系、管理員看全部。
@@ -931,10 +993,15 @@ def approvals():
                  f'{where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?',
                  sargs + [per_page, (page - 1) * per_page])
     else:
-        rows = todo_requests(u)
-        page = 1
+        # v1.1.0：待辦清單也分頁。此前 todo 分支一次取出全部待審假單——
+        # scope=all 早有分頁，唯獨預設的 todo 視圖沒有，審批人學生一多，
+        # 頁面就無限變長。total 交給模板顯示「共 N 筆」。
+        total = count_todo(u)
+        total_pages = max((total + per_page - 1) // per_page, 1)
+        page = min(max(page, 1), total_pages)
+        rows = todo_requests(u, limit=per_page, offset=(page - 1) * per_page)
     return render_template('approvals.html', requests=rows, scope=scope,
-                           page=page, total_pages=total_pages)
+                           page=page, total_pages=total_pages, total=total)
 
 
 # --------------------------------------------------------------------------
@@ -972,6 +1039,20 @@ def notifications_read_all():
     u = current_user()
     execute('UPDATE notifications SET is_read=1 WHERE user_id=? AND is_read=0', (u['id'],))
     flash('已將全部通知標為已讀。', 'success')
+    return redirect(url_for('notifications'))
+
+
+@app.route('/notifications/<int:nid>/read', methods=['POST'])
+@login_required
+def notification_read(nid):
+    """單則標為已讀（v1.1.0）：此前只有「全部標為已讀」，
+    想保留其餘未讀狀態、逐則處理時沒有辦法。"""
+    u = current_user()
+    changed = execute_guard('UPDATE notifications SET is_read=1 '
+                            'WHERE id=? AND user_id=? AND is_read=0', (nid, u['id']))
+    if not changed:
+        # 不區分「不存在」與「不屬於你」：避免以枚舉通知 id 探測他人資料
+        flash('找不到該通知，或它已被標為已讀。', 'error')
     return redirect(url_for('notifications'))
 
 
@@ -1112,6 +1193,12 @@ def admin_add_user():
     if not valid_role(role):
         flash('角色不合法（限 student / advisor / faculty / admin）。', 'error')
         return redirect(url_for('admin_users'))
+    # v1.1.0：學生與院系帳號必須填寫院系。待辦清單、核准通知、範圍隔離
+    # 全都按 department 匹配——空院系的學生遞交需院系複核的假單後，
+    # 沒有任何院系審批人看得見它，整張單卡在第二級沒人處理。
+    if role in ('student', 'faculty') and not department:
+        flash('學生與院系帳號必須填寫所屬院系（審批範圍依院系匹配）。', 'error')
+        return redirect(url_for('admin_users'))
     if q('SELECT id FROM users WHERE username=?', (username,), one=True):
         flash(f'帳號 {username} 已存在。', 'error')
         return redirect(url_for('admin_users'))
@@ -1197,7 +1284,7 @@ def admin_reset_password(uid):
 @role_required('admin')
 def admin_edit_user(uid):
     """調整姓名、院系、班級與導師歸屬（導師異動時最常需要）。"""
-    target = q('SELECT id FROM users WHERE id=?', (uid,), one=True)
+    target = q('SELECT id, role FROM users WHERE id=?', (uid,), one=True)
     if not target:
         flash('找不到該帳號。', 'error')
         return redirect(url_for('admin_users'))
@@ -1213,10 +1300,14 @@ def admin_edit_user(uid):
     if adv_err:
         flash(adv_err, 'error')
         return redirect(url_for('admin_users'))
+    department = request.form.get('department', '').strip()
+    # 同新增帳號：學生與院系不可清空院系，否則審批範圍再也匹配不到他們
+    if target['role'] in ('student', 'faculty') and not department:
+        flash('學生與院系帳號必須填寫所屬院系（審批範圍依院系匹配）。', 'error')
+        return redirect(url_for('admin_users'))
     execute('UPDATE users SET name=?, department=?, class_name=?, email=?, advisor_id=? '
             'WHERE id=?',
-            (name,
-             request.form.get('department', '').strip(),
+            (name, department,
              request.form.get('class_name', '').strip(),
              email,
              advisor_id, uid))
@@ -1439,4 +1530,8 @@ if __name__ == '__main__':
         if created:
             print('已寫入示範資料。')
         seed_timetable()
-    app.run(host='127.0.0.1', port=5055, debug=True)
+    # debug 模式（Werkzeug 除錯器／自動重載）預設關閉：誰都能 `python app.py`
+    # 直接把服務跑起來，不該預設附帶一個可執行任意程式碼的除錯控制台。
+    # 本機開發時用 LEAVE_DEBUG=1 開啟（start.bat 已預設設定）。
+    app.run(host='127.0.0.1', port=5055,
+            debug=os.environ.get('LEAVE_DEBUG', '0') == '1')
