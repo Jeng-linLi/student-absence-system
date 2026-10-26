@@ -726,5 +726,89 @@ check('無院系的學生帳號被擋下', '必須填寫所屬院系' in _r_node
 check('被擋下的帳號未建立',
       db_query("SELECT id FROM users WHERE username='nodept_smoke'") == [])
 
+# ---- v1.2.0 新增檢查：交易內不寄信 / 狀態篩選 / 帳號分頁 / CSV 串流 / 孤兒附件 ----
+print('\n[+14] v1.2.0：郵件不在交易中寄出、approvals 狀態篩選、帳號管理分頁、CSV 串流、孤兒附件預檢、healthz 版本')
+
+# 交易內不寄信：以 FakeSMTP 攔截，核准時斷言寄出點不在交易中
+import flask as _flask
+_sent_during = []
+_tx_depth_at_send = []
+
+
+class _RecordingSMTP(_FakeSMTP):
+    def send_message(self, *a):
+        _tx_depth_at_send.append(getattr(_flask.g, '_tx_depth', 0))
+
+
+_smtplib.SMTP = _RecordingSMTP
+os.environ['LEAVE_SMTP_HOST'] = 'smtp.test.invalid'
+os.environ['LEAVE_SMTP_USER'] = 'u'
+os.environ['LEAVE_SMTP_FROM'] = 'f@test.invalid'
+try:
+    # submit() 內部會以學生身份登入，T001 的登入必須排在提交之後
+    _rid_tx, _ = submit('2024003', 1, TODAY + datetime.timedelta(days=900),
+                        TODAY + datetime.timedelta(days=900), 'v12 交易郵件')
+    check('交易郵件測試假單可提交', _rid_tx is not None)
+    login('T001')
+    _r_appr = c.post(f'/request/{_rid_tx}/decide', data={'action': 'approve', 'comment': 'ok'})
+    check('核准成功', _r_appr.status_code == 302)
+    check('核准後有寄出通知郵件', len(_tx_depth_at_send) >= 1)
+    check('郵件不在交易進行中寄出（_tx_depth=0）',
+          all(d == 0 for d in _tx_depth_at_send))
+finally:
+    _smtplib.SMTP = _orig_smtp
+    for _k in ('LEAVE_SMTP_HOST', 'LEAVE_SMTP_USER', 'LEAVE_SMTP_FROM'):
+        os.environ.pop(_k, None)
+
+# approvals scope=all 狀態篩選
+login('admin')
+_html_all = get('/approvals?scope=all')
+check('全部假單顯示狀態篩選列', '全部狀態' in _html_all and '已核准' in _html_all)
+_html_appr = get('/approvals?scope=all&status=approved')
+check('已核准篩選含已核准假單', 'tag green">已核准' in _html_appr)
+check('已核准篩選不含待審假單',
+      '待導師審批' not in _html_appr and '待院系審批' not in _html_appr)
+_html_bogus = get('/approvals?scope=all&status=bogus')
+check('非法狀態值視為不篩選', '待導師審批' in _html_bogus)
+check('狀態篩選與分頁可組合', c.get('/approvals?scope=all&status=pending&page=2').status_code == 200)
+
+# 帳號管理分頁：補到超過一頁
+for _i in range(15):
+    c.post('/admin/users/add', data={'username': f'v12smoke{_i:02d}', 'password': 'Smoke@2026x',
+                                     'name': f'冒煙 {_i}', 'role': 'student',
+                                     'department': '人工智能學域'})
+_html_users = get('/admin/users')
+check('帳號管理顯示分頁頁碼', re.search(r'第 1 / \d+ 頁', _html_users) is not None)
+check('帳號管理第二頁可開啟', c.get('/admin/users?page=2').status_code == 200)
+check('帳號管理角色篩選與分頁可組合',
+      c.get('/admin/users?role=student&page=2').status_code == 200)
+
+# CSV 串流匯出：內容與舊版一致（表頭＋列數＋公式注入前綴）
+_r_csv = c.get('/export')
+_csv_text = _r_csv.get_data(as_text=True).encode('utf-8').decode('utf-8-sig')
+_csv_lines = [ln for ln in _csv_text.splitlines() if ln.strip()]
+_csv_total = db_query('SELECT COUNT(*) c FROM leave_requests')[0]['c']
+check('CSV 匯出表頭正確', _csv_lines[0].startswith('假單號'))
+check('CSV 串流匯出包含全部假單', len(_csv_lines) == _csv_total + 1)
+
+# requires_attachment 預檢：被擋下的病假不在 uploads/ 留孤兒檔案
+import glob as _glob
+_files_before = set(_glob.glob(os.path.join(os.environ['LEAVE_UPLOAD_DIR'], '*')))
+login('2024005')
+_r_orphan = c.post('/new', data={'leave_type_id': '2',
+                                 'start_date': (TODAY + datetime.timedelta(days=950)).isoformat(),
+                                 'end_date': (TODAY + datetime.timedelta(days=950)).isoformat(),
+                                 'reason': 'v12 孤兒附件', 'contact_phone': '13800000001'},
+                   content_type='multipart/form-data')
+check('沒附證明的病假被擋下', '必須上傳證明文件' in _r_orphan.get_data(as_text=True))
+check('被擋下的假單未寫入',
+      db_query("SELECT id FROM leave_requests WHERE reason='v12 孤兒附件'") == [])
+_files_after = set(_glob.glob(os.path.join(os.environ['LEAVE_UPLOAD_DIR'], '*')))
+check('uploads/ 沒有留下孤兒檔案', _files_after == _files_before)
+
+# healthz 回傳版本號
+_r_hz = c.get('/healthz')
+check('healthz 回報目前版本', _r_hz.get_json().get('version') == '1.2.0')
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

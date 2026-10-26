@@ -12,13 +12,14 @@ import hmac
 import time
 import secrets
 import json
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from functools import wraps
 from urllib.parse import urlsplit
 
 from flask import (Flask, render_template, request, redirect, url_for, session,
                    flash, jsonify, send_from_directory, Response, abort,
-                   make_response)
+                   make_response, g, has_request_context, stream_with_context)
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -189,14 +190,71 @@ def send_email(to_addr, subject, body):
 
 
 def notify(user_id, request_id, message):
-    """站內通知永遠寫入；若已設定 SMTP，再額外寄一封 Email（失敗靜默）。"""
+    """站內通知永遠寫入；若已設定 SMTP，再額外寄一封 Email（失敗靜默）。
+
+    Email 不在呼叫點同步寄出，而是進佇列（見 _queue_email）——
+    notify 幾乎都在交易區塊內被呼叫，同步寄信會讓 SQLite 寫入鎖
+    在整個 SMTP 連線期間被持有。
+    """
     if user_id:
         execute('INSERT INTO notifications (user_id, request_id, message) VALUES (?,?,?)',
                 (user_id, request_id, message))
         if _smtp_configured():
             u = q('SELECT email FROM users WHERE id=?', (user_id,), one=True)
             if u and u['email']:
-                send_email(u['email'], '線上請假系統通知', message)
+                _queue_email(u['email'], message)
+
+
+def _queue_email(to_addr, message):
+    """把通知郵件放進佇列，延到交易提交後再寄（v1.2.0）。
+
+    原因：寄信是網路 I/O，SMTP 連線最長可達 LEAVE_SMTP_TIMEOUT 秒
+    （v1.1.0 加的逾時）。舊版在交易內同步寄出，等於讓 SQLite 的
+    寫入鎖整個寄信過程都被持有——任何併發的審批／提交都會被阻塞，
+    甚至撞上 database is locked。現在交易期間只入佇列：
+
+    - 請求週期內：由 atomic() 在最外層交易成功提交後寄出；
+    - 非請求週期（CLI、seed）：沒有 after_request 會來收割，立即寄出。
+    """
+    if getattr(g, '_pending_emails', None) is None:
+        g._pending_emails = []
+    g._pending_emails.append((to_addr, message))
+    # 非請求週期（CLI、seed）且不在交易中：沒有 after_request 會來收割、
+    # 也沒有 atomic() 會在提交後寄出——立即寄出。若在交易中（縱然沒有
+    # 請求週期），是否寄出交給 atomic() 依提交／回滾決定。
+    if not has_request_context() and not getattr(g, '_tx_depth', 0):
+        _flush_emails()
+
+
+def _flush_emails():
+    """寄出佇列中的郵件並清空。send_email 本身失敗靜默，這裡不補catch。"""
+    pending = getattr(g, '_pending_emails', None)
+    if not pending:
+        return
+    g._pending_emails = []
+    for to_addr, message in pending:
+        send_email(to_addr, '線上請假系統通知', message)
+
+
+@contextmanager
+def atomic():
+    """transaction() ＋ 通知郵件佇列語義（v1.2.0）。
+
+    notify() 在交易期間只把郵件放進 g._pending_emails；最外層交易
+    成功提交後才實際寄出。若交易擲出例外而回滾，把在此交易期間
+    入佇列的郵件一併作廢——站內信的寫入隨交易消失，郵件不該
+    單獨寄到使用者手上。
+    """
+    mark = len(getattr(g, '_pending_emails', None) or [])
+    try:
+        with transaction():
+            yield
+    except Exception:
+        queued = getattr(g, '_pending_emails', None)
+        if queued:
+            del queued[mark:]
+        raise
+    _flush_emails()
 
 
 def log_action(request_id, actor_id, action, detail=''):
@@ -255,6 +313,17 @@ def too_large(e):
     白底錯誤頁，改成 flash 提示並導回原頁面（v1.0.0）。"""
     flash(f'上傳內容過大（上限 {MAX_ATTACHMENT_MB} MB），請壓縮或改傳較小檔案。', 'error')
     return redirect(_safe_referrer())
+
+
+@app.after_request
+def flush_pending_emails(resp):
+    """安全網：交易外入佇列的通知郵件在回應送出前寄出。
+
+    正常路徑由 atomic() 在交易提交後負責；這裡覆蓋「notify 於
+    交易外被呼叫」的少數路徑（例如未包 atomic 的 CLI 流程）。
+    """
+    _flush_emails()
+    return resp
 
 
 @app.after_request
@@ -714,7 +783,14 @@ def new_request():
 
         attachment = ''
         file = request.files.get('attachment')
-        if file and file.filename:
+        has_file = bool(file and file.filename)
+        # v1.2.0：必須附檔但沒附——在落盤之前就擋掉。舊版把檔案先存進
+        # uploads/ 才檢查，被擋下的檔案沒有資料庫紀錄與它對應，成了
+        # 永遠沒人認領的孤兒（還帶著個資）。
+        if ltype['requires_attachment'] and not has_file:
+            flash(f"「{ltype['name']}」必須上傳證明文件。", 'error')
+            return render_template('new_request.html', types=types, form=request.form)
+        if has_file:
             if not allowed_file(file.filename):
                 flash('證明文件格式不支援（僅 PDF/圖片/Word）。', 'error')
                 return render_template('new_request.html', types=types, form=request.form)
@@ -737,9 +813,6 @@ def new_request():
                 f"{u['username']}_{datetime.now():%Y%m%d%H%M%S}_{secrets.token_hex(6)}_{safe_name}")
             file.save(os.path.join(UPLOAD_DIR, fn))
             attachment = fn
-        if ltype['requires_attachment'] and not attachment:
-            flash(f"「{ltype['name']}」必須上傳證明文件。", 'error')
-            return render_template('new_request.html', types=types, form=request.form)
 
         level = required_level_for(days, ltype)
         affected = affected_courses_for(u['id'], start_date.isoformat(),
@@ -747,7 +820,8 @@ def new_request():
         affected_json = json.dumps(affected, ensure_ascii=False)
         # 假單＋兩級審批記錄＋稽核＋通知要麼全部寫入、要麼全部不寫——
         # 逐句 commit 的話，中途失敗會留下「有假單沒有審批記錄」的孤兒。
-        with transaction():
+        # atomic() 另負責在提交後才寄出通知郵件（不佔著寫入鎖寄信）。
+        with atomic():
             rid = execute(
                 'INSERT INTO leave_requests (student_id, leave_type_id, start_date, end_date, '
                 'start_period, end_period, days, reason, attachment, contact_phone, '
@@ -886,7 +960,9 @@ def decide(rid):
     # approvals 的更新另加 action='pending' 條件守衛：兩位審批人同時點擊
     # （或雙擊）時，只有第一位能寫入；第二位的影響列數是 0，明確告知
     # 「已被處理」，而不是覆寫第一位結果、讓學生重複收到通知。
-    with transaction():
+    # v1.2.0：改用 atomic()——通知郵件在交易提交後才寄，不讓 SMTP
+    # 連線期間一直持有 SQLite 寫入鎖。
+    with atomic():
         changed = execute_guard(
             'UPDATE approvals SET action=?, approver_id=?, comment=?, acted_at=? '
             "WHERE request_id=? AND level=? AND action='pending'",
@@ -935,8 +1011,9 @@ def withdraw(rid):
     # v1.1.0：status='pending' 直接寫進 WHERE——「讀取時仍待審」與
     # 「寫入時仍待審」之間若有併發（導師剛好核准），影響列數為 0，
     # 明確告知使用者，而不是覆寫掉剛發生的審批結果。
-    # 撤回＋紀錄＋通知同樣在一個交易內完成。
-    with transaction():
+    # 撤回＋紀錄＋通知同樣在一個交易內完成（atomic() 見 v1.2.0：
+    # 郵件在提交後才寄出）。
+    with atomic():
         changed = execute_guard(
             "UPDATE leave_requests SET status='withdrawn', updated_at=? "
             "WHERE id=? AND status='pending'", (now, rid))
@@ -981,6 +1058,14 @@ def approvals():
         # v0.9.0 複審發現此分支漏了 role_scope——/stats 與 /export 在 v0.7.0
         # 就修了，唯獨「全部假單」漏網，任何導師都能翻遍全系統的請假事由。
         conds, sargs = role_scope(u)
+        # v1.2.0：狀態篩選。全部假單預設混雜四種狀態，審批人想追「已核准」
+        # 或「已駁回」只能一頁頁翻；白名單外的值一律視為不篩選。
+        status = request.args.get('status', '')
+        if status not in LEAVE_STATUSES:
+            status = ''
+        if status:
+            conds.append('r.status=?')
+            sargs.append(status)
         where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
         total = q('SELECT COUNT(*) c FROM leave_requests r '
                   'JOIN users s ON s.id=r.student_id ' + where, sargs, one=True)['c']
@@ -996,12 +1081,14 @@ def approvals():
         # v1.1.0：待辦清單也分頁。此前 todo 分支一次取出全部待審假單——
         # scope=all 早有分頁，唯獨預設的 todo 視圖沒有，審批人學生一多，
         # 頁面就無限變長。total 交給模板顯示「共 N 筆」。
+        status = ''
         total = count_todo(u)
         total_pages = max((total + per_page - 1) // per_page, 1)
         page = min(max(page, 1), total_pages)
         rows = todo_requests(u, limit=per_page, offset=(page - 1) * per_page)
     return render_template('approvals.html', requests=rows, scope=scope,
-                           page=page, total_pages=total_pages, total=total)
+                           page=page, total_pages=total_pages, total=total,
+                           filter_status=status)
 
 
 # --------------------------------------------------------------------------
@@ -1092,25 +1179,47 @@ def export_csv():
     u = current_user()
     conds, args = role_scope(u)
     where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
-    rows = q('SELECT r.id, s.username, s.name, s.class_name, s.department, t.name type_name, '
-             'r.start_date, r.end_date, r.days, r.reason, r.status, r.current_level, r.created_at '
-             'FROM leave_requests r JOIN users s ON s.id=r.student_id '
-             f'JOIN leave_types t ON t.id=r.leave_type_id {where} '
-             'ORDER BY r.created_at DESC', args)
+    sql = ('SELECT r.id, s.username, s.name, s.class_name, s.department, t.name type_name, '
+           'r.start_date, r.end_date, r.days, r.reason, r.status, r.current_level, r.created_at '
+           'FROM leave_requests r JOIN users s ON s.id=r.student_id '
+           f'JOIN leave_types t ON t.id=r.leave_type_id {where} '
+           'ORDER BY r.created_at DESC')
 
-    buf = io.StringIO()
-    buf.write('\ufeff')
-    w = csv.writer(buf)
-    w.writerow(['假單號', '學號', '姓名', '班級', '院系', '假別', '開始', '結束',
-                '天數', '事由', '狀態', '目前層級', '提交時間'])
-    for r in rows:
-        # csv_safe：事由等自由文字若是 = + - @ 開頭，在 Excel 會被當公式執行
-        w.writerow([csv_safe(v) if isinstance(v, str) else v
-                    for v in (r['id'], r['username'], r['name'], r['class_name'], r['department'],
-                              r['type_name'], r['start_date'], r['end_date'], r['days'],
-                              r['reason'], STATUS_LABEL.get(r['status'], r['status']),
-                              r['current_level'], r['created_at'])])
-    return Response(buf.getvalue(), mimetype='text/csv',
+    def generate():
+        # v1.2.0：改串流。舊版 q() 一次 fetchall 把整個範圍的假單讀進
+        # 記憶體——導師带幾十屆學生時，匯出能吃到數百 MB。現在用同一条
+        # 連線的 cursor 逐批 fetchmany(200) 邊讀邊寫，記憶體用量與
+        # 資料量脫鉤。stream_with_context 讓 app context 在串流期間
+        # 保持存活，get_db() 才拿得到連線。
+        buf = io.StringIO()
+        buf.write('\ufeff')
+        w = csv.writer(buf)
+        w.writerow(['假單號', '學號', '姓名', '班級', '院系', '假別', '開始', '結束',
+                    '天數', '事由', '狀態', '目前層級', '提交時間'])
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+        cur = get_db().execute(sql, args)
+        try:
+            while True:
+                batch = cur.fetchmany(200)
+                if not batch:
+                    break
+                for r in batch:
+                    # csv_safe：事由等自由文字若是 = + - @ 開頭，在 Excel 會被當公式執行
+                    w.writerow([csv_safe(v) if isinstance(v, str) else v
+                                for v in (r['id'], r['username'], r['name'], r['class_name'],
+                                          r['department'], r['type_name'], r['start_date'],
+                                          r['end_date'], r['days'], r['reason'],
+                                          STATUS_LABEL.get(r['status'], r['status']),
+                                          r['current_level'], r['created_at'])])
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate(0)
+        finally:
+            cur.close()
+
+    return Response(stream_with_context(generate()), mimetype='text/csv',
                     headers={'Content-Disposition':
                              f'attachment; filename=leave_{date.today():%Y%m%d}.csv'})
 
@@ -1118,18 +1227,26 @@ def export_csv():
 # --------------------------------------------------------------------------
 # 管理後台
 # --------------------------------------------------------------------------
-def _render_admin_users(role='', onetime=None):
-    """帳號管理頁的共用渲染（GET 與 POST 成功後的一次性呈現都用它）。"""
+def _render_admin_users(role='', page=1, onetime=None):
+    """帳號管理頁的共用渲染（GET 與 POST 成功後的一次性呈現都用它）。
+
+    v1.2.0：加分頁。此前一次載入全部帳號——與 v1.1.0 修待辦清單時
+    同類的問題：帳號一多頁面就無限變長。角色篩選與分頁可組合。
+    """
+    page = max(int(page or 1), 1)
+    per_page = 20
+    where = 'WHERE u.role=?' if role else ''
+    args = [role] if role else []
+    total = q('SELECT COUNT(*) c FROM users u ' + where, args, one=True)['c']
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    page = min(page, total_pages)
     sql = ('SELECT u.*, a.name advisor_name FROM users u '
-           'LEFT JOIN users a ON a.id=u.advisor_id')
-    args = []
-    if role:
-        sql += ' WHERE u.role=?'
-        args.append(role)
-    sql += ' ORDER BY u.role, u.username'
+           'LEFT JOIN users a ON a.id=u.advisor_id '
+           + where + ' ORDER BY u.role, u.username LIMIT ? OFFSET ?')
     advisors = q("SELECT id, name FROM users WHERE role='advisor' AND active=1 ORDER BY name")
-    return render_template('admin_users.html', users=q(sql, args),
+    return render_template('admin_users.html', users=q(sql, args + [per_page, (page - 1) * per_page]),
                            advisors=advisors, filter_role=role,
+                           page=page, total_pages=total_pages, total=total,
                            onetime_headline=onetime[0] if onetime else None,
                            onetime_secret=onetime[1] if onetime else None)
 
@@ -1157,7 +1274,8 @@ def _parse_advisor_id(raw):
 @login_required
 @role_required('admin')
 def admin_users():
-    return _render_admin_users(request.args.get('role', ''))
+    return _render_admin_users(request.args.get('role', ''),
+                               page=request.args.get('page', 1, type=int))
 
 
 @app.route('/admin/users/add', methods=['POST'])
@@ -1416,7 +1534,7 @@ def healthz():
     try:
         q('SELECT 1')
         q('SELECT COUNT(*) c FROM users')      # schema 完整性：核心表可查
-        return jsonify({'status': 'ok', 'db': 'up'})
+        return jsonify({'status': 'ok', 'db': 'up', 'version': APP_VERSION})
     except Exception as exc:  # noqa: BLE001 — 探針只需回報狀態，不吐堆疊
         return jsonify({'status': 'error', 'db': str(exc)}), 503
 

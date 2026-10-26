@@ -11,6 +11,16 @@
     <a class="btn ghost sm" href="{{ url_for('export_csv') }}">匯出 CSV</a>
   </div>
 
+  {% if scope == 'all' %}
+  <div class="actions" style="margin:0 0 12px">
+    <a class="btn sm {{ '' if filter_status=='' else 'ghost' }}" href="{{ url_for('approvals', scope='all') }}">全部狀態</a>
+    {% for st, lbl in [('pending','審批中'),('approved','已核准'),('rejected','已駁回'),('withdrawn','已撤回')] %}
+      <a class="btn sm {{ '' if filter_status==st else 'ghost' }}"
+         href="{{ url_for('approvals', scope='all', status=st) }}">{{ lbl }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if requests %}
   <table>
     <thead><tr><th>#</th><th>學生</th><th>假別</th><th>起訖</th>
@@ -33,11 +43,19 @@
   {% if total_pages > 1 %}
     <div class="pager">
       {% if page > 1 %}
-        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page-1) }}">← 上一頁</a>
+        {% if scope == 'all' %}
+          <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', status=filter_status, page=page-1) }}">← 上一頁</a>
+        {% else %}
+          <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page-1) }}">← 上一頁</a>
+        {% endif %}
       {% endif %}
       <span class="muted">第 {{ page }} / {{ total_pages }} 頁{% if total is defined %}（共 {{ total }} 筆）{% endif %}</span>
       {% if page < total_pages %}
-        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page+1) }}">下一頁 →</a>
+        {% if scope == 'all' %}
+          <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', status=filter_status, page=page+1) }}">下一頁 →</a>
+        {% else %}
+          <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page+1) }}">下一頁 →</a>
+        {% endif %}
       {% endif %}
     </div>
   {% endif %}

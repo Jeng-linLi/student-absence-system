@@ -105,5 +105,16 @@
     {% endfor %}
     </tbody>
   </table>
+  {% if total_pages > 1 %}
+    <div class="pager">
+      {% if page > 1 %}
+        <a class="btn sm ghost" href="{{ url_for('admin_users', role=filter_role, page=page-1) }}">← 上一頁</a>
+      {% endif %}
+      <span class="muted">第 {{ page }} / {{ total_pages }} 頁（共 {{ total }} 個帳號）</span>
+      {% if page < total_pages %}
+        <a class="btn sm ghost" href="{{ url_for('admin_users', role=filter_role, page=page+1) }}">下一頁 →</a>
+      {% endif %}
+    </div>
+  {% endif %}
 </div>
 {% endblock %}
