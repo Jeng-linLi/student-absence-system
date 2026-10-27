@@ -287,4 +287,4 @@ def test_healthz_reports_version():
     r = app.test_client().get('/healthz')
     assert r.status_code == 200
     data = r.get_json()
-    assert data['status'] == 'ok' and data['version'] == APP_VERSION == '1.2.0'
+    assert data['status'] == 'ok' and data['version'] == APP_VERSION

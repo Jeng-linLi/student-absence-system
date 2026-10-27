@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v1.2.0`**（2026-10-26）· MIT · CI passing
+**Prototype version ｜原型版本：`v1.2.1`**（2026-10-27）· MIT · CI passing
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
 periods instantly previews the classes a leave would make a student miss (`GET
@@ -54,6 +54,34 @@ pagination / unit tests, and a 183-check smoke suite in CI.
 | `leave-system/` | Flask + SQLite prototype (**v1.2.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, streamed CSV export, 183-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、CSV 串流匯出 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
+
+## Why adopt ｜為什麼採用（for universities）
+
+This isn't a slide-deck proposal — it ships a **runnable prototype** alongside the enterprise design package, so a
+steering committee can try the full leave-and-approval flow before approving any budget. Four reasons it makes
+sense to act this academic cycle:
+
+- **Payback under one year.** ≈ ¥2.0M / year in avoided cost (faculty email overhead, registry adjudication,
+  duplicate-document handling) against ¥0.45M / year run cost. The ¥1.0M MVP build pays back inside Year 1.
+- **Closes a live PIPL / 個人資料保護法 gap.** Student absence data (health reasons, family events, accommodation
+  needs) today lives in private email inboxes — uncontrolled retention, no deletion, no cross-border audit trail.
+  SAAS moves it into a single, retention-scheduled, access-controlled, audit-logged system.
+- **Peer institutions are moving.** "Email your instructors" reads as 2010-era friction to applicants comparing
+  HKUST(GZ) with CUHK(SZ), NYU Shanghai, Duke Kunshan. A modern, humane absence flow is a visible signal of digital
+  maturity — and it produces the structured ledger that future analytics / risk-scoring / AI initiatives need.
+- **De-risked pilot.** Phase-1 runs two programmes in parallel with the existing email process, with an explicit
+  rollback plan at week 14. No sunk infrastructure cost if it doesn't meet adoption thresholds.
+
+See the Executive Summary's "Why Now" section for the full case.
+
+<span class="zh">這不是簡報式提案——附帶**可執行原型**，指導委員可在核准預算前先試用完整的請假與審批流程。本學年即須行動的四個理由：</span>
+
+- <span class="zh">**不到一學年回本。** 穩態後每年可避免約 200 萬成本（教師郵件、教務裁決、重複文件），對應每年 45 萬運維；100 萬 MVP 開發費用在第一年內回收。</span>
+- <span class="zh">**收斂個人資料保護法風險。** 學生請假資料（健康事由、家庭事件、便利需求）目前散落私人信箱——留存無控、刪除無機制、跨境無軌跡。SAAS 收進單一、有留存期、有權限、有審計的系統。</span>
+- <span class="zh">**同業已在推進。** 「自行發電郵給教師」在申請者眼中是 2010 年代的摩擦。現代、友善的請假流程是數位成熟的顯性訊號——也為未來分析、風險評分、AI 功能鋪好結構化資料。</span>
+- <span class="zh">**試點可回退。** 第一期兩個項目與現行電郵並行，第 14 週設回退閘門；未達採用門檻則退回現狀，無沉沒基礎設施成本。</span>
+
+<span class="zh">完整論述見執行摘要的「為什麼是現在」區段。</span>
 
 ## Quick start ｜快速開始
 

@@ -52,25 +52,33 @@
     <h2>1. Problem Statement<span class="zh">現狀問題</span></h2>
     <table>
       <thead><tr><th style="width:32px">#</th><th>Pain point<span class="zh">痛點</span></th>
-        <th>Impact today<span class="zh">目前影響</span></th><th>After SAAS<span class="zh">SAAS 上線後</span></th></tr></thead>
+        <th>Impact today<span class="zh">目前影響</span></th>
+        <th>Cost of inaction<span class="zh">不做代價</span></th>
+        <th>After SAAS<span class="zh">SAAS 上線後</span></th></tr></thead>
       <tbody>
         <tr><td>1</td><td>Students email each instructor individually<br><span class="zh">學生須逐封電郵通知每位任課教師</span></td>
           <td>8–15 emails per absence; no guarantee of receipt<br><span class="zh">單次請假 8–15 封郵件，無法確認送達</span></td>
+          <td>Missed deadlines, grade disputes, student appeals that the Office cannot adjudicate<br><span class="zh">錯過截止日、成績爭議、申訴無據可查</span></td>
           <td>One form, auto-notify all affected instructors<br><span class="zh">一次填表，自動通知全部受影響教師</span></td></tr>
         <tr><td>2</td><td>No centralized tracking<br><span class="zh">缺乏集中紀錄</span></td>
           <td>No single source of truth; disputes unresolvable<br><span class="zh">無單一事實來源，爭議無法追溯</span></td>
+          <td>PIPL / 個人資料保護法 合規缺口——個人資料散落於私人信箱，跨境、留存、刪除皆不可控<br><span class="zh">個人資料散落私人信箱，跨境、留存、刪除不可控</span></td>
           <td>Immutable request ledger + audit log<br><span class="zh">不可竄改的假單帳本與操作日誌</span></td></tr>
         <tr><td>3</td><td>Assessment conflicts handled manually<br><span class="zh">考評衝突靠人工協調</span></td>
           <td>Inconsistency across courses; make-up decided ad hoc<br><span class="zh">各課程口徑不一，補考安排臨時決定</span></td>
+          <td>Fairness appeals, grade appeals, reputational risk if outcomes diverge across sections<br><span class="zh">公平性申訴、成績覆核，各班結果不一致時損及校譽</span></td>
           <td>Auto-detect conflicts + 5 standard accommodations<br><span class="zh">自動偵測衝突，提供 5 種標準學業便利方案</span></td></tr>
         <tr><td>4</td><td>Official activities need repeated proof<br><span class="zh">官方活動需重複提交證明</span></td>
           <td>Same letter uploaded semester after semester<br><span class="zh">同一份證明每學期重複上傳</span></td>
+          <td>~1,500 redundant uploads / year across athletes &amp; event participants; admin overhead grows linearly<br><span class="zh">運動員與活動參與者每年約 1,500 次重複上傳，行政成本線性增長</span></td>
           <td>Activity roster ⇒ auto-verified, zero document<br><span class="zh">活動名單內學生自動核實，免附證明</span></td></tr>
         <tr><td>5</td><td>Program Offices lack visibility<br><span class="zh">項目辦公室無全局視圖</span></td>
           <td>Trends and at-risk students invisible until too late<br><span class="zh">無法及早發現缺席趨勢與風險學生</span></td>
+          <td>Intervention late; dropout risk materializes; NSS / accreditors flag student-support gaps<br><span class="zh">介入過晚、退學風險成形、評鑑機構標記學生支持缺口</span></td>
           <td>Department dashboards + early-warning alerts<br><span class="zh">院系看板與預警機制</span></td></tr>
         <tr><td>6</td><td>Faculty time lost to repetitive email<br><span class="zh">教師耗時處理重複郵件</span></td>
           <td>Estimated 3–5 h per instructor per term<br><span class="zh">估計每位教師每學期 3–5 小時</span></td>
+          <td>450 instructors × 4 h × ¥800/h ≈ <b>¥1.4M / year</b> in faculty opportunity cost<br><span class="zh">450 名教師 × 4 小時 × 800 元/時 ≈ <b>每年 140 萬</b>教師機會成本</span></td>
           <td>One-click decision queues with context<br><span class="zh">待辦佇列一鍵決策，附完整上下文</span></td></tr>
       </tbody>
     </table>
@@ -164,9 +172,78 @@
     </table>
   </div>
 
-  <!-- 6 投資 -->
+  <!-- 6 為什麼現在 -->
   <div class="card">
-    <h2>6. Investment Summary<span class="zh">投資摘要</span></h2>
+    <h2>6. Why Now — The Case for Acting This Academic Cycle<span class="zh">為什麼是現在 — 本學年即須行動的理由</span></h2>
+    <p class="lead" style="color:var(--ink-2);margin-top:0">
+      The cost of the status quo is no longer just inefficiency — it is measurable financial loss,
+      regulatory exposure, and a widening gap with peer institutions. Four forces make this the right window.
+      <span class="zh">現狀的代價已不只是效率低落——而是可量化的財務損失、法規風險，以及與同業院校的差距持續擴大。四股力量讓本學年成為行動的窗口。</span></p>
+
+    <h3 style="margin-top:18px">6.1 Financial — payback in under one academic year<span class="zh">6.1 財務 — 不到一學年即可回收</span></h3>
+    <div class="grid g4" style="margin:10px 0 14px">
+      <div class="kpi"><div class="n">≈ ¥1.4M</div><div class="l">Faculty email overhead / yr (recovered)<span class="zh">教師郵件處理年成本（可回收）</span></div></div>
+      <div class="kpi"><div class="n">≈ ¥0.6M</div><div class="l">Registry / admin adjudication / yr<span class="zh">教務處爭議裁決年成本</span></div></div>
+      <div class="kpi"><div class="n">≈ ¥2.0M</div><div class="l">Annual cost avoided (Yr-2 steady state)<span class="zh">穩態後每年可避免成本</span></div></div>
+      <div class="kpi"><div class="n">~9 mo</div><div class="l">Payback on ¥1.0M MVP build<span class="zh">MVP 100 萬投資回收期</span></div></div>
+    </div>
+    <p style="font-size:13.5px;color:var(--ink-2)">
+      At steady state (Year 2+), SAAS recovers roughly <b>¥2.0M / year</b> in avoided faculty time, registry
+      adjudication, duplicate-document handling and dispute resolution — against <b>¥0.45M / year</b> run cost. The
+      ¥1.0M MVP build is paid back inside the first academic year, before Phase 2 even begins.
+      <span class="zh">進入穩態（第二年以後），SAAS 每年可避免約 <b>200 萬</b>成本——教師時間、教務處裁決、重複文件與爭議處理——對應每年 <b>45 萬</b>運維。100 萬的 MVP 開發費用在第一個學年內即可回收，甚至早於第二期啟動。</span></p>
+
+    <h3 style="margin-top:22px">6.2 Regulatory — PIPL / 個人資料保護法 exposure ends now<span class="zh">6.2 法規 — 個人資料保護法風險即須收斂</span></h3>
+    <p style="font-size:13.5px;color:var(--ink-2)">
+      Student absence data is personal information: health reasons, family events, accommodation needs. Today it
+      lives in <b>private email inboxes</b> — uncontrolled retention, no deletion mechanism, no cross-border audit
+      trail. Under the Personal Information Protection Law (PIPL) and HKUST(GZ)'s data-protection obligations this
+      is a live compliance gap: every academic term it persists is another cohort's PII exposed outside the
+      institution's governed perimeter. SAAS moves all of it into a single, retention-scheduled, access-controlled,
+      audit-logged system aligned with FERPA / GDPR mapping (see Data &amp; Security).
+      <span class="zh">學生請假資料屬個人資訊——健康事由、家庭事件、便利需求。目前散落於<b>私人電郵信箱</b>：留存無控、刪除無機制、跨境無軌跡。依《個人資訊保護法》（PIPL）及港科大（廣州）資料保護義務，這是活生生的合規缺口——每多拖一個學年，就多一屆學生的個人資料暴露於校園治理邊界之外。SAAS 將全部資料收進單一、有留存期、有權限、有審計的系統，並對齊 FERPA / GDPR 對應（見「資料與安全」）。</span></p>
+
+    <h3 style="margin-top:22px">6.3 Strategic — peer institutions are already moving<span class="zh">6.3 戰略 — 同業院校已在推進</span></h3>
+    <table>
+      <thead><tr><th>Lever<span class="zh">面向</span></th><th>Without SAAS<span class="zh">不導入</span></th>
+        <th>With SAAS<span class="zh">導入後</span></th></tr></thead>
+      <tbody>
+        <tr><td>Student experience<span class="zh">學生體驗</span></td>
+          <td>25–40 min per absence across multiple apps<br><span class="zh">單次請假 25–40 分鐘，跨多個應用</span></td>
+          <td>≤ 5 min, one form, mobile-friendly<br><span class="zh">5 分鐘內，一次填表，流動友善</span></td></tr>
+        <tr><td>Recruitment &amp; reputation<span class="zh">招生與校譽</span></td>
+          <td>"Email your instructors" reads as 2010-era friction to applicants comparing HKUST(GZ) with CUHK(SZ), NYU Shanghai, Duke Kunshan<br><span class="zh">「自行發電郵給教師」在申請者眼中是 2010 年代的摩擦，與港中大（深圳）、上海紐約大學、崑山杜克比較時扣分</span></td>
+          <td>Modern, humane, low-friction absence flow is a visible signal of a digitally mature campus<br><span class="zh">現代、友善、低摩擦的請假流程，是數位成熟校園的顯性訊號</span></td></tr>
+        <tr><td>Accreditation evidence<span class="zh">評鑑佐證</span></td>
+          <td>Student-support metrics reconstructed by hand each cycle<br><span class="zh">學生支持指標每輪評鑑才人工拼湊</span></td>
+          <td>Reproducible reports from the same ledger — always audit-ready<br><span class="zh">可重現的報表，隨時可應評鑑</span></td></tr>
+        <tr><td>Data foundation for AI<span class="zh">AI 資料基礎</span></td>
+          <td>No clean, structured absence dataset — every future analytics / risk-scoring initiative starts from scratch<br><span class="zh">無乾淨結構化資料——未來任何分析或風險評分都得從零起步</span></td>
+          <td>Structured ledger from day 1; Phase-3 AI features build on real data, not guesses<br><span class="zh">第一天就有結構化帳本；第三期 AI 功能建立在真實資料上，而非假設</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:22px">6.4 De-risked — a working prototype, not a slide deck<span class="zh">6.4 降低決策風險 — 可執行原型，而非簡報</span></h3>
+    <p style="font-size:13.5px;color:var(--ink-2)">
+      Most enterprise proposals ask for a budget on the strength of mockups. This package ships a
+      <b>runnable prototype</b> (<code class="inl">leave-system/</code>, v1.2.1, 105 unit tests + 183 smoke checks in
+      CI) that the steering committee can <i>try before approving</i>: submit a request, walk it through two-level
+      approval, watch the timetable-aware affected-course preview, inspect the audit log. The prototype already
+      implements CSRF protection, attachment content-sniffing, transaction-safe email delivery, scope isolation and
+      paginated account admin — the design package is not aspirational, it is a specification of what already runs.
+      <span class="zh">多數企業級提案只憑介面稿就要預算。本提案附帶<b>可執行原型</b>（<code class="inl">leave-system/</code>，v1.2.1，CI 內 105 項單元測試 + 183 項冒煙檢查）——指導委員可在核准前<i>先試用</i>：提交假單、走完兩級審批、查看課表感知的受影響課程預覽、檢視稽核日誌。原型已實作 CSRF 防護、附件內容嗅探、交易安全郵件投遞、範圍隔離與帳號管理分頁——設計提案不是空想，而是對「已經在跑的系統」的規格說明。</span></p>
+    <div class="note">
+      <b>Pilot safety net（試點安全網）:</b> Phase-1 pilot runs two programmes in parallel with the existing email
+      process, with an explicit rollback plan. If adoption or CSAT thresholds are not met at week 14, the university
+      reverts to the status quo with no sunk infrastructure cost beyond the MVP build — which itself remains a
+      reusable asset.
+      <span class="zh"><b>試點安全網：</b>第一期以兩個項目與現行電郵流程並行試點，設有明確回退方案。若第 14 週採用率或滿意度未達門檻，校方可退回現狀，除 MVP 開發費用外無沉沒基礎設施成本——而 MVP 本身仍是可重用資產。</span>
+    </div>
+  </div>
+
+  <!-- 7 投資 -->
+  <div class="card">
+    <h2>7. Investment Summary<span class="zh">投資摘要</span></h2>
     <div class="grid g3">
       <div class="kpi"><div class="n">¥1.0M</div><div class="l">MVP build (12 wks, 8.5 FTE)<span class="zh">MVP 開發（12 週，8.5 人）</span></div></div>
       <div class="kpi"><div class="n">¥1.0M</div><div class="l">Phase 2 (16 wks)<span class="zh">第二期（16 週）</span></div></div>
@@ -174,13 +251,14 @@
     </div>
     <p style="margin-top:14px;font-size:13.5px;color:var(--ink-2)">
       3-year TCO ≈ <b>¥5.0M</b> (≈ ¥280 per student per year at 6,000 students). Costs drop materially if delivery uses
-      internal IT staff and the campus Microsoft Entra / Azure education agreement.
-      <span class="zh">三年總擁有成本約 <b>500 萬人民幣</b>（按 6,000 名學生計，約每人每年 280 元）。若由校內資訊科技處自行交付，並沿用校園 Microsoft Entra / Azure 教育授權，成本可顯著下降。詳見「路線圖與成本」。</span></p>
+      internal IT staff and the campus Microsoft Entra / Azure education agreement. Against ≈ <b>¥2.0M / year</b> in
+      avoided cost at steady state (see §6.1), the ¥1.0M MVP build pays back in under one academic year.
+      <span class="zh">三年總擁有成本約 <b>500 萬人民幣</b>（按 6,000 名學生計，約每人每年 280 元）。若由校內資訊科技處自行交付，並沿用校園 Microsoft Entra / Azure 教育授權，成本可顯著下降。對應穩態後每年約 <b>200 萬</b>可避免成本（見第 6.1 節），100 萬的 MVP 開發費用可在不到一個學年內回收。詳見「路線圖與成本」。</span></p>
   </div>
 
   <!-- 7 審批事項 -->
   <div class="card">
-    <h2>7. Decisions Requested<span class="zh">提請審批事項</span></h2>
+    <h2>8. Decisions Requested<span class="zh">提請審批事項</span></h2>
     <table>
       <thead><tr><th style="width:32px">#</th><th>Decision<span class="zh">決策點</span></th><th>Owner<span class="zh">責任方</span></th><th>Needed by<span class="zh">時限</span></th></tr></thead>
       <tbody>

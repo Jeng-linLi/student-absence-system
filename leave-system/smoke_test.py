@@ -20,6 +20,7 @@ os.environ['LEAVE_UPLOAD_DIR'] = os.path.join(TMP, 'uploads')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app import (app, calc_days, init_db, seed, academic_year_start,  # noqa: E402
                 MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN, _smtp_configured)
+from utils import APP_VERSION  # noqa: E402
 
 with app.app_context():
     init_db()
@@ -808,7 +809,7 @@ check('uploads/ 沒有留下孤兒檔案', _files_after == _files_before)
 
 # healthz 回傳版本號
 _r_hz = c.get('/healthz')
-check('healthz 回報目前版本', _r_hz.get_json().get('version') == '1.2.0')
+check('healthz 回報目前版本', _r_hz.get_json().get('version') == APP_VERSION)
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')
