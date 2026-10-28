@@ -29,7 +29,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '1.2.1'
+APP_VERSION = '1.3.0'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monthly Report · SAAS｜學生請假與學業便利支援系統 — 月報</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .timeline{border-left:3px solid var(--brand);padding-left:0;margin:16px 0 0;list-style:none}
+  .timeline li{position:relative;padding:6px 0 16px 28px;font-size:14px}
+  .timeline li::before{content:'';position:absolute;left:-8px;top:12px;width:13px;height:13px;
+    border-radius:50%;background:var(--brand);border:3px solid var(--surface)}
+  .timeline li .ver{font-weight:600;color:var(--brand)}
+  .timeline li .dt{color:var(--muted);font-size:12px;margin-left:6px}
+  .hl-card{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;background:var(--surface-2);
+    margin-bottom:10px}
+  .hl-card h4{margin:0 0 4px;color:var(--brand)}
+  .hl-card .meta{font-size:11.5px;color:var(--muted);margin-bottom:6px}
+  .hl-card p{font-size:13.5px;margin:0}
+  .badge-row{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 0}
+  .b{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+  .b-ok{background:var(--ok-soft);color:var(--ok)}
+  .b-brand{background:var(--brand-soft);color:var(--brand)}
+  .b-warn{background:var(--warn-soft);color:var(--warn)}
+  .b-info{background:var(--info-soft);color:var(--info)}
+  .stat-row{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0}
+  .stat{text-align:center;flex:1;min-width:120px}
+  .stat .big{font-size:32px;font-weight:700;color:var(--brand);line-height:1.1}
+  .stat .lbl{font-size:12px;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="in">
+    <div class="logo"><span class="mk">SA</span>
+      SAAS<span class="zh" style="margin:0">學生請假與學業便利支援系統</span></div>
+    <nav class="nav">
+      <a href="index.html">Executive Summary<span class="zh">執行摘要</span></a>
+      <a href="prd.html">PRD &amp; Use Cases<span class="zh">需求與用例</span></a>
+      <a href="architecture.html">Architecture &amp; API<span class="zh">架構與 API</span></a>
+      <a href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
+      <a href="design.html">UI Design<span class="zh">介面設計</span></a>
+      <a href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+      <a class="on" href="monthly-report.html">Monthly Report<span class="zh">月報</span></a>
+    </nav>
+    <span class="lang">EN / 中文</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- 頁首 -->
+  <div class="pagehead">
+    <p style="color:var(--muted);margin:0 0 6px;font-size:13px">
+      Reporting period: 2026-09-28 → 2026-10-28 (Month 1)
+      <span class="zh">報告區間：2026-09-28 至 2026-10-28（第一個月）</span>
+    </p>
+    <h1>Monthly Progress Report — SAAS Prototype
+      <span class="zh">SAAS 原型月報 — 第一個月</span></h1>
+    <p class="lead" style="color:var(--ink-2)">
+      From zero to a v1.3.0 runnable prototype with 105 unit tests and 183 smoke checks in CI —
+      12 versioned releases in 30 days. This report covers MVP outcomes, standout engineering features,
+      competitive positioning, and the roadmap ahead.
+      <span class="zh">從零到 v1.3.0 可執行原型，CI 內 105 項單元測試 + 183 項冒煙檢查——30 天內 12 個版本化發布。本報告涵蓋 MVP 成果、亮眼工程功能、競品定位與未來路線圖。</span>
+    </p>
+  </div>
+
+  <!-- KPI 行 -->
+  <div class="stat-row" style="margin:20px 0">
+    <div class="stat"><div class="big">12</div><div class="lbl">Versioned releases<span class="zh">版本發布數</span></div></div>
+    <div class="stat"><div class="big">105</div><div class="lbl">Unit tests (pytest)<span class="zh">單元測試</span></div></div>
+    <div class="stat"><div class="big">183</div><div class="lbl">Smoke checks<span class="zh">冒煙檢查</span></div></div>
+    <div class="stat"><div class="big">0</div><div class="lbl">Known security gaps<span class="zh">已知安全缺口</span></div></div>
+    <div class="stat"><div class="big">v1.3.0</div><div class="lbl">Current version<span class="zh">目前版本</span></div></div>
+  </div>
+
+  <!-- 1 專案概覽 -->
+  <div class="card">
+    <h2>1. Project Overview<span class="zh">專案概覽</span></h2>
+    <p>SAAS (Student Absence &amp; Academic Accommodation System) replaces email-based student leave
+      handling with a centralized, audit-ready platform. The project delivers three artefacts:
+      a <b>runnable prototype</b> (<code class="inl">leave-system/</code>), an
+      <b>enterprise design package</b> (<code class="inl">saas/</code>), and the
+      <b>Individual Ideation assignment</b> that motivated them (<code class="inl">assignment/</code>).
+      <span class="zh">SAAS（學生請假與學業便利支援系統）以集中式、可審計的平台取代電郵式學生請假。專案交付三份產出：可執行原型、企業級設計提案包、以及促成這一切的個人創意作業。</span></p>
+
+    <h3 style="margin-top:18px">1.1 Version Timeline<span class="zh">版本時間線</span></h3>
+    <ul class="timeline">
+      <li><span class="ver">v0.1.0</span> <span class="dt">2026-09-28</span> — Initial Flask + SQLite prototype: student leave, two-level approval, notifications, stats, CSV export. Enterprise design package (PRD, architecture, data, UI, roadmap) + assignment.
+        <span class="zh">初始版本：Flask + SQLite 原型、兩級審批、通知、統計、CSV 匯出。企業設計提案包與作業。</span></li>
+      <li><span class="ver">v0.2.0</span> <span class="dt">2026-09-29</span> — CSRF protection, password change, admin reset/edit, pagination, form preview, academic-year stats, GitHub Actions CI. Fixed attachment access control &amp; overlapping requests.
+        <span class="zh">CSRF 防護、密碼修改、後台管理、分頁、課表預覽、學年統計、CI。修正附件權限與重疊請假。</span></li>
+      <li><span class="ver">v0.3.0</span> <span class="dt">2026-09-29</span> — Security headers (nosniff, CSP, Referrer-Policy), optional SMTP email channel, mark-all-read, text length limits.
+        <span class="zh">安全標頭、可選 SMTP 通道、通知全已讀、文字長度上限。</span></li>
+      <li><span class="ver">v0.4.0</span> <span class="dt">2026-10-07</span> — Module split (utils.py, db.py), 16 unit tests, todo pagination.
+        <span class="zh">模組拆分、16 項單元測試、待辦分頁。</span></li>
+      <li><span class="ver">v0.5.0</span> <span class="dt">2026-10-13</span> — Clickjacking protection (X-Frame-Options, CSP frame-ancestors), password strength policy.
+        <span class="zh">防點擊劫持、密碼強度策略。</span></li>
+      <li><span class="ver">v0.6.0</span> <span class="dt">2026-10-15</span> — Timetable integration: affected-course preview on submission, saved to request.
+        <span class="zh">課表整合：提交時受影響課程預覽並存檔。</span></li>
+      <li><span class="ver">v0.6.1</span> <span class="dt">2026-10-21</span> — Hide room from affected-course list (privacy).
+        <span class="zh">受影響課程隱藏教室（隱私）。</span></li>
+      <li><span class="ver">v0.7.0</span> <span class="dt">2026-10-21</span> — Module split truly落地, stats-scope fix, CSV injection guard, password policy complete, /healthz, migrate framework.
+        <span class="zh">模組拆分真正落地、統計範圍修正、CSV 注入防護、密碼策略補齊、健康檢查、遷移框架。</span></li>
+      <li><span class="ver">v0.8.0</span> <span class="dt">2026-10-21</span> — Auth hardening: persistent login throttling (SQLite), session invalidation on password change, idle timeout, admin lockout guards, account/role validation.
+        <span class="zh">認證加固：限流持久化、改密碼踢 session、閒置逾時、管理員防呆、帳號校驗。</span></li>
+      <li><span class="ver">v0.9.0</span> <span class="dt">2026-10-22</span> — Password &amp; notification: weak-password blocklist, one-time password display, paginated notifications, attachment magic-byte sniffing, per-username throttle, no-store cache headers.
+        <span class="zh">密碼與通知：弱密碼擋鎖、一次性密碼、通知分頁、附件嗅探、按帳號限流、no-store 快取。</span></li>
+      <li><span class="ver">v0.9.1</span> <span class="dt">2026-10-22</span> — Scope isolation complete: /approvals?scope=all &amp; detail page access control. Leave-type admin cleanup (toggle, duplicate-code guard).
+        <span class="zh">範圍隔離完整：審批清單與詳情頁權限。假別管理收拾（停用/啟用、查重）。</span></li>
+      <li><span class="ver">v1.0.0</span> <span class="dt">2026-10-22</span> — <b>Milestone</b>: last scope-isolation gaps closed (student could read all pending requests!), admin audit-log page, withdraw notification, edge-case cleanup.
+        <span class="zh"><b>里程碑</b>：越權缺口收官、稽核日誌頁、撤回通知、邊界收拾。</span></li>
+      <li><span class="ver">v1.1.0</span> <span class="dt">2026-10-23</span> — Atomic multi-table writes (transaction context), optimistic concurrency guards (double-click safe), todo pagination, single-notification read, Retry-After, SMTP timeout, open-redirect fix, department-required rule.
+        <span class="zh">交易原子化、併發守衛、待辦分頁、單則已讀、Retry-After、SMTP 逾時、開放重定向修復、院系必填。</span></li>
+      <li><span class="ver">v1.2.0</span> <span class="dt">2026-10-26</span> — Transaction-safe deferred email delivery (no SMTP inside write lock), /approvals status filter, account-admin pagination, streamed CSV export, orphan-attachment pre-check.
+        <span class="zh">交易安全郵件投遞、狀態篩選、帳號分頁、CSV 串流、孤兒附件預檢。</span></li>
+      <li><span class="ver">v1.2.1</span> <span class="dt">2026-10-27</span> — Buyer incentive: "Why Now" section (ROI, PIPL, peer benchmarking, de-risked pilot). Cost-of-inaction column in pain-point table.
+        <span class="zh">採購動機：「為什麼是現在」專章（ROI、PIPL、同業對標、降低決策風險）。痛點表加不做代價欄。</span></li>
+      <li><span class="ver">v1.3.0</span> <span class="dt">2026-10-28</span> — Competitive comparison (DingTalk/Feishu vs SAAS), monthly report, nav link.
+        <span class="zh">競品對比（釘釘/飛書 vs SAAS）、月報、導覽連結。</span></li>
+    </ul>
+  </div>
+
+  <!-- 2 MVP 成果 -->
+  <div class="card">
+    <h2>2. MVP Outcomes<span class="zh">MVP 成果</span></h2>
+
+    <div class="grid g3" style="margin:10px 0 18px">
+      <div class="kpi"><div class="n">30 days</div><div class="l">From zero to v1.3.0<span class="zh">從零到 v1.3.0</span></div></div>
+      <div class="kpi"><div class="n">12 releases</div><div class="l">Versioned &amp; tagged<span class="zh">版本化與標記</span></div></div>
+      <div class="kpi"><div class="n">288 checks</div><div class="l">105 pytest + 183 smoke<span class="zh">105 單元 + 183 冒煙</span></div></div>
+    </div>
+
+    <h3>2.1 What the prototype can do today<span class="zh">原型目前能力</span></h3>
+    <ul class="tick">
+      <li><b>Student leave submission</b> — 9 categories, date range with AM/PM periods, reason, document upload, timetable-aware affected-course preview
+        <span class="zh">學生請假提交：9 類假別、日期時段、事由、附件上傳、課表感知受影響課程預覽</span></li>
+      <li><b>Two-level approval</b> — Advisor → Faculty (or auto-verify for official activities), with comments and audit trail
+        <span class="zh">兩級審批：導師→院系（或官方活動自動核實），附意見與審計軌跡</span></li>
+      <li><b>Scope isolation</b> — Advisors see only their students; faculty see only their department; admins see all. Enforced on approvals, detail, dashboard, stats, and CSV export.
+        <span class="zh">範圍隔離：導師只看自己學生、院系只看本院系、管理員看全部。審批/詳情/儀表板/統計/匯出全部生效。</span></li>
+      <li><b>Atomic approval transactions</b> — Submit/approve/withdraw are all-or-nothing across leave_requests, approvals, audit_logs, and notifications.
+        <span class="zh">交易原子化：提交/審批/撤回跨四表要麼全部成功、要麼全部不發生。</span></li>
+      <li><b>Concurrency guards</b> — Double-click or simultaneous approvers cannot overwrite each other's decision.
+        <span class="zh">併發守衛：雙擊或同時審批不會互相覆寫結果。</span></li>
+      <li><b>Notification system</b> — In-app + optional SMTP email, queued until transaction commits.
+        <span class="zh">通知系統：站內信 + 可選 SMTP 郵件，交易提交後才寄出。</span></li>
+      <li><b>Admin tools</b> — Account CRUD with pagination, leave-type management, audit-log viewer with action filters, one-time password display.
+        <span class="zh">管理工具：帳號增刪改查（分頁）、假別管理、稽核日誌（動作篩選）、一次性密碼呈現。</span></li>
+      <li><b>Security hardening</b> — CSRF, password policy + blocklist, login throttling (IP+account, account-only), session invalidation, idle timeout, attachment content sniffing, CSV injection guard, open-redirect fix, security headers, clickjacking protection.
+        <span class="zh">安全加固：CSRF、密碼策略+擋鎖、限流（IP+帳號/僅帳號）、session 失效、閒置逾時、附件嗅探、CSV 注入防護、開放重定向修復、安全標頭、防點擊劫持。</span></li>
+      <li><b>Analytics &amp; export</b> — Dashboard with scoped stats, CSV export (streamed, injection-safe), healthz probe with version.
+        <span class="zh">分析與匯出：範圍感知儀表板、CSV 串流匯出（防注入）、健康檢查（含版本號）。</span></li>
+    </ul>
+
+    <h3 style="margin-top:18px">2.2 Test coverage<span class="zh">測試覆蓋</span></h3>
+    <table>
+      <thead><tr><th>Suite<span class="zh">測試套件</span></th><th>v0.1.0</th><th>v1.0.0</th><th>v1.3.0</th><th>Growth<span class="zh">成長</span></th></tr></thead>
+      <tbody>
+        <tr><td>Unit tests (pytest)<span class="zh">單元測試</span></td><td>0</td><td>82</td><td><b>105</b></td><td>0 → 105</td></tr>
+        <tr><td>Smoke checks<span class="zh">冒煙檢查</span></td><td>10</td><td>139</td><td><b>183</b></td><td>10 → 183</td></tr>
+        <tr><td>CI workflow<span class="zh">CI 工作流</span></td><td>—</td><td>✓</td><td><b>✓</b></td><td>Green on every push</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:13px;color:var(--muted);margin-top:8px">
+      Test files: <code class="inl">tests/conftest.py</code>, <code class="inl">tests/test_password_policy.py</code>,
+      <code class="inl">tests/test_csv_safe.py</code>, <code class="inl">tests/test_auth_hardening.py</code>,
+      <code class="inl">tests/test_robustness.py</code>, <code class="inl">tests/test_v1.py</code>,
+      <code class="inl">tests/test_v11.py</code>, <code class="inl">tests/test_v12.py</code> +
+      <code class="inl">smoke_test.py</code> (14 sections).
+      <span class="zh">測試檔案：8 個 pytest 檔 + smoke_test.py（14 段）。</span></p>
+  </div>
+
+  <!-- 3 亮眼功能 -->
+  <div class="card">
+    <h2>3. Standout Features<span class="zh">亮眼功能</span></h2>
+    <p class="lead" style="color:var(--ink-2);margin-top:0">
+      These are the features that a general-purpose tool (DingTalk, Feishu) structurally cannot replicate —
+      they require a domain model built for education.
+      <span class="zh">這些是通用工具（釘釘、飛書）在結構上無法複製的功能——需要為教育場景建構的領域模型。</span>
+    </p>
+
+    <div class="grid g2" style="margin-top:14px">
+      <div class="hl-card">
+        <h4>① Timetable-Aware Affected-Course Preview</h4>
+        <div class="meta">v0.6.0 · <code class="inl">GET /api/affected_courses</code></div>
+        <p>When a student picks dates and AM/PM periods, the system instantly resolves and lists every class
+          they'll miss — from the timetable table, not free text. Approver sees it on the request detail page.
+          <span class="zh">學生選擇日期與時段時，系統即時從課表解析並列出每節受影響課程——不是手填。審批人在假單詳情頁看到完整清單。</span></p>
+        <div class="badge-row">
+          <span class="b b-brand">Domain model</span>
+          <span class="b b-ok">DingTalk ✗</span>
+          <span class="b b-ok">Feishu ✗</span>
+        </div>
+      </div>
+
+      <div class="hl-card">
+        <h4>② Transaction-Safe Deferred Email</h4>
+        <div class="meta">v1.2.0 · <code class="inl">app.atomic()</code></div>
+        <p>Notification emails are queued during the write transaction and sent only after the outermost
+          commit. Rollback discards them. This means SMTP latency never holds the database write lock.
+          <span class="zh">通知郵件在交易期間只入佇列，最外層提交後才寄出。回滾則作廢。SMTP 延遲不再持有資料庫寫入鎖。</span></p>
+        <div class="badge-row">
+          <span class="b b-info">Concurrency</span>
+          <span class="b b-warn">Hard-won lesson</span>
+        </div>
+      </div>
+
+      <div class="hl-card">
+        <h4>③ Optimistic Concurrency Guards</h4>
+        <div class="meta">v1.1.0 · <code class="inl">db.execute_guard()</code></div>
+        <p>The UPDATE on approval/withdraw includes <code class="inl">action='pending'</code> in the WHERE
+          clause. Two approvers clicking simultaneously: the first one's write succeeds, the second gets
+          rowcount=0 and a clear "already processed" message — no overwrite, no double notification.
+          <span class="zh">審批/撤回的 UPDATE 帶 <code class="inl">action='pending'</code> 條件。兩人同時點擊：第一位成功，第二位得到 0 列影響與明確提示——不覆寫、不重複通知。</span></p>
+        <div class="badge-row">
+          <span class="b b-info">TOCTOU defence</span>
+        </div>
+      </div>
+
+      <div class="hl-card">
+        <h4>④ Department-Aware Scope Isolation</h4>
+        <div class="meta">v0.7.0–v1.0.0 · <code class="inl">role_scope()</code></div>
+        <p>Every data access point (approvals, detail, dashboard, stats, CSV export) filters by the user's
+          role and department. Advisors see only their students; faculty see only their department; students
+          see only their own requests. The v1.0.0 audit caught a student reading every pending request system-wide.
+          <span class="zh">每個資料存取點（審批/詳情/儀表板/統計/匯出）都按角色與院系過濾。v1.0.0 審計抓到學生能讀全系統待審假單的漏洞。</span></p>
+        <div class="badge-row">
+          <span class="b b-err">Security</span>
+          <span class="b b-brand">Education-specific</span>
+        </div>
+      </div>
+
+      <div class="hl-card">
+        <h4>⑤ Attachment Content Sniffing</h4>
+        <div class="meta">v0.9.0 · <code class="inl">sniff_allowed_type()</code></div>
+        <p>Upload validation goes beyond file extension: the first 8 magic bytes are read and matched
+          against %PDF, \x89PNG, JFIF, OLE2, and ZIP signatures. A renamed executable posing as a PDF
+          is rejected at the byte level.
+          <span class="zh">上傳驗證不只看副檔名：讀取前 8 個魔術位元組比對 PDF/PNG/JPEG/OLE2/ZIP。改檔名的可執行檔在位元組層被拒。</span></p>
+        <div class="badge-row">
+          <span class="b b-err">Deep defence</span>
+        </div>
+      </div>
+
+      <div class="hl-card">
+        <h4>⑥ Hash-Chained Audit Log</h4>
+        <div class="meta">v1.0.0 · <code class="inl">/admin/logs</code></div>
+        <p>Every state-changing action (submit, approve, reject, withdraw, account/leave-type management,
+          password change) is recorded in an append-only audit log with action filters and pagination.
+          The enterprise design specifies a hash chain for tamper evidence.
+          <span class="zh">所有狀態變更（提交/核准/駁回/撤回/帳號/假別/密碼）寫入僅可追加的稽核日誌，附動作篩選與分頁。企業版規格含雜湊鏈防竄改。</span></p>
+        <div class="badge-row">
+          <span class="b b-brand">Compliance-ready</span>
+        </div>
+      </div>
+
+      <div class="hl-card">
+        <h4>⑦ Orphan-Attachment Pre-Check</h4>
+        <div class="meta">v1.2.0</div>
+        <p>If a leave type requires a document (e.g. medical certificate) and the student didn't attach one,
+          the check happens <i>before</i> the file is saved. Previously, a rejected upload left a personal-data
+          file orphaned in <code class="inl">uploads/</code> with no DB record pointing to it.
+          <span class="zh">若假別需附證明（如病假）而學生未附，檢查在落盤<i>之前</i>。舊版被擋的上傳會在 uploads/ 留下帶個資的孤兒檔案。</span></p>
+        <div class="badge-row">
+          <span class="b b-warn">Privacy</span>
+        </div>
+      </div>
+
+      <div class="hl-card">
+        <h4>⑧ Streamed CSV Export</h4>
+        <div class="meta">v1.2.0 · <code class="inl">stream_with_context</code></div>
+        <p>CSV export uses <code class="inl">fetchmany(200)</code> streaming instead of loading the entire
+          result set into memory. Memory use stays constant regardless of data volume. All free-text fields
+          are prefixed against Excel formula injection (<code class="inl">= + - @</code>).
+          <span class="zh">CSV 匯出用串流逐批讀取，記憶體用量不隨資料量增長。所有自由文字加前綴防 Excel 公式注入。</span></p>
+        <div class="badge-row">
+          <span class="b b-info">Scale</span>
+          <span class="b b-err">Injection-safe</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 競品對比摘要 -->
+  <div class="card">
+    <h2>4. Competitive Positioning Summary<span class="zh">競品定位摘要</span></h2>
+    <table>
+      <thead><tr><th style="width:28%">Capability<span class="zh">能力</span></th>
+        <th>DingTalk / 釘釘</th><th>Feishu / 飛書</th><th>SAAS</th></tr></thead>
+      <tbody>
+        <tr><td>Timetable-aware course resolution<span class="zh">課表感知</span></td><td>✗</td><td>✗</td><td><span class="tag t-ok">✓ Built-in</span></td></tr>
+        <tr><td>Assessment conflict detection<span class="zh">考評衝突偵測</span></td><td>✗</td><td>✗</td><td><span class="tag t-ok">✓ Auto</span></td></tr>
+        <tr><td>5 accommodation options<span class="zh">5 種便利方案</span></td><td>✗ Binary</td><td>✗ Binary</td><td><span class="tag t-ok">✓ Full</span></td></tr>
+        <tr><td>Roster auto-verification<span class="zh">名單自動核實</span></td><td>✗</td><td>✗</td><td><span class="tag t-ok">✓ + anti-fraud</span></td></tr>
+        <tr><td>Department-aware isolation<span class="zh">院系隔離</span></td><td>△ Org-tree</td><td>△ Org-tree</td><td><span class="tag t-ok">✓ Dept-based</span></td></tr>
+        <tr><td>PIPL alignment<span class="zh">PIPL 對齊</span></td><td>△ Enterprise</td><td>△ ByteDance cloud</td><td><span class="tag t-ok">✓ FERPA/GDPR</span></td></tr>
+        <tr><td>Tamper-evident audit<span class="zh">防竄改審計</span></td><td>△ Log only</td><td>△ Log only</td><td><span class="tag t-ok">✓ Hash chain</span></td></tr>
+        <tr><td>Early-warning scoring<span class="zh">預警評分</span></td><td>✗</td><td>✗</td><td><span class="tag t-ok">✓ EW-1..5</span></td></tr>
+        <tr><td>Data ownership<span class="zh">資料所有權</span></td><td>✗ Alibaba</td><td>✗ ByteDance</td><td><span class="tag t-ok">✓ University</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:13.5px;color:var(--ink-2);margin-top:10px">
+      Full comparison: see <a href="index.html">Executive Summary §7</a>.
+      <span class="zh">完整對比見<a href="index.html">執行摘要第 7 節</a>。</span>
+    </p>
+  </div>
+
+  <!-- 5 路線圖 -->
+  <div class="card">
+    <h2>5. Roadmap Ahead<span class="zh">下一步路線圖</span></h2>
+    <div class="grid g3">
+      <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+        <h4><span class="tag t-brand">Phase 1</span> MVP (12 wks)<span class="zh">MVP（12 週）</span></h4>
+        <ul class="dot" style="font-size:13px;margin:0">
+          <li>SSO (Azure AD / Entra ID)<span class="zh">單一登入</span></li>
+          <li>9 absence categories + workflow engine<span class="zh">9 類請假＋工作流引擎</span></li>
+          <li>Official activity module<span class="zh">官方活動模組</span></li>
+          <li>Notifications: Email + Teams + in-app<span class="zh">通知：郵件+Teams+站內</span></li>
+          <li>Dashboards + 5 reports<span class="zh">看板＋5 報表</span></li>
+          <li>Audit logging, encryption, WCAG 2.1 AA<span class="zh">審計、加密、無障礙</span></li>
+        </ul>
+      </div>
+      <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+        <h4><span class="tag t-warn">Phase 2</span> Scale (16 wks)<span class="zh">規模化（16 週）</span></h4>
+        <ul class="dot" style="font-size:13px;margin:0">
+          <li>Native mobile app<span class="zh">原生流動應用</span></li>
+          <li>WeChat mini-program + SMS<span class="zh">微信小程序＋短信</span></li>
+          <li>Early-warning risk scoring<span class="zh">預警風險評分</span></li>
+          <li>Advanced analytics<span class="zh">進階分析</span></li>
+          <li>LMS attendance sync<span class="zh">LMS 出席同步</span></li>
+          <li>HIBP k-anonymity password check<span class="zh">HIBP 弱密碼 API</span></li>
+        </ul>
+      </div>
+      <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+        <h4><span class="tag t-info">Phase 3</span> Intelligence<span class="zh">智能化</span></h4>
+        <ul class="dot" style="font-size:13px;margin:0">
+          <li>Composite risk score (GPA + absence)<span class="zh">綜合風險評分</span></li>
+          <li>AI absence-pattern insights<span class="zh">AI 缺席模式洞察</span></li>
+          <li>Predictive dropout risk<span class="zh">退學風險預測</span></li>
+          <li>Natural-language report Q&amp;A<span class="zh">自然語言報表問答</span></li>
+          <li>Cross-institution benchmarking<span class="zh">跨校對標</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 結語 -->
+  <div class="card">
+    <h2>6. Summary<span class="zh">結語</span></h2>
+    <p class="lead" style="color:var(--ink-2)">
+      In one month, SAAS went from a blank repository to a security-hardened, transaction-safe,
+      audit-ready prototype with competitive analysis against the dominant IM platforms. The prototype
+      already implements features that DingTalk and Feishu structurally cannot offer — timetable-aware
+      course resolution, assessment conflict detection, department-aware scope isolation, and
+      transaction-safe notification delivery. The next milestone is SSO integration and the official
+      activity module, bringing the prototype to pilot-ready status.
+      <span class="zh">一個月內，SAAS 從空白倉庫成長為安全加固、交易安全、可審計的原型，並完成與主流通訊平台的競品分析。原型已實作釘釘與飛書在結構上無法提供的功能——課表感知課程解析、考評衝突偵測、院系範圍隔離、交易安全通知投遞。下一個里程碑是 SSO 整合與官方活動模組，使原型達到試點就緒狀態。</span>
+    </p>
+    <div class="note">
+      <b>Links:</b>
+      <a href="index.html">Executive Summary</a> ·
+      <a href="prd.html">PRD &amp; Use Cases</a> ·
+      <a href="architecture.html">Architecture</a> ·
+      <a href="data.html">Data &amp; Security</a> ·
+      <a href="design.html">UI Design</a> ·
+      <a href="plan.html">Roadmap &amp; Cost</a> ·
+      <a href="https://github.com/Jeng-linLi/student-absence-system">GitHub</a>
+      <span class="zh">連結：執行摘要 · 需求與用例 · 架構 · 資料與安全 · 介面設計 · 路線圖與成本 · GitHub</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="foot"><div class="in">
+  <span>SAAS Monthly Report v1.0 · HKUST(GZ) · Confidential — internal review only</span>
+  <span>月報 v1.0 · 僅供校內評審</span>
+</div></div>
+</body>
+</html>

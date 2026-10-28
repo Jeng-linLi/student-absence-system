@@ -19,6 +19,7 @@
       <a href="data.html">Data &amp; Security<span class="zh">資料與安全</span></a>
       <a href="design.html">UI Design<span class="zh">介面設計</span></a>
       <a href="plan.html">Roadmap &amp; Cost<span class="zh">路線圖與成本</span></a>
+      <a href="monthly-report.html">Monthly Report<span class="zh">月報</span></a>
     </nav>
     <span class="lang">EN / 中文</span>
   </div>
@@ -241,9 +242,117 @@
     </div>
   </div>
 
-  <!-- 7 投資 -->
+  <!-- 7 競品對比 -->
   <div class="card">
-    <h2>7. Investment Summary<span class="zh">投資摘要</span></h2>
+    <h2>7. Competitive Comparison — Why Not Just Use DingTalk or Feishu?<span class="zh">競品對比 — 為什麼不用釘釘或飛書？</span></h2>
+    <p class="lead" style="color:var(--ink-2);margin-top:0">
+      DingTalk and Feishu are excellent general-purpose workplace tools — for <i>staff</i> leave and expense
+      claims. They are not built for the academic absence-and-assessment domain. The table below shows where a
+      purpose-built system earns its keep.
+      <span class="zh">釘釘與飛書是優秀的通用辦公工具——用於<i>教職員</i>請假與報銷沒問題。但它們不是為「學生請假 × 學業考評」這個領域設計的。下表逐維度說明專用系統的價值所在。</span></p>
+
+    <table>
+      <thead><tr>
+        <th style="width:24%">Capability<span class="zh">能力</span></th>
+        <th>DingTalk / 釘釘</th>
+        <th>Feishu / 飛書</th>
+        <th style="width:28%">SAAS<span class="zh">本系統</span></th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Timetable-aware affected courses</b><br><span class="zh">課表感知受影響課程</span></td>
+          <td>✗ No timetable model; student types free text<br><span class="zh">無課表模型，學生手填</span></td>
+          <td>✗ Same — no concept of courses or sections<br><span class="zh">同左，無課程概念</span></td>
+          <td><b>✓ Auto-resolves</b> from SIS/LMS timetable; lists every affected session<br><span class="zh"><b>自動解析</b>，列出每節受影響課程</span></td>
+        </tr>
+        <tr>
+          <td><b>Assessment conflict detection</b><br><span class="zh">考評衝突偵測</span></td>
+          <td>✗ No assessment calendar; instructor must eyeball<br><span class="zh">無考評行事曆，教師自行比對</span></td>
+          <td>✗ Same<br><span class="zh">同左</span></td>
+          <td><b>✓ Auto-detects</b> quiz/midterm/final/lab clashes per request<br><span class="zh"><b>自動偵測</b>小測/期中/期末/實驗衝突</span></td>
+        </tr>
+        <tr>
+          <td><b>5 standard accommodation options</b><br><span class="zh">5 種標準學業便利方案</span></td>
+          <td>✗ Binary approve/reject only<br><span class="zh">僅核准／駁回</span></td>
+          <td>✗ Binary approve/reject only<br><span class="zh">僅核准／駁回</span></td>
+          <td><b>✓ Excused, make-up, alt-assignment, weight-shift, reject</b><br><span class="zh"><b>豁免/補考/替代作業/權重轉移/駁回</b></span></td>
+        </tr>
+        <tr>
+          <td><b>Official activity roster auto-verification</b><br><span class="zh">官方活動名單自動核實</span></td>
+          <td>✗ No roster concept; each student re-uploads proof every time<br><span class="zh">無名單概念，每次重複上傳</span></td>
+          <td>✗ Same<br><span class="zh">同左</span></td>
+          <td><b>✓ One roster upload → all members auto-verified</b>; anti-fraud snapshot<br><span class="zh"><b>一次上傳名單 → 全員自動核實</b>；防追溯快照</span></td>
+        </tr>
+        <tr>
+          <td><b>Role-scoped data isolation</b><br><span class="zh">角色範圍資料隔離</span></td>
+          <td>△ Org-tree based; advisor cannot see "my students" by dept<br><span class="zh">基於組織架構，導師無法按院系看「我的學生」</span></td>
+          <td>△ Same org-tree model<br><span class="zh">同為組織架構模型</span></td>
+          <td><b>✓ Department-aware</b>: advisor → own students, faculty → own dept, admin → all<br><span class="zh"><b>院系感知</b>：導師看自己學生、院系看本院系</span></td>
+        </tr>
+        <tr>
+          <td><b>PIPL / 個人資料保護法 alignment</b><br><span class="zh">PIPL 合規對齊</span></td>
+          <td>△ Enterprise data residency, but no education-specific retention schedule<br><span class="zh">企業級資料駐留，無教育專用留存期</span></td>
+          <td>△ Same; data flows through ByteDance cloud<br><span class="zh">同左，資料經字節雲</span></td>
+          <td><b>✓ FERPA/GDPR-mapped</b>, retention-scheduled, cross-border audit trail<br><span class="zh"><b>對齊 FERPA/GDPR</b>，有留存期與跨境軌跡</span></td>
+        </tr>
+        <tr>
+          <td><b>Tamper-evident audit chain</b><br><span class="zh">防竄改審計鏈</span></td>
+          <td>△ Operation log exists but not hash-chained<br><span class="zh">有操作日誌但非雜湊鏈</span></td>
+          <td>△ Same<br><span class="zh">同左</span></td>
+          <td><b>✓ Hash-chained</b>, append-only, exportable evidence pack<br><span class="zh"><b>雜湊鏈</b>，僅可追加，可匯出證據包</span></td>
+        </tr>
+        <tr>
+          <td><b>Early-warning risk scoring</b><br><span class="zh">預警風險評分</span></td>
+          <td>✗ No absence-pattern analytics<br><span class="zh">無缺席模式分析</span></td>
+          <td>✗ Same<br><span class="zh">同左</span></td>
+          <td><b>✓ EW-1..EW-5</b>: absence rate, consecutive misses, medical clustering, conflict load, composite score<br><span class="zh"><b>EW-1 至 EW-5</b>：缺席率、連續缺席、病假聚集、衝突負荷、綜合評分</span></td>
+        </tr>
+        <tr>
+          <td><b>Two-level academic approval</b><br><span class="zh">兩級學術審批</span></td>
+          <td>△ Multi-level possible but generic; no advisor→faculty→registry academic chain<br><span class="zh">可多級但通用，無導師→院系→教務學術鏈</span></td>
+          <td>△ Weaker than DingTalk for complex branching; single-direction after approval<br><span class="zh">複雜分支更弱，審批後不可逆</span></td>
+          <td><b>✓ Purpose-built</b>: advisor → faculty → registry, with SLA timers &amp; escalation<br><span class="zh"><b>專用設計</b>：導師→院系→教務，附 SLA 計時與升級</span></td>
+        </tr>
+        <tr>
+          <td><b>SLA timers &amp; auto-escalation</b><br><span class="zh">SLA 計時與自動升級</span></td>
+          <td>△ Timeout reminders possible but no auto-escalation chain<br><span class="zh">可設逾時提醒但無自動升級鏈</span></td>
+          <td>✗ No native SLA concept<br><span class="zh">無原生 SLA 概念</span></td>
+          <td><b>✓ 50% reminder → 100% delegate → 150% registry</b><br><span class="zh"><b>五成提醒→十成代理人→百五教務</b></span></td>
+        </tr>
+        <tr>
+          <td><b>CSV injection protection</b><br><span class="zh">CSV 公式注入防護</span></td>
+          <td>? Unknown / not documented for education exports<br><span class="zh">未明，教育匯出無記載</span></td>
+          <td>? Same<br><span class="zh">同左</span></td>
+          <td><b>✓ csv_safe()</b> prefixes <code>= + - @</code> on all free-text fields<br><span class="zh"><b>csv_safe()</b> 為自由文字加前綴</span></td>
+        </tr>
+        <tr>
+          <td><b>Attachment content sniffing</b><br><span class="zh">附件內容嗅探</span></td>
+          <td>? Virus scan in enterprise edition (paid add-on)<br><span class="zh">企業版付費加購病毒掃描</span></td>
+          <td>? Same<br><span class="zh">同左</span></td>
+          <td><b>✓ Magic-byte sniffing</b> built-in (PDF/PNG/JPEG/OLE2/ZIP)<br><span class="zh"><b>內建魔術位元組嗅探</b></span></td>
+        </tr>
+        <tr>
+          <td><b>Data ownership &amp; portability</b><br><span class="zh">資料所有權與可攜性</span></td>
+          <td>✗ Vendor lock-in; data in Alibaba Cloud<br><span class="zh">廠商綁定，資料在阿里雲</span></td>
+          <td>✗ Vendor lock-in; data in ByteDance Cloud<br><span class="zh">廠商綁定，資料在字節雲</span></td>
+          <td><b>✓ University-owned</b>, PostgreSQL on Azure (campus agreement), full DDL provided<br><span class="zh"><b>校方自有</b>，PostgreSQL on Azure，提供完整 DDL</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note" style="margin-top:14px">
+      <b>Bottom line（結論）:</b> DingTalk and Feishu can handle "student submits form → teacher clicks approve." They
+      cannot handle "student submits form → system resolves 6 affected courses → detects 2 assessment conflicts →
+      routes to advisor then faculty → advisor picks make-up date → student gets calendar invite → audit log
+      captures everything → registry sees trend dashboard." That multi-step, domain-specific flow is what SAAS
+      automates — and it is why bolting absence management onto a general-purpose IM tool costs more in workarounds
+      than building the right system.
+      <span class="zh"><b>結論：</b>釘釘與飛書能做「學生填表 → 教師點核准」。做不了「學生填表 → 系統解析 6 門受影響課程 → 偵測 2 個考評衝突 → 分派導師再院系 → 導師選補考日期 → 學生收行事曆邀請 → 審計日誌全程留痕 → 教務處看趨勢看板」。這條多步驟、領域專用的流程就是 SAAS 自動化的核心——也是為什麼把請假管理硬塞到通用通訊工具上，繞路成本比建正確系統更高。</span>
+    </div>
+  </div>
+
+  <!-- 8 投資 -->
+  <div class="card">
+    <h2>8. Investment Summary<span class="zh">投資摘要</span></h2>
     <div class="grid g3">
       <div class="kpi"><div class="n">¥1.0M</div><div class="l">MVP build (12 wks, 8.5 FTE)<span class="zh">MVP 開發（12 週，8.5 人）</span></div></div>
       <div class="kpi"><div class="n">¥1.0M</div><div class="l">Phase 2 (16 wks)<span class="zh">第二期（16 週）</span></div></div>
@@ -258,7 +367,7 @@
 
   <!-- 7 審批事項 -->
   <div class="card">
-    <h2>8. Decisions Requested<span class="zh">提請審批事項</span></h2>
+    <h2>9. Decisions Requested<span class="zh">提請審批事項</span></h2>
     <table>
       <thead><tr><th style="width:32px">#</th><th>Decision<span class="zh">決策點</span></th><th>Owner<span class="zh">責任方</span></th><th>Needed by<span class="zh">時限</span></th></tr></thead>
       <tbody>

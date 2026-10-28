@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v1.2.1`**（2026-10-27）· MIT · CI passing
+**Prototype version ｜原型版本：`v1.3.0`**（2026-10-28）· MIT · CI passing
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
 periods instantly previews the classes a leave would make a student miss (`GET
@@ -51,7 +51,7 @@ pagination / unit tests, and a 183-check smoke suite in CI.
 
 | Folder | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v1.2.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, streamed CSV export, 183-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、CSV 串流匯出 |
+| `leave-system/` | Flask + SQLite prototype (**v1.3.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, streamed CSV export, 183-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、CSV 串流匯出 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
@@ -102,8 +102,13 @@ Demo accounts (password `Demo@2026`): student `2024001`, advisor `T001`, faculty
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — **v1.2.0** moves the last synchronous I/O out of
-the write transaction: notification emails used to be sent inside `transaction()`, so a
+See [`CHANGELOG.md`](CHANGELOG.md) — **v1.3.0** adds competitive comparison against
+DingTalk and Feishu (13-dimension table showing why general-purpose IM tools cannot
+handle the multi-step academic absence-and-assessment flow), plus a monthly report
+page with MVP outcomes, standout features, and roadmap; v1.2.1 strengthens the
+buyer-incentive case with a "Why Now" section (ROI, PIPL, peer benchmarking,
+de-risked pilot); v1.2.0 moves the last synchronous I/O out of the
+write transaction: notification emails used to be sent inside `transaction()`, so a
 slow or unreachable SMTP server held the SQLite write lock for the entire connection and
 blocked every concurrent approval/submission. Emails are now queued and sent only after
 the outermost transaction commits (and discarded with it on rollback). It also closes the
