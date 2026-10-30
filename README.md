@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v1.3.0`**（2026-10-28）· MIT · CI passing
+**Prototype version ｜原型版本：`v1.3.0`**（2026-10-28）· Commercial License · CI passing
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
 periods instantly previews the classes a leave would make a student miss (`GET
@@ -155,11 +155,18 @@ Johnny, Jeng-lin Li · HKUST(GZ)
 
 ## License
 
-Code and documentation are released under the **MIT License** — see [`LICENSE`](LICENSE).
-You may use, modify and redistribute freely, including commercially, provided the copyright
-notice is retained.
+This project is released under a **Commercial License** — all rights reserved. See
+[`LICENSE`](LICENSE) for the full terms.
 
-程式碼與文件皆採 **MIT License**，可自由使用、修改、再散布（含商業用途），只需保留著作權聲明。
+- **Personal / evaluation use** is permitted free of charge (no production deployment, no
+  services to third parties).
+- **Commercial use** (production deployment, offering as a service, or use by a for-profit
+  organisation) requires a separate paid license. Contact the author to obtain one.
+
+本專案採 **商業授權**，保留所有權利。完整條款見 [`LICENSE`](LICENSE)。
+
+- **個人／評估用途**可免費使用（不得用於正式環境部署，亦不得對第三方提供服務）。
+- **商業用途**（正式環境部署、作為服務提供、或由營利組織使用）須另購商業授權，請聯絡作者取得。
 
 > **On `assignment/`:** the Individual Ideation essay is published as a worked example for
 > reference and citation. **It must not be submitted as another student's own assessment.**

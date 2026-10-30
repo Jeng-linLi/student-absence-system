@@ -7,6 +7,16 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Changed ｜變更
+
+- **授權從 MIT 升級為商業授權 (Commercial License)**：保留所有權利。個人／評估用途免費，
+  商業用途須另購授權。詳見 [`LICENSE`](LICENSE) 與 README〈License〉。
+  License upgraded from MIT to a proprietary **Commercial License** (all rights reserved):
+  free for personal/evaluation use, paid license required for commercial use. See
+  [`LICENSE`](LICENSE) and the README "License" section.
+
 ## [1.3.0] — 2026-10-28
 
 文件強化版：主軸是**強化商業價值論述與競品對比，並製作月報**。程式碼與

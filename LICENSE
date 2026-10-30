@@ -1,21 +1,66 @@
-MIT License
+COMMERCIAL LICENSE AGREEMENT
+Student Absence & Academic Accommodation System (SAAS)
 
-Copyright (c) 2026 Johnny, Jeng-lin Li
+Copyright (c) 2026 Johnny, Jeng-lin Li. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+The software and its accompanying documentation (collectively, the "Software")
+are licensed, not sold, to you by the copyright holder ("Licensor").
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. OWNERSHIP
+The Software is protected by copyright and other applicable laws. Licensor
+retains all right, title, and interest in and to the Software, including all
+intellectual property rights, whether registered or not.
 
+2. GRANT OF LICENSE
+Subject to the terms of this Agreement, Licensor grants you a limited,
+non-exclusive, non-transferable, non-sublicensable license:
+
+  (a) Evaluation / Personal Use. You may use the Software for personal,
+      educational, or internal evaluation purposes free of charge. This grant
+      does NOT include the right to deploy the Software in production or to
+      provide services powered by the Software to any third party.
+
+  (b) Commercial Use. Any use of the Software in a commercial setting —
+      including production deployment, offering it as a hosted or managed
+      service, embedding it in a product, or use by or for a for-profit
+      organisation — requires a separate paid commercial license executed with
+      Licensor. Contact the Licensor to obtain commercial terms before such
+      use.
+
+3. RESTRICTIONS
+Except as expressly permitted in Section 2, you shall not, and shall not
+permit any third party to:
+  - redistribute, sublicense, lease, lend, or sell the Software;
+  - remove, alter, or obscure any copyright, trademark, or other proprietary
+    notices contained in the Software;
+  - reverse engineer, decompile, or disassemble the Software, except to the
+    extent expressly permitted by applicable law;
+  - use the Software to build or operate a competing product or service.
+
+4. ASSIGNMENT MATERIALS
+The `assignment/` directory is provided for reference and citation only. It
+must not be submitted as another student's own assessment. Academic-integrity
+restrictions in that directory are independent of, and add to, this license.
+
+5. TERM AND TERMINATION
+This license is effective until terminated. Licensor may terminate it
+immediately if you breach any term. Upon termination you must destroy all
+copies of the Software in your possession.
+
+6. DISCLAIMER OF WARRANTY
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. Licensor does not
+warrant that the Software is error-free or fit for any particular purpose.
+
+7. LIMITATION OF LIABILITY
+IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA OR PROFITS,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR INABILITY TO USE THE SOFTWARE,
+EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+8. CONTACT
+For commercial licensing, contact the author:
+Johnny, Jeng-lin Li (HKUST(GZ)) — [licensing contact / email]
+
+By downloading, installing, or using the Software you agree to the terms above.
