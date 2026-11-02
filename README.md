@@ -191,8 +191,8 @@ Positioning, buyers, licensing and go-to-market are documented in
 | Tier ｜層級 | Scope ｜範圍 | Status ｜狀態 |
 |---|---|---|
 | Evaluation ／ Personal | 個人、教學、內部評估（不得部署生產環境、不得對第三方提供服務） | **免費**（`LICENSE` §2(a)） |
-| Institutional Site License | 單一院校／校區生產部署（自托管，校方 IT 維運） | 商業授權 · 價格 **TBD** |
-| Managed Service | 作者方托管與維運（含升級、備份、SLA） | 商業授權 · 價格 **TBD** |
+| Institutional Site License | 單一院校／校區生產部署（自託管，校方 IT 維運） | 商業授權 · 價格 **TBD** |
+| Managed Service | 作者方託管與維運（含升級、備份、SLA） | 商業授權 · 價格 **TBD** |
 
 The buyer case is **compliance, not convenience**: UKVI student-sponsor duties,
 Australia's ESOS/ELICOS 80% attendance obligation and US FERPA expectations all require

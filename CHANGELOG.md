@@ -27,7 +27,7 @@ All notable changes to this project are documented in this file.
     義務（2018）、美國 FERPA（20 U.S.C. §1232g）——出處標註為
     `assignment/content.md`，成本數字標註為提案 `saas/index.html` 估算。
   - **授權分層**：Evaluation／Personal（免費，`LICENSE` §2(a)）、
-    Institutional Site License（單一院校自托管）、Managed Service（作者方托管含
+    Institutional Site License（單一院校自託管）、Managed Service（作者方托管含
     SLA）。三層皆列範圍，價格一律 **TBD**，並給定價原則（錨定可避免成本與
     學生規模、隨合規強度遞增、試點單列回退條款）。
   - **就緒門檻（Readiness gate）**：明列簽署生產合約前必須關閉的四項
