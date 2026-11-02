@@ -22,12 +22,21 @@
   {% endif %}
 
   {% if requests %}
+  {% if scope != 'all' %}
+  {# v1.6.0 B6：只在「待我審批」開批次勾選。「全部假單」混雜已結案單，
+     勾了也只會被後端逐張擋下，徒增誤解；後端仍逐張重新校驗權限與狀態。 #}
+  <form method="post" action="{{ url_for('bulk_decide', scope=scope) }}" id="bulk-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% endif %}
   <table>
-    <thead><tr><th>#</th><th>學生</th><th>假別</th><th>起訖</th>
+    <thead><tr>
+      {% if scope != 'all' %}<th style="width:2.2rem"><input type="checkbox" id="bulk-all" style="width:auto" title="全選本頁"></th>{% endif %}
+      <th>#</th><th>學生</th><th>假別</th><th>起訖</th>
       <th class="tnum">天數</th><th>狀態</th><th class="tnum">提交</th><th></th></tr></thead>
     <tbody>
     {% for r in requests %}
       <tr>
+        {% if scope != 'all' %}<td><input type="checkbox" name="ids" value="{{ r.id }}" style="width:auto"></td>{% endif %}
         <td class="mono">{{ r.id }}</td>
         <td>{{ r.student_name }}<div class="muted">{{ r.class_name }} · {{ r.department }}</div></td>
         <td>{{ r.type_name }}</td>
@@ -40,6 +49,29 @@
     {% endfor %}
     </tbody>
   </table>
+  {% if scope != 'all' %}
+  <div class="actions" style="margin:12px 0 0;flex-wrap:wrap;gap:8px">
+    <span class="muted">批次處理勾選的假單（單次上限 {{ MAX_BULK_DECIDE }} 張）：</span>
+    <select name="action">
+      <option value="approve">核准</option>
+      <option value="reject">駁回</option>
+    </select>
+    <input name="comment" maxlength="{{ MAX_COMMENT_LEN }}" placeholder="審批意見（駁回必填）">
+    <button class="btn sm ok" type="submit">送出批次</button>
+  </div>
+  </form>
+  <script>
+    (function () {
+      var all = document.getElementById('bulk-all');
+      if (!all) return;
+      var boxes = Array.prototype.slice.call(
+        document.querySelectorAll('#bulk-form input[name="ids"]'));
+      all.addEventListener('change', function () {
+        boxes.forEach(function (b) { b.checked = all.checked; });
+      });
+    })();
+  </script>
+  {% endif %}
   {% if total_pages > 1 %}
     <div class="pager">
       {% if page > 1 %}

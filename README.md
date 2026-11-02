@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v1.5.1`**（2026-11-02）· Commercial License · CI passing
+**Prototype version ｜原型版本：`v1.6.0`**（2026-11-02）· Commercial License · CI passing
 · 商業化方案見 [`COMMERCIAL.md`](COMMERCIAL.md)
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
@@ -69,11 +69,18 @@ buyer case (UKVI sponsor duties, ESOS 80% attendance, FERPA expectations), a
 readiness gate listing the four gaps that must close before any production contract
 (SSO, PostgreSQL, SIS timetable sync, personal-data governance), and a
 pilot → proof → rollout GTM path. See [`COMMERCIAL.md`](COMMERCIAL.md); prices are
-deliberately left TBD pending the author's decision.
+deliberately left TBD pending the author's decision. **v1.6.0** closes the batch-approval
+gap (`GAP-ANALYSIS.md` B6): approvers can tick several pending requests in the todo list
+and approve or reject them in one action, wrapped in a single atomic transaction so a
+batch can never land half-applied. Every id is re-checked server-side — unauthorised,
+already-closed or concurrently-taken requests are skipped rather than decided — and the
+write path is now a single shared `_apply_decision()` used by both the single-request and
+batch routes, so approval routing, notifications and audit wording cannot drift apart.
+140 unit tests + 200 smoke checks.
 
 | Folder | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v1.5.1**) — student leave, two-level approval (advisor → faculty), approval delegation (advisor/faculty can hand their level to a stand-in for a date range), admin advisor-reassignment, academic terms with per-term leave quotas (pending + approved both count), holiday calendar (non-teaching days skipped in affected courses), **academic-calendar file import** (terms / holiday ranges / makeup days, idempotent UPSERT), **makeup days** (weekend classes taught on another weekday's timetable still count as missed classes), built-in HKUST(GZ) 2026–27 calendar preset + `flask import-calendar` CLI, SLA escalation cron with 24h cooldown, CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, streamed CSV export, 128 unit tests + 183-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、委託審批（導師／院系可把審批權暫交代理人）、管理員改派導師、學期制請假額度（待審＋已核准都計入）、校曆假日（受影響課程跳過非上課日）、**校曆檔匯入（學期／假日區間／補課日，冪等 UPSERT）**、**補課／調課日（週末補課按被補星期幾的課表計缺課）**、內建港科大（廣州）2026–27 校曆預設＋`flask import-calendar` CLI、催辦升級 cron（24 小時冷卻）、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、CSV 串流匯出 |
+| `leave-system/` | Flask + SQLite prototype (**v1.6.0**) — student leave, two-level approval (advisor → faculty), **batch approve/reject** (tick rows in the todo list, one atomic transaction, per-request re-authorisation, 50-request cap), approval delegation (advisor/faculty can hand their level to a stand-in for a date range), admin advisor-reassignment, academic terms with per-term leave quotas (pending + approved both count), holiday calendar (non-teaching days skipped in affected courses), **academic-calendar file import** (terms / holiday ranges / makeup days, idempotent UPSERT), **makeup days** (weekend classes taught on another weekday's timetable still count as missed classes), built-in HKUST(GZ) 2026–27 calendar preset + `flask import-calendar` CLI, SLA escalation cron with 24h cooldown, CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, streamed CSV export, 140 unit tests + 200-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、**批次核准／駁回（待審清單勾選、單一交易原子化、逐張重新鑑權、單次上限 50 張）**、委託審批（導師／院系可把審批權暫交代理人）、管理員改派導師、學期制請假額度（待審＋已核准都計入）、校曆假日（受影響課程跳過非上課日）、**校曆檔匯入（學期／假日區間／補課日，冪等 UPSERT）**、**補課／調課日（週末補課按被補星期幾的課表計缺課）**、內建港科大（廣州）2026–27 校曆預設＋`flask import-calendar` CLI、催辦升級 cron（24 小時冷卻）、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、CSV 串流匯出 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
@@ -111,7 +118,7 @@ See the Executive Summary's "Why Now" section for the full case.
 # 原型系統
 cd leave-system
 python app.py            # http://127.0.0.1:5055
-python smoke_test.py     # 183 項全鏈路冒煙測試
+python smoke_test.py     # 200 項全鏈路冒煙測試
 flask import-calendar    # 匯入涵蓋今天的內建校曆（也可帶校曆檔路徑）
 
 # 設計提案包（靜態站）
@@ -125,10 +132,14 @@ Demo accounts (password `Demo@2026`): student `2024001`, advisor `T001`, faculty
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — **v1.5.1** adds the commercialisation brief
-([`COMMERCIAL.md`](COMMERCIAL.md)): licensing tiers, the compliance-driven buyer case,
-the readiness gate before any production contract, and the GTM path (prices TBD);
-**v1.5.0** imports the official HKUST(GZ)
+See [`CHANGELOG.md`](CHANGELOG.md) — **v1.6.0** adds batch approval: tick rows in the
+todo list and approve or reject them in one atomic transaction, with every id
+re-authorised server-side and a 50-request per-batch cap; the approval write path is now
+a single shared helper used by both the single and batch routes (plus 12 new regression
+tests, 140 total, and 17 new smoke checks, 200 total). **v1.5.1** adds the
+commercialisation brief ([`COMMERCIAL.md`](COMMERCIAL.md)): licensing tiers, the
+compliance-driven buyer case, the readiness gate before any production contract, and the
+GTM path (prices TBD); **v1.5.0** imports the official HKUST(GZ)
 2026–27 academic calendar (plain-text calendar-file format, holiday ranges,
 makeup days, built-in presets, admin import page and `flask import-calendar` CLI;
 plus 13 new regression tests, 128 total);

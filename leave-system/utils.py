@@ -29,7 +29,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '1.5.1'
+APP_VERSION = '1.6.0'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')
@@ -55,6 +55,9 @@ _USERNAME_RE = re.compile(r'[A-Za-z0-9._@-]{1,50}')
 # 假別代號格式與名稱長度上限
 _TYPE_CODE_RE = re.compile(r'[A-Za-z0-9_-]{1,20}')
 MAX_TYPE_NAME_LEN = 30
+
+# 單次批次審批上限（v1.6.0）：一筆交易別鎖太久，也防誤勾整頁
+MAX_BULK_DECIDE = 50
 
 # 閒置 session 逾時（分鐘）：超過此時間無操作即需重新登入。
 # session 是簽名 cookie，服務端無法主動逐出，只能以時間戳記在每次請求時檢驗。

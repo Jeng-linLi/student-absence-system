@@ -37,6 +37,7 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
                    ACADEMIC_YEAR_START_MONTH, SESSION_IDLE_MINUTES,
                    APP_VERSION, LEAVE_STATUSES, MAX_TYPE_NAME_LEN,
+                   MAX_BULK_DECIDE,
                    parse_date, calc_days, required_level_for,
                    academic_year_start, allowed_file,
                    validate_password, temp_password, csv_safe,
@@ -716,7 +717,8 @@ def inject_globals():
                 max_date=(date.today() + timedelta(days=365)).isoformat(),
                 MAX_SINGLE_DAYS=MAX_SINGLE_DAYS, MAX_BACKDATE_DAYS=MAX_BACKDATE_DAYS,
                 MAX_REASON_LEN=MAX_REASON_LEN, MAX_COMMENT_LEN=MAX_COMMENT_LEN,
-                MAX_PHONE_LEN=MAX_PHONE_LEN)
+                MAX_PHONE_LEN=MAX_PHONE_LEN,
+                MAX_BULK_DECIDE=MAX_BULK_DECIDE)
 
 
 # --------------------------------------------------------------------------
@@ -1159,6 +1161,51 @@ def detail(rid):
 # --------------------------------------------------------------------------
 # 審批動作
 # --------------------------------------------------------------------------
+def _apply_decision(u, req, action, comment, now):
+    """把一張假單的審批結果寫入資料庫（v1.6.0 從 decide() 抽出）。
+
+    呼叫端必須先完成前置校驗（status='pending'、can_approve_request、
+    action 白名單、comment 長度、駁回必填理由），並負責把本函式包在
+    atomic() 內、負責 flash 與 redirect。回傳 (ok, message)：
+    ok=False 代表並發下該層審批列已被他人處理（影響列數 0）。
+
+    抽出共用是讓「單張審批」與「批次審批」走同一份寫入邏輯，避免
+    核准轉下一級、通知對象、稽核動作文案在兩邊各自漂移。
+    """
+    rid = req['id']
+    level = req['current_level']
+    # v1.1.0：action='pending' 條件守衛——兩位審批人同時點擊（或雙擊）
+    # 只有第一位能寫入；第二位影響列數 0，不得覆寫第一位結果。
+    changed = execute_guard(
+        'UPDATE approvals SET action=?, approver_id=?, comment=?, acted_at=? '
+        "WHERE request_id=? AND level=? AND action='pending'",
+        (action, u['id'], comment, now, rid, level))
+    if not changed:
+        return False, '該假單剛被其他人處理，請重新整理後再確認。'
+
+    if action == 'reject':
+        execute("UPDATE leave_requests SET status='rejected', updated_at=? WHERE id=?", (now, rid))
+        log_action(rid, u['id'], 'reject', comment)
+        notify(req['student_id'], rid,
+               f"你的{req['type_name']}假單被{'導師' if level == 1 else '院系'}駁回：{comment}")
+        return True, '已駁回該假單。'
+
+    # 核准
+    if level < req['required_level']:
+        execute('UPDATE leave_requests SET current_level=?, updated_at=? WHERE id=?',
+                (level + 1, now, rid))
+        log_action(rid, u['id'], 'approve', f'第{level}級核准，轉院系複核')
+        # v1.4.0：院系審批人＋其代理人一起通知
+        notify_approvers(2, req['department'], None, rid,
+                         f"{req['student_name']} 的 {req['days']} 天{req['type_name']}待院系複核。")
+        return True, '已核准，已轉交院系複核。'
+
+    execute("UPDATE leave_requests SET status='approved', updated_at=? WHERE id=?", (now, rid))
+    log_action(rid, u['id'], 'approve', f'第{level}級核准，假單生效')
+    notify(req['student_id'], rid, f"你的{req['type_name']}假單已核准（{req['days']} 天）。")
+    return True, '已核准該假單。'
+
+
 @app.route('/request/<int:rid>/decide', methods=['POST'])
 @login_required
 def decide(rid):
@@ -1170,7 +1217,6 @@ def decide(rid):
         flash('該假單已完成審批，無法再操作。', 'error')
         return redirect(url_for('detail', rid=rid))
 
-    level = req['current_level']
     # 權限校驗（v1.4.0：含代理人身分，統一由 can_approve_request 判斷）
     if not can_approve_request(u, req):
         flash('你沒有權限審批這一單。', 'error')
@@ -1189,44 +1235,13 @@ def decide(rid):
         return redirect(url_for('detail', rid=rid))
 
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    # v1.1.0：整個審批動作放進一個交易——approvals、leave_requests、
-    # audit_logs、notifications 四張表要麼全部生效、要麼全部不發生。
-    # approvals 的更新另加 action='pending' 條件守衛：兩位審批人同時點擊
-    # （或雙擊）時，只有第一位能寫入；第二位的影響列數是 0，明確告知
-    # 「已被處理」，而不是覆寫第一位結果、讓學生重複收到通知。
-    # v1.2.0：改用 atomic()——通知郵件在交易提交後才寄，不讓 SMTP
-    # 連線期間一直持有 SQLite 寫入鎖。
+    # v1.1.0：approvals、leave_requests、audit_logs、notifications 四張表
+    # 要麼全部生效要麼全部不發生；v1.2.0 改 atomic()，郵件在交易提交後
+    # 才寄，不讓 SMTP 連線期間持有 SQLite 寫入鎖。
+    # v1.6.0：寫入邏輯抽到 _apply_decision()，單張／批次共用同一份規則。
     with atomic():
-        changed = execute_guard(
-            'UPDATE approvals SET action=?, approver_id=?, comment=?, acted_at=? '
-            "WHERE request_id=? AND level=? AND action='pending'",
-            (action, u['id'], comment, now, rid, level))
-        if not changed:
-            flash('該假單剛被其他人處理，請重新整理後再確認。', 'error')
-            return redirect(url_for('detail', rid=rid))
-
-        if action == 'reject':
-            execute("UPDATE leave_requests SET status='rejected', updated_at=? WHERE id=?", (now, rid))
-            log_action(rid, u['id'], 'reject', comment)
-            notify(req['student_id'], rid,
-                   f"你的{req['type_name']}假單被{'導師' if level == 1 else '院系'}駁回：{comment}")
-            flash('已駁回該假單。', 'success')
-            return redirect(url_for('approvals'))
-
-        # 核准
-        if level < req['required_level']:
-            execute('UPDATE leave_requests SET current_level=?, updated_at=? WHERE id=?',
-                    (level + 1, now, rid))
-            log_action(rid, u['id'], 'approve', f'第{level}級核准，轉院系複核')
-            # v1.4.0：院系審批人＋其代理人一起通知
-            notify_approvers(2, req['department'], None, rid,
-                             f"{req['student_name']} 的 {req['days']} 天{req['type_name']}待院系複核。")
-            flash('已核准，已轉交院系複核。', 'success')
-        else:
-            execute("UPDATE leave_requests SET status='approved', updated_at=? WHERE id=?", (now, rid))
-            log_action(rid, u['id'], 'approve', f'第{level}級核准，假單生效')
-            notify(req['student_id'], rid, f"你的{req['type_name']}假單已核准（{req['days']} 天）。")
-            flash('已核准該假單。', 'success')
+        ok, message = _apply_decision(u, req, action, comment, now)
+    flash(message, 'success' if ok else 'error')
     return redirect(url_for('approvals'))
 
 
@@ -1323,6 +1338,87 @@ def approvals():
     return render_template('approvals.html', requests=rows, scope=scope,
                            page=page, total_pages=total_pages, total=total,
                            filter_status=status)
+
+
+# --------------------------------------------------------------------------
+# 批次審批（GAP-ANALYSIS B6，v1.6.0）
+# --------------------------------------------------------------------------
+@app.route('/approvals/bulk', methods=['POST'])
+@login_required
+@role_required('advisor', 'faculty', 'admin')
+def bulk_decide():
+    """一次核准／駁回多張待審假單。
+
+    與單張 decide() 共用 _apply_decision()，核准轉下一級、通知對象、
+    稽核動作文案與並發守衛因此完全一致。關鍵設計：
+
+    - 逐張重新讀取並校驗 status='pending' 與 can_approve_request()，
+      **不信任前端勾選**——批次 id 是可竄改的表單欄位，摻進別人的單
+      或已結案的單只能被略過，不能造成越權審批。
+    - 整批放進同一個 atomic()：要嘛一起提交，要嘛一起回滾；郵件在
+      交易提交後一次寄出（v1.2.0 語義）。
+    - 部分成功是允許的：單張被並發處理（execute_guard 影響 0 列）只
+      計入 skipped，不讓整批回滾，也不覆寫他人結果。
+    """
+    u = current_user()
+    scope = request.args.get('scope', 'todo')
+    if scope not in ('todo', 'all'):
+        scope = 'todo'
+    back = url_for('approvals', scope=scope)
+
+    raw_ids = request.form.getlist('ids')
+    ids = []
+    for raw in raw_ids:
+        try:
+            rid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if rid > 0 and rid not in ids:
+            ids.append(rid)
+    if not ids:
+        flash('請先勾選要處理的假單。', 'error')
+        return redirect(back)
+    if len(ids) > MAX_BULK_DECIDE:
+        flash(f'單次最多處理 {MAX_BULK_DECIDE} 張，請分批操作。', 'error')
+        return redirect(back)
+
+    action = request.form.get('action')
+    comment = request.form.get('comment', '').strip()
+    if action not in ('approve', 'reject'):
+        flash('無效的操作。', 'error')
+        return redirect(back)
+    if len(comment) > MAX_COMMENT_LEN:
+        flash(f'審批意見過長（上限 {MAX_COMMENT_LEN} 字）。', 'error')
+        return redirect(back)
+    if action == 'reject' and not comment:
+        flash('駁回必須填寫理由。', 'error')
+        return redirect(back)
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    done = 0
+    skipped = 0
+    with atomic():
+        for rid in ids:
+            req = q('SELECT r.*, t.name type_name, s.name student_name, s.department, '
+                    's.advisor_id FROM leave_requests r '
+                    'JOIN leave_types t ON t.id=r.leave_type_id '
+                    'JOIN users s ON s.id=r.student_id WHERE r.id=?', (rid,), one=True)
+            # 逐張重新校驗：不信任前端勾選，越權／已結案一律略過。
+            if not req or req['status'] != 'pending' or not can_approve_request(u, req):
+                skipped += 1
+                continue
+            ok, _ = _apply_decision(u, req, action, comment, now)
+            if ok:
+                done += 1
+            else:
+                skipped += 1
+
+    if done == 0:
+        flash(f'沒有可處理的假單（略過 {skipped} 張：非待審、無權限或已被他人處理）。', 'error')
+    else:
+        verb = '核准' if action == 'approve' else '駁回'
+        flash(f'已{verb} {done} 張假單' + (f'，略過 {skipped} 張。' if skipped else '。'), 'success')
+    return redirect(back)
 
 
 # --------------------------------------------------------------------------

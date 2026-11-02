@@ -811,5 +811,98 @@ check('uploads/ 沒有留下孤兒檔案', _files_after == _files_before)
 _r_hz = c.get('/healthz')
 check('healthz 回報目前版本', _r_hz.get_json().get('version') == APP_VERSION)
 
+# ---- v1.6.0 新增檢查：批次審批（GAP-ANALYSIS B6）----
+print('\n[+15] v1.6.0：批次審批（共用單張邏輯、越權／已結案略過、單次上限、模板勾選）')
+from utils import MAX_BULK_DECIDE as _MAX_BULK
+from werkzeug.datastructures import MultiDict as _MultiDict
+
+
+def _bulk_post(ids, action='approve', comment='批次核准', follow=True):
+    """ids 是多值欄位；werkzeug 的 data 只接受 mapping，故用 MultiDict。"""
+    data = _MultiDict()
+    for rid in ids:
+        data.add('ids', str(rid))
+    data['action'] = action
+    data['comment'] = comment
+    return c.post('/approvals/bulk', data=data, follow_redirects=follow)
+
+
+def _new_request(username, offset, reason, days=1):
+    """以指定學生提交一天假單，回傳 rid。日期排在兩年外，避開學期額度與校曆。"""
+    login(username)
+    d = TODAY + datetime.timedelta(days=offset)
+    r = c.post('/new', data={'leave_type_id': '1', 'start_date': d.isoformat(),
+                             'end_date': (d + datetime.timedelta(days=days - 1)).isoformat(),
+                             'start_period': 'AM', 'end_period': 'PM',
+                             'reason': reason, 'contact_phone': '13800000001'})
+    assert r.status_code == 302, f'提交失敗（{reason}）：{r.status_code}'
+    return int(dict(r.headers)['Location'].rsplit('/', 1)[-1])
+
+
+# 一次核准三張（2024001/2/3 皆屬導師 T001）
+_v16_ids = [_new_request('2024001', 1000 + i * 3, f'v16 批次{i}') for i in range(3)]
+login('T001')
+_html = _bulk_post(_v16_ids).get_data(as_text=True)
+check('批次核准三張成功', '已核准 3 張假單' in _html)
+check('批次核准後三張皆生效',
+      all(db_query('SELECT status FROM leave_requests WHERE id=?', (rid,))[0]['status'] == 'approved'
+          for rid in _v16_ids))
+check('批次審批沿用單張的稽核文案',
+      any('第1級核准' in (r['detail'] or '') for r in db_query(
+          "SELECT detail FROM audit_logs WHERE request_id=? AND action='approve'",
+          (_v16_ids[0],))))
+
+# 摻進別的導師的學生假單（2024005 屬 T002）：只略過，不得越權核准
+# [9] 的限流測試已把 2024002 鎖進 5 分鐘窗口；這裡清掉殘留的失敗紀錄，
+# 並改用其他帳號送件，避免撞上登入限流。
+db_exec('DELETE FROM login_attempts')
+_v16_mine = _new_request('2024001', 1010, 'v16 我的')
+_v16_theirs = _new_request('2024005', 1013, 'v16 他人的')
+login('T001')
+_html2 = _bulk_post([_v16_mine, _v16_theirs]).get_data(as_text=True)
+check('越權單只被略過（核准 1、略過 1）',
+      '已核准 1 張假單' in _html2 and '略過 1 張' in _html2)
+check('越權假單維持待審',
+      db_query('SELECT status FROM leave_requests WHERE id=?',
+               (_v16_theirs,))[0]['status'] == 'pending')
+
+# 已結案的單再送一次只被略過
+_html3 = _bulk_post([_v16_mine]).get_data(as_text=True)
+check('已結案單被略過', '沒有可處理的假單' in _html3)
+
+# 批次駁回：理由必填，且確實寫入審批列
+_v16_r = _new_request('2024003', 1016, 'v16 駁回理由')
+login('T001')
+_html4 = _bulk_post([_v16_r], action='reject', comment='').get_data(as_text=True)
+check('批次駁回必須填寫理由', '駁回必須填寫理由' in _html4)
+check('未填理由時假單維持待審',
+      db_query('SELECT status FROM leave_requests WHERE id=?', (_v16_r,))[0]['status'] == 'pending')
+_html5 = _bulk_post([_v16_r], action='reject', comment='集體公假不成立').get_data(as_text=True)
+check('批次駁回成功', '已駁回 1 張假單' in _html5)
+check('駁回理由寫入審批列',
+      any(r['comment'] == '集體公假不成立' for r in db_query(
+          'SELECT comment FROM approvals WHERE request_id=? AND level=1', (_v16_r,))))
+
+# 沒勾選、超過單次上限
+check('沒勾選會被擋下', '請先勾選' in _bulk_post([]).get_data(as_text=True))
+check(f'超過單次上限 {_MAX_BULK} 張會被擋下',
+      f'單次最多處理 {_MAX_BULK} 張' in
+      _bulk_post(list(range(1, _MAX_BULK + 2))).get_data(as_text=True))
+
+# 模板：待審視圖有勾選框；「全部假單」視圖不給勾選
+_todo_html = get('/approvals')
+check('待審視圖有批次表單與勾選框',
+      'name="ids"' in _todo_html and '/approvals/bulk' in _todo_html)
+check('待審視圖標示單次上限', f'單次上限 {_MAX_BULK} 張' in _todo_html)
+check('「全部假單」視圖不給勾選（避免誤勾已結案單）',
+      'name="ids"' not in get('/approvals?scope=all'))
+
+# 角色下限：學生進不了批次端點
+_v16_role = _new_request('2024001', 1019, 'v16 角色')
+check('學生進不了批次審批端點', _bulk_post([_v16_role], follow=False).status_code == 302)
+check('學生批次操作未生效',
+      db_query('SELECT status FROM leave_requests WHERE id=?',
+               (_v16_role,))[0]['status'] == 'pending')
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')
