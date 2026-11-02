@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     department    TEXT    NOT NULL DEFAULT '',      -- 所屬院系
     class_name    TEXT    NOT NULL DEFAULT '',      -- 班級（學生）
     email         TEXT    NOT NULL DEFAULT '',
+    external_id   TEXT,                              -- SSO / 外部身分對映（A2，v1.8.0）；本地帳號為 NULL
     advisor_id    INTEGER REFERENCES users(id),     -- 學生的導師
     active        INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime'))

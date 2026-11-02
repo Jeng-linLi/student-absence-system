@@ -1049,5 +1049,47 @@ check('導師不能匯入課表', _v17_admin_page.status_code == 302)
 login('2024001')
 check('學生進不了課表管理頁', c.get('/admin/timetable').status_code == 302)
 
+# --- 單一登入（SSO / OIDC，A2·v1.8.0）---
+# 預設關閉：登入頁不應出現 SSO 按鈕，/login/sso 直接導回登入
+import sso as _sso_mod  # noqa: E402
+_c2 = app.test_client()
+check('SSO 預設關閉：登入頁不出現學校帳號按鈕',
+      '使用學校帳號登入' not in _c2.get('/login').get_data(as_text=True))
+check('SSO 預設關閉：/login/sso 直接導回登入',
+      _c2.get('/login/sso').status_code == 302
+      and '/login' in _c2.get('/login/sso').headers.get('Location', ''))
+
+# 臨時在行程內開啟 SSO，並以 stub 取代網路呼叫，驗證完整授權碼流程（離線）
+_orig_post = _sso_mod._http_post_json
+_orig_get = _sso_mod._http_get_json
+app.config['SSO_CLIENT_ID'] = 'smoke-cid'
+app.config['SSO_AUTHORIZE_URL'] = 'https://idp.test/authorize'
+app.config['SSO_TOKEN_URL'] = 'https://idp.test/token'
+app.config['SSO_USERINFO_URL'] = 'https://idp.test/userinfo'
+app.config['SSO_REDIRECT_URI'] = 'http://localhost/callback'
+app.config['SSO_USERNAME_CLAIM'] = 'preferred_username'
+app.config['SSO_AUTO_LINK_EMAIL'] = '1'
+_sso_sub = 'smoke-sub-1'
+db_exec("UPDATE users SET external_id=? WHERE username='admin'", (_sso_sub,))
+_sso_mod._http_post_json = lambda *a, **k: {'access_token': 'tok'}
+_sso_mod._http_get_json = lambda *a, **k: {'sub': _sso_sub,
+                                           'preferred_username': 'admin',
+                                           'email': 'admin@school.edu'}
+_c3 = app.test_client()
+_ls = _c3.get('/login/sso')
+check('SSO 開啟：/login/sso 跳轉到 IdP 授權網址',
+      _ls.status_code == 302
+      and _ls.headers['Location'].startswith('https://idp.test/authorize'))
+import urllib.parse as _up  # noqa: E402
+_sso_state = _up.parse_qs(_up.urlparse(_ls.headers['Location']).query)['state'][0]
+_cb = _c3.get(f'/callback?state={_sso_state}&code=code123', follow_redirects=False)
+check('SSO 開啟：/callback 完成身分對映並建立 session（導向儀表板 /）',
+      _cb.status_code == 302 and _cb.headers.get('Location', '') in ('/', '/?'))
+check('SSO 登入後可進入系統', _c3.get('/').status_code == 200)
+# 還原：清掉 stub 與 external_id，避免影響後續
+_sso_mod._http_post_json = _orig_post
+_sso_mod._http_get_json = _orig_get
+db_exec("UPDATE users SET external_id=NULL WHERE username='admin'")
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

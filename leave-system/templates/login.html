@@ -28,6 +28,13 @@
         <div class="actions"><button class="btn" type="submit">登入</button></div>
       </form>
 
+      {% if sso_enabled %}
+      <div class="sso-row">
+        <div class="sso-divider"><span>或</span></div>
+        <a class="btn btn-sso" href="{{ url_for('login_sso') }}">使用學校帳號登入</a>
+      </div>
+      {% endif %}
+
       <div class="demo">
         <strong>演示帳號</strong>（統一密碼 <span class="mono">Demo@2026</span>）
         <table>

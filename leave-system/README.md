@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v1.7.0）
+# 線上請假系統（原型 v1.8.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -168,8 +168,8 @@ leave-system/
 ## 測試
 
 ```bash
-python -m pytest tests/ -v   # 168 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化）
-python smoke_test.py         # 231 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼、範圍隔離、假別管理、儀表板範圍、角色下限、撤回通知、稽核日誌、待辦分頁、重複審批守衛、撤回院系通知、單則已讀、電話格式、referrer 防護、SMTP 逾時、院系必填、交易內不寄信、狀態篩選、帳號分頁、CSV 串流、孤兒附件預檢、批次審批（越權／已結案略過、單次上限、模板勾選）、課表真實化（逐生課表、CSV 匯入與冪等、時間補零、覆蓋率、單筆增刪、課表檢視權限）
+python -m pytest tests/ -v   # 187 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化 / v1.8.0 單一登入 SSO）
+python smoke_test.py         # 236 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼、範圍隔離、假別管理、儀表板範圍、角色下限、撤回通知、稽核日誌、待辦分頁、重複審批守衛、撤回院系通知、單則已讀、電話格式、referrer 防護、SMTP 逾時、院系必填、交易內不寄信、狀態篩選、帳號分頁、CSV 串流、孤兒附件預檢、批次審批（越權／已結案略過、單次上限、模板勾選）、課表真實化（逐生課表、CSV 匯入與冪等、時間補零、覆蓋率、單筆增刪、課表檢視權限）、單一登入 SSO（預設關閉不顯示按鈕、/login/sso 導回登入、開啟後跳轉 IdP、/callback 身分對映並建立 session）
 ```
 
 測試會使用**全新的暫存資料庫**，不會動到 `leave_system.db`。
@@ -186,10 +186,39 @@ python smoke_test.py         # 231 項全鏈路冒煙：兩級審批、撤回、
 | `LEAVE_SMTP_HOST` / `LEAVE_SMTP_USER` / `LEAVE_SMTP_FROM` / `LEAVE_SMTP_PASS` / `LEAVE_SMTP_PORT` / `LEAVE_SMTP_TLS` | （未設則不啟用） | 選用 Email 通知通道；`HOST`/`USER`/`FROM` 三者齊全才啟用，發送失敗不影響主流程 |
 | `LEAVE_SMTP_TIMEOUT` | `10` | SMTP 連線逾時（秒）。防止郵件伺服器不可達時請求無限期掛起 |
 | `LEAVE_DEBUG` | `0` | 設 `1` 開啟 Flask debug（自動重載＋除錯器）；`start.bat` 已預設開啟，正式部署請保持 `0` |
+| `SSO_CLIENT_ID` | （未設則不啟用） | OIDC client_id；與下方四個 `SSO_*` 端點齊全時 SSO 才啟用 |
+| `SSO_CLIENT_SECRET` | （未設則不啟用） | OIDC client_secret（授權碼兌換 access_token 用） |
+| `SSO_AUTHORIZE_URL` | （未設則不啟用） | IdP 授權端點（跳轉登入） |
+| `SSO_TOKEN_URL` | （未設則不啟用） | IdP 換 token 端點 |
+| `SSO_USERINFO_URL` | （未設則不啟用） | IdP userinfo 端點（取身分聲明） |
+| `SSO_REDIRECT_URI` | （未設則不啟用） | 回呼網址，須與 IdP 登記一致（本系統為 `/callback`） |
+| `SSO_SCOPES` | `openid email profile` | 請求的 scope |
+| `SSO_USERNAME_CLAIM` | `email` | 用來識別帳號的 claim（學號／教工號通常為 `preferred_username` 或 `sub`） |
+| `SSO_ROLE_CLAIM` | （空） | 群組／角色聲明；有值且開啟自動開通時用來決定新帳號角色 |
+| `SSO_DEFAULT_ROLE` | `student` | 自動開通時的預設角色（claim 角色不在白名單內時回落到此） |
+| `SSO_PROVISION` | `0` | 設 `1` 時對「對應不到的 IdP 使用者」自動開通新帳號（密碼為隨機強雜湊，只能走 SSO） |
+| `SSO_AUTO_LINK_EMAIL` | `1` | 設 `1` 時用 email 自動連結既有本地帳號；設 `0` 關閉此行為 |
+
+## 單一登入（SSO / OIDC，v1.8.0）
+
+標準 OIDC 授權碼流程已接好，但**預設關閉**——四個必要 `SSO_*` 端點／參數（`SSO_CLIENT_ID`、
+`SSO_AUTHORIZE_URL`、`SSO_TOKEN_URL`、`SSO_USERINFO_URL`）齊全才啟用。啟用後：
+
+- 登入頁出現「使用學校帳號登入」按鈕，點擊跳轉 `/login/sso` → IdP；
+- IdP 回呼 `/callback`：先校驗 `state`（防 CSRF／授權碼注入），再兌換 code → 取 userinfo →
+  對映到本地使用者 → 建立 session。任一環節失敗一律退回本地登入並閃錯，**不暴露錯誤細節**。
+- 身分對映優先序（`sso.resolve_user`）：① `external_id` → ② username claim →
+  ③ email 自動連結（可關） → ④ 自動開通（僅 `SSO_PROVISION=1`，新帳號給隨機強雜湊，
+  **只能走 SSO**）。
+- **本地帳密登入永遠保留為災難備援**：SSO 掛掉時管理員仍能以帳密進系統。
+
+> ⚠️ 本版交付的是**接線通道**，不是「已完成 SSO 對接」：真實 IdP 連線參數與
+> 群組／角色聲明 → 本地角色的對映規則屬各校部署設定，本倉不內含任何一家學校的憑證或假設。
+> 生產環境還應補：ID-token 簽章驗證、nonce 重放防護。
 
 ## 上生產前還要補
 
-1. **認證**：接學校 SSO / CAS，替換本地帳號；密碼改由 IAM 託管。
+1. **認證**：v1.8.0 已備妥 OIDC 授權碼接線通道（見「單一登入（SSO）」一節），填入校方 IdP 參數與角色對映即可啟用；本地帳密保留為災難備援。上線前仍應補 ID-token 簽章驗證與 nonce 重放防護。
 2. **安全**：上傳檔案做病毒掃描（v0.9.0 已加檔案頭魔術位元組嗅探，擋掉改名偽裝，
    但內容層的惡意程式仍需掃描引擎）；弱密碼擋鎖目前是靜態清單，正式環境可改
    Have I Been Pwned 的 k-anonymity API；`SECRET_KEY` 走密鑰管理服務；登入限流已

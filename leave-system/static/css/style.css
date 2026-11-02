@@ -125,6 +125,14 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--brand-soft);bord
 .demo{background:var(--surface-2);border-radius:8px;padding:12px 14px;margin-top:16px;font-size:12px}
 .demo table{margin-top:6px}
 .demo td,.demo th{padding:3px 6px;border:none;background:transparent}
+/* 單一登入（SSO）按鈕 */
+.sso-row{margin-top:16px}
+.sso-divider{display:flex;align-items:center;gap:10px;color:var(--muted);
+  font-size:12px;margin-bottom:10px}
+.sso-divider::before,.sso-divider::after{content:'';flex:1;height:1px;background:var(--line)}
+.btn-sso{display:block;text-align:center;background:var(--surface-2);
+  color:var(--text);border:1px solid var(--brand);font-weight:600}
+.btn-sso:hover{filter:brightness(0.97)}
 
 /* 分頁 */
 .pager{display:flex;align-items:center;justify-content:center;gap:12px;

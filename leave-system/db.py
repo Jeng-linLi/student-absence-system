@@ -93,6 +93,7 @@ MIGRATIONS = [
     ('leave_requests', 'affected_courses', "TEXT NOT NULL DEFAULT ''"),
     ('users', 'pwd_changed_at', 'TEXT'),
     ('timetable', 'source', "TEXT NOT NULL DEFAULT 'demo'"),
+    ('users', 'external_id', 'TEXT'),   # A2 SSO（v1.8.0）：外部身分對映，本地帳號為 NULL
 ]
 
 # 補建索引（v1.7.0）：課表匯入的 merge 模式靠唯一索引做冪等 UPSERT。

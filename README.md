@@ -197,7 +197,7 @@ cache headers); v0.8.0 hardens authentication and account administration (persis
 throttling, session invalidation on password change, idle-session expiry, admin lockout
 guards); v0.7.0 consolidates the module split, fixes a stats-scope leak, hardens CSV export
 against formula injection, completes the password policy, and adds a `/healthz` probe
-(smoke suite now 165 checks).
+(smoke suite now 236 checks).
 
 完整變更記錄見 [`CHANGELOG.md`](CHANGELOG.md)。
 
@@ -207,6 +207,27 @@ against formula injection, completes the password policy, and adds a `/healthz` 
 - \> 3 days, or an official-activity absence → advisor → faculty review
 - Official activity roster → auto-verified, instructors notified only
 - Absence > 7 days → programme office → registry → instructors
+
+## Single sign-on (SSO) ｜單一登入（SSO）
+
+SSO is wired in as a **config-gated OIDC authorization-code channel** (since `v1.8.0`,
+see `GAP-ANALYSIS.md` A2). Local username/password login is kept as a **disaster-recovery
+fallback** — admins can still get in if the IdP is down.
+
+- The login page shows a **"使用學校帳號登入"** button only when SSO is enabled.
+- Identity mapping priority in `resolve_user()`: ① `external_id` → ② username claim →
+  ③ email auto-link (toggleable) → ④ auto-provision (only when `SSO_PROVISION=1`, and the
+  new account gets a random hash so it can **only** sign in via SSO).
+
+> ⚠️ What this release does **not** do: it is a wiring channel, not a finished SSO
+> integration. Each school must supply its real IdP parameters (issuer, `client_id`,
+> redirect URI, scope) and the role-claim → local-role mapping at deploy time. Production
+> should also add ID-token signature verification and nonce replay protection.
+
+Full configuration: `SSO_CLIENT_ID` / `SSO_CLIENT_SECRET` / `SSO_AUTHORIZE_URL` /
+`SSO_TOKEN_URL` / `SSO_USERINFO_URL` / `SSO_REDIRECT_URI` / `SSO_SCOPES` /
+`SSO_USERNAME_CLAIM` / `SSO_ROLE_CLAIM` / `SSO_DEFAULT_ROLE` / `SSO_PROVISION` /
+`SSO_AUTO_LINK_EMAIL`. Details in `leave-system/README.md` "單一登入（SSO）".
 
 ## Commercial ｜商業化
 
@@ -225,7 +246,8 @@ institutions to evidence how absence and academic accommodation are handled — 
 that obligation into a query instead of a fire drill.
 
 > ⚠️ **Readiness gate ｜就緒門檻**：原型可演示與試點，但簽署生產合約前須關閉
-> `GAP-ANALYSIS.md` 中的 SSO（A2）、PostgreSQL（A1）、課表接入學校 SIS／LMS（C1 的格式與
+> `GAP-ANALYSIS.md` 中的 SSO（A2 · v1.8.0 已備妥 OIDC 接線通道，尚待校方提供真實 IdP 參數與角色對映）、
+> PostgreSQL（A1）、課表接入學校 SIS／LMS（C1 的格式與
 > 匯入通道已於 v1.7.0 就緒，尚待校方提供真實課表資料源）
 > 與個資治理（D 組）四項缺口。詳見 `COMMERCIAL.md` §4。
 >

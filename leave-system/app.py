@@ -9,6 +9,7 @@ import os
 import csv
 import io
 import hmac
+import urllib.error
 import time
 import secrets
 import json
@@ -46,7 +47,9 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
 from calendar_import import (parse_calendar_text, apply_calendar,
                              load_preset, preset_for_today, PRESETS)
 from timetable_import import (parse_timetable_csv, apply_timetable,
-                              timetable_coverage, pad_time, MAX_IMPORT_ROWS)
+                             timetable_coverage, pad_time, MAX_IMPORT_ROWS)
+from sso import sso_configured, sso_settings, authorize_url, exchange_code, \
+    fetch_userinfo, resolve_user
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -64,6 +67,14 @@ app.config.update(
 if os.environ.get('LEAVE_SECRET') is None:
     print('[安全警告] 使用預設 secret_key（LEAVE_SECRET 未設定）。'
           '僅限本地開發，切勿直接上線。')
+
+# 單一登入（SSO / OIDC，A2·v1.8.0）：把環境變數載入 app.config，
+# 既能被 sso.py 讀到，也能在測試時由 app.config 直接覆寫。
+for _k in ('SSO_CLIENT_ID', 'SSO_CLIENT_SECRET', 'SSO_AUTHORIZE_URL',
+           'SSO_TOKEN_URL', 'SSO_USERINFO_URL', 'SSO_REDIRECT_URI',
+           'SSO_SCOPES', 'SSO_USERNAME_CLAIM', 'SSO_ROLE_CLAIM',
+           'SSO_DEFAULT_ROLE', 'SSO_PROVISION', 'SSO_AUTO_LINK_EMAIL'):
+    app.config.setdefault(_k, os.environ.get(_k, ''))
 
 
 @app.teardown_appcontext
@@ -722,6 +733,7 @@ def inject_globals():
         unread = row['c']
     return dict(current_user=u, unread_count=unread, app_version=APP_VERSION,
                 now=datetime.now(), FACULTY_THRESHOLD_DAYS=FACULTY_THRESHOLD_DAYS,
+                sso_enabled=sso_configured(),
                 min_date=(date.today() - timedelta(days=MAX_BACKDATE_DAYS)).isoformat(),
                 max_date=(date.today() + timedelta(days=365)).isoformat(),
                 MAX_SINGLE_DAYS=MAX_SINGLE_DAYS, MAX_BACKDATE_DAYS=MAX_BACKDATE_DAYS,
@@ -763,6 +775,19 @@ app.jinja_env.globals.update(status_view=status_view,
 _DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(16))
 
 
+def _establish_session(user):
+    """建立登入 session（本地登入與 SSO 回呼共用）。
+
+    一律先 clear 再寫，避免 session fixation；並寫入 auth_at 讓「登入後改密碼
+    舊 session 即時作廢」的機制對 SSO 登入也成立。
+    """
+    session.clear()
+    session['uid'] = user['id']
+    session['csrf_token'] = secrets.token_hex(32)
+    session['auth_at'] = _now_str()
+    session['last_seen'] = session['auth_at']
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -784,11 +809,7 @@ def login():
         if user and check_password_hash(user['password_hash'], password):
             login_succeeded(key)
             login_succeeded(user_key)
-            session.clear()                       # 防 session fixation
-            session['uid'] = user['id']
-            session['csrf_token'] = secrets.token_hex(32)
-            session['auth_at'] = _now_str()
-            session['last_seen'] = session['auth_at']
+            _establish_session(user)
             return redirect(url_for('dashboard'))
         if not user:
             # 帳號不存在也跑一次雜湊比對，拉平與「帳號存在但密碼錯誤」的時間差
@@ -797,6 +818,48 @@ def login():
         login_failed(user_key)
         flash('帳號或密碼錯誤。', 'error')
     return render_template('login.html')
+
+
+# 單一登入（SSO / OIDC，A2·v1.8.0）：身分中介層插在 login() 之前。
+# 本地帳號密碼登入一律保留為災難備援——SSO 掛掉時管理員仍能進系統。
+@app.route('/login/sso')
+def login_sso():
+    if not sso_configured():
+        flash('單一登入（SSO）尚未啟用。', 'error')
+        return redirect(url_for('login'))
+    # state 防 CSRF／授權碼注入；綁在 session 上，回呼時比對
+    state = secrets.token_urlsafe(24)
+    session['sso_state'] = state
+    return redirect(authorize_url(state))
+
+
+@app.route('/callback')
+def sso_callback():
+    if not sso_configured():
+        return redirect(url_for('login'))
+    # ① state 比對：失敗直接踢回登入，不給任何錯誤細節
+    state = request.args.get('state', '')
+    if not state or state != session.pop('sso_state', None):
+        flash('SSO 狀態驗證失敗，請重新登入。', 'error')
+        return redirect(url_for('login'))
+    code = request.args.get('code')
+    if not code:
+        flash('SSO 授權碼缺失。', 'error')
+        return redirect(url_for('login'))
+    # ② 兌換授權碼 → userinfo；網路錯誤不該把頁面炸掉，退回本地登入
+    try:
+        token = exchange_code(code)
+        claims = fetch_userinfo(token['access_token'])
+    except (urllib.error.URLError, ValueError, KeyError, Exception):  # noqa: BLE001
+        flash('SSO 身分驗證失敗，請稍後再試或改用本地帳號。', 'error')
+        return redirect(url_for('login'))
+    # ③ 對映到本地使用者；對應不到則退回（不建立來歷不明的帳號）
+    user, err = resolve_user(claims)
+    if not user:
+        flash('SSO 帳號無法對應到本系統使用者。', 'error')
+        return redirect(url_for('login'))
+    _establish_session(user)
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/logout')

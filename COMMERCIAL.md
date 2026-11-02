@@ -70,7 +70,7 @@ One line: turn absence handling from an administrative chore into **audit-grade 
 
 | 缺口 | 說明 | 狀態 |
 | --- | --- | --- |
-| **A2 SSO** | 校內單點登錄（Entra ID / OIDC）；企業採購的硬門檻 | P0 · 未做 |
+| **A2 SSO** | 校內單點登錄（Entra ID / OIDC）；企業採購的硬門檻。v1.8.0 已備妥標準 OIDC 授權碼接線通道（本地帳密保留為災難備援），尚缺**校方真實 IdP 參數與角色對映** | P0 · 半完成（通道已就緒，IdP／角色映射待校方） |
 | **A1 PostgreSQL** | SQLite 不適合多用戶生產部署 | P0 · 未做 |
 | **C1 課表真實化** | 課表須由 SIS／LMS 同步，而非手工維護。v1.7.0 已備妥逐生課表與 CSV／CLI 匯入通道，尚缺**校方的真實課表資料源對接** | P0 · 半完成（通道已就緒，資料源待校方） |
 | **D 組個資治理** | 數據分級、保存期、刪除權、稽核導出（對 FERPA／GDPR／個保法） | P1 · 未做 |
@@ -85,7 +85,7 @@ One line: turn absence handling from an administrative chore into **audit-grade 
    門檻建議沿用提案：第 14 周採用率與滿意度未達標即退回現狀。
 2. **Proof pack** — 把試點數據做成合規證據包（審批 SLA、缺課檢出率、舉證查詢耗時），
    這是後續銷售的主要素材。
-3. **Institutional rollout** — 教務處主導，擴建至全校；此時補 SSO 與 PostgreSQL。
+3. **Institutional rollout** — 教務處主導，擴建至全校；此時接入校方真實 IdP 參數並補 SSO 簽章驗證與角色對映，PostgreSQL 一併上線。
 4. **Replication** — 以「同類院校合規樣板」複製到兄弟院校／合作校區。
 
 ## 6. 商業化指標 ｜Metrics that matter

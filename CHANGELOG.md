@@ -9,6 +9,53 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-11-03
+
+單一登入（SSO / OIDC，A2）版：把 `GAP-ANALYSIS.md` 的 P0 **A2（沒有 SSO / 外部身分整合）**
+從「未做」推進到「通道已就緒」——標準 OIDC 授權碼流程已接好，本地帳密登入保留為災難備援。
+這是大學採購前必然會問的第一題，本版讓 SAAS 具備「可對接貴校身分系統」的基本盤。
+
+> ⚠️ 界限說明：本版交付的是**接線通道**，不是「已完成 SSO 對接」。真實 IdP 的連線參數
+> （issuer、client_id、重定向 URI、scope）與**使用者／角色對映規則**屬於各校部署設定，
+> 本倉不內含任何一家學校的憑證或假設，留給校方在部署時填入（見 `leave-system/README.md`
+> 「單一登入（SSO）」一節）。生產環境還應補：ID-token 簽章驗證、nonce 重放防護、
+> 群組／角色聲明到本地角色的正式對映。這些標註在程式碼與 README 裡，待校方對接時一併補齊。
+
+### Added ｜新增
+
+- **`leave-system/sso.py`**（新模組）：標準 OIDC 授權碼流程（authorize → code → token →
+  userinfo），**全部由組態驅動，不引入任何第三方依賴**（網路呼叫只用標準函式庫 `urllib`）。
+  - `sso_configured()`：四個必要端點／參數齊全才算啟用；未啟用時登入頁不顯示 SSO 按鈕、
+    `/login/sso` 直接導回登入並閃錯。
+  - `authorize_url(state)`：組出跳轉到 IdP 的授權網址。
+  - `resolve_user(claims)`：claims → 本地使用者，優先序為
+    ① `external_id` → ② username claim → ③ email 自動連結（可關） → ④ 自動開通
+    （僅 `SSO_PROVISION=1` 時建立新帳號，且給隨機強雜湊使其只能走 SSO）。
+  - 網路呼叫隔成 `_http_post_json` / `_http_get_json` 兩個 seam，便於單測以 monkeypatch 替換，
+    不需真實 IdP 即可完整覆蓋。
+- **登入頁 SSO 入口**（`templates/login.html` + `static/css/style.css`）：啟用後出現
+  「使用學校帳號登入」按鈕（分隔線樣式）。
+- **路由**：`/login/sso`（生成 state 存入 session 後跳轉 IdP）與 `/callback`（state 校驗 →
+  code 兌換 → userinfo → `resolve_user` → 建立 session → 導向儀表板；任一環節失敗退回本地登入）。
+- **`users.external_id` 欄位**（`schema.sql` + `db.py` 遷移）：SSO 外部身分對映，本地帳號為 NULL；
+  舊庫透過冪等 `ALTER TABLE ADD COLUMN` 自動補齄。
+- **測試**：`tests/test_v18.py`（19 項），覆蓋組態門控、授權碼流程、身分對映優先序、
+  自動開通與災難備援；`smoke_test.py` 新增 5 項 SSO 全鏈路檢查（離線 stub）。
+
+### Changed ｜變更
+
+- `APP_VERSION` 1.7.0 → 1.8.0；根 README、`leave-system/README.md`、`COMMERCIAL.md`、
+  `GAP-ANALYSIS.md` 同步。
+- **本地帳密登入保留為災難備援**：SSO 掛掉時管理員仍能以帳密進系統；`_establish_session()`
+  抽出為登入與 SSO 回呼共用，登入成功路徑改用它（防 session fixation + 記錄 `auth_at`）。
+
+### Security ｜安全
+
+- `/callback` 做 state 校驗防 CSRF／授權碼注入；網路錯誤與身分對應失敗一律退回本地登入並閃錯，
+  不暴露任何錯誤細節。
+
+---
+
 ## [1.7.0] — 2026-11-02
 
 課表真實化版：把 `GAP-ANALYSIS.md` 裡**最大也最致命的那個 P0 —— C1（課表真實化）**
