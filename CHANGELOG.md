@@ -9,6 +9,45 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.1] — 2026-11-02
+
+商業化版：把「要怎麼賣」從口號寫成文件。原型功能不變，新增
+`COMMERCIAL.md` 商業化方案，並在根 README 補上授權分層與就緒門檻。
+**本版不含定價**——價格、折扣與合約範本仍待作者決定（另立私有文件）。
+
+### Added ｜新增
+
+- **`COMMERCIAL.md`（商業化方案）**：
+  - **定位**：賣的不是表單流程，而是「可舉證」——監管方問「這個學生缺了多少課、
+    誰批的、依據什麼」時能在幾秒內回答；並列 consistency（跨院系一致）與
+    continuity（缺課自動生成學業便利方案）兩項附帶價值。
+  - **目標客群**：灘頭為中外合作大學與有國際生／贊助生的院校（合規義務最剛性），
+    擴張至任何需向監管方證明出勤管理的院校，長尾為國際學校與海外校區。
+    合規論述引用 UKVI 學生擔保人責任（2024）、澳洲 ESOS/ELICOS 80% 出勤
+    義務（2018）、美國 FERPA（20 U.S.C. §1232g）——出處標註為
+    `assignment/content.md`，成本數字標註為提案 `saas/index.html` 估算。
+  - **授權分層**：Evaluation／Personal（免費，`LICENSE` §2(a)）、
+    Institutional Site License（單一院校自托管）、Managed Service（作者方托管含
+    SLA）。三層皆列範圍，價格一律 **TBD**，並給定價原則（錨定可避免成本與
+    學生規模、隨合規強度遞增、試點單列回退條款）。
+  - **就緒門檻（Readiness gate）**：明列簽署生產合約前必須關閉的四項
+    `GAP-ANALYSIS.md` 缺口——SSO（A2）、PostgreSQL（A1）、課表由 SIS／LMS
+    同步（C1）、個資治理（D 組）；並註明「原型是資產，不是產品」。
+  - **上市路徑**：Pilot（2 項目、約 600 學生、第 14 週回退閘門）→ Proof pack
+    （把試點數據做成合規證據包）→ Institutional rollout → Replication。
+  - **指標**：試點採用率、審批 SLA 達成率、缺課檢出／預警數、監管查詢響應時間。
+  - **風險與待決事項**：定價、智慧財產歸屬（作者任職於 HKUST(GZ)，商用前須釐清
+    學校是否主張權利）、數據駐留與個保法、責任上限與 SLA、開源邊界、
+    提案數字的可引用性（須標註為估算）。
+- 根 README 新增 **Commercial ｜商業化** 區段：授權分層表、合規驅動的買家論述、
+  就緒門檻警示，並在檔頭與「更新日誌」段連回 `COMMERCIAL.md`。
+
+### Changed ｜變更
+
+- `APP_VERSION` 1.5.0 → 1.5.1；根 README、`leave-system/README.md` 版本號同步。
+- 測試未異動：單元測試 128、冒煙檢查 183（版本斷言為動態比對 `APP_VERSION`，
+  不需為發版改測試）。
+
 ## [1.5.0] — 2026-11-02
 
 校曆落地版：把**港科大（廣州）2026–27 學年官方校曆**匯入系統，並補上
