@@ -1,0 +1,19 @@
+﻿# 課表範例檔（v1.7.0）— 用法：flask import-timetable data/timetable-sample.csv
+#
+# 格式：學號,星期,開始時間,結束時間,課程代碼[,類型,教室,備註]
+#   · 星期可用 mon / 週一 / 1（週一到週五）；時間 9:00 與 09:00 都收
+#   · 表頭可省略，欄名中英文皆可；教室含逗號時用雙引號包住
+#   · # 開頭為註解，空白行忽略
+#
+# 這份檔刻意讓兩位學生的課表不同——v1.6.0 以前所有人共用同一份示範課表，
+# 「受影響課程」算出來對任何一個真實學生都可能是錯的。
+student_no,weekday,start_time,end_time,course_code,kind,room,note
+2024001,mon,09:00,10:20,AIAA 2205-L01,Lecture,"Rm 102, W4",
+2024001,mon,13:30,14:50,UFUG 2104-L01,Lecture,"Rm 222, W1",
+2024001,tue,10:30,11:50,UCUG 1800-L03,Lecture,"Rm 147, E1",
+2024001,wed,15:00,16:50,UFUG 1501-LA01,Lab,Einstein Lab (E3-231B),以實際編班為準
+2024001,fri,09:00,11:50,UFUG 1501-L01,Lecture,"Rm 233, W1",
+2024002,mon,10:30,11:50,AIAA 2205-L01,Lecture,"Rm 101, W1",
+2024002,tue,13:30,14:50,UFUG 2104-L01,Lecture,"Rm 222, W1",
+2024002,thu,12:30,13:20,UFUG 1501-T01,Tutorial,"Rm 233, W1",
+2024002,fri,12:00,12:50,AIAA 1010-L01,Lecture,Lecture Hall B,

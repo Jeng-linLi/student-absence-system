@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}課表管理 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>課表管理</h1>
+<p class="muted" style="margin-top:-6px">
+  課表是「受影響課程」的唯一依據——它不真實，整套課表感知功能就只是裝飾。
+</p>
+
+<div class="card">
+  <h3>課表覆蓋率</h3>
+  <div class="row" style="grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
+    <div><div style="font-size:22px;font-weight:600">{{ coverage.students }}</div>
+      <div class="muted" style="font-size:12px">在學學生</div></div>
+    <div><div style="font-size:22px;font-weight:600">{{ coverage.with_tt }}</div>
+      <div class="muted" style="font-size:12px">已有課表</div></div>
+    <div><div style="font-size:22px;font-weight:600;color:var(--red)">{{ coverage.demo_only }}</div>
+      <div class="muted" style="font-size:12px">仍是示範資料</div></div>
+    <div><div style="font-size:22px;font-weight:600;color:var(--green)">{{ coverage.imported }}</div>
+      <div class="muted" style="font-size:12px">已匯入／手動維護</div></div>
+  </div>
+  {% if coverage.demo_only or coverage.missing %}
+  <p class="muted" style="margin:12px 0 0;font-size:13px">
+    <strong>{{ coverage.demo_only + coverage.missing }}</strong> 位學生的課表還不是真實資料
+    （{{ coverage.demo_only }} 人全是示範課表{% if coverage.missing %}、{{ coverage.missing }} 人完全沒有課表{% endif %}）。
+    示範課表是「所有學生共用同一份」，匯入或手動維護後才算數。
+  </p>
+  {% else %}
+  <p class="muted" style="margin:12px 0 0;font-size:13px">
+    所有在學學生的課表都已是匯入或手動維護的真實資料。
+  </p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>選擇學生</h3>
+  <form method="get" action="{{ url_for('admin_timetable') }}">
+    <div class="row" style="grid-template-columns:1fr auto;align-items:end">
+      <div>
+        <label>學生（學號 · 姓名 · 班級）</label>
+        <select name="uid">
+          {% for s in students %}
+            <option value="{{ s.id }}" {{ 'selected' if sel and sel.id == s.id }}>
+              {{ s.username }} · {{ s.name }}{% if s.class_name %}（{{ s.class_name }}）{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div><button class="btn" type="submit">查看課表</button></div>
+    </div>
+  </form>
+  {% if not students %}<div class="empty">尚無在學學生帳號。</div>{% endif %}
+</div>
+
+{% if sel %}
+<div class="card">
+  <h3>{{ sel.name }}（{{ sel.username }}）的週課表</h3>
+  {% if rows %}
+  <table>
+    <thead><tr><th style="width:70px">星期</th><th style="width:110px">時間</th>
+      <th>課程</th><th style="width:90px">類型</th><th>教室</th>
+      <th style="width:80px">來源</th><th></th></tr></thead>
+    <tbody>
+    {% for wd, wd_label in days %}
+      {% for r in by_day.get(wd, []) %}
+      <tr>
+        <td>{% if loop.first %}<strong>{{ wd_label }}</strong>{% endif %}</td>
+        <td class="tnum mono">{{ r.start_time }}–{{ r.end_time }}</td>
+        <td><strong>{{ r.course_code }}</strong>
+          {% if r.note %}<span class="muted" style="font-size:12px"> · {{ r.note }}</span>{% endif %}</td>
+        <td>{{ r.kind or '—' }}</td>
+        <td>{{ r.room or '—' }}</td>
+        <td>{% if r.source == 'demo' %}<span class="tag grey">示範</span>
+            {% elif r.source == 'import' %}<span class="tag green">匯入</span>
+            {% else %}<span class="tag brand">手動</span>{% endif %}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_delete_timetable_row', tid=r.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn sm danger" type="submit"
+              onclick="return confirm('確定移除 {{ r.course_code }}（{{ wd_label }} {{ r.start_time }}）？');">移除</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">這位學生還沒有課表（請用下方表單新增或匯入）。</div>{% endif %}
+  <p class="muted" style="margin:10px 0 0;font-size:12px">
+    同一時段同一門課只會有一列；匯入重跑會更新，不會長出重複的課。
+  </p>
+</div>
+
+<div class="card">
+  <h3>單筆新增（{{ sel.name }}）</h3>
+  <form method="post" action="{{ url_for('admin_add_timetable_row') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="uid" value="{{ sel.id }}">
+    <div class="row" style="grid-template-columns:110px 110px 110px">
+      <div>
+        <label>星期 *</label>
+        <select name="weekday">
+          {% for wd, wd_label in days %}<option value="{{ wd }}">{{ wd_label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label>開始 *</label><input name="start_time" placeholder="09:00" required></div>
+      <div><label>結束 *</label><input name="end_time" placeholder="10:20" required></div>
+    </div>
+    <div class="row" style="grid-template-columns:1fr 110px 1fr">
+      <div><label>課程代碼 *</label><input name="course_code" maxlength="40" placeholder="AIAA 2205-L01" required></div>
+      <div><label>類型</label><input name="kind" maxlength="20" placeholder="Lecture"></div>
+      <div><label>教室</label><input name="room" maxlength="60" placeholder="Rm 102, W4"></div>
+    </div>
+    <label>備註</label>
+    <input name="note" maxlength="80" placeholder="以實際編班為準">
+    <div class="actions"><button class="btn" type="submit">新增</button></div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>CSV 匯入課表</h3>
+  <p class="muted" style="margin:0 0 12px;font-size:13px">
+    一列一節課，<span class="mono">#</span> 開頭為註解。表頭中英文皆可，也可省略
+    （省略時依序解讀為 學號,星期,開始,結束,課程代碼,類型,教室,備註）：
+  </p>
+  <pre class="mono" style="background:var(--surface-2);padding:10px 12px;border-radius:8px;font-size:12px;overflow:auto;margin:0 0 14px">student_no,weekday,start_time,end_time,course_code,kind,room,note
+2024001,mon,09:00,10:20,AIAA 2205-L01,Lecture,"Rm 102, W4",</pre>
+
+  <form method="post" action="{{ url_for('admin_import_timetable') }}"
+        enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>貼上課表 CSV</label>
+    <textarea name="csv_text" rows="6"
+      placeholder="2024001,mon,09:00,10:20,AIAA 2205-L01,Lecture"></textarea>
+
+    <label style="margin-top:12px">或上傳 CSV 檔（單次上限 {{ max_rows }} 列）</label>
+    <input type="file" name="csv_file" accept=".csv,.txt,text/csv,text/plain">
+
+    <label style="margin-top:12px">匯入模式</label>
+    <div style="display:flex;gap:18px;margin:6px 0 4px;font-size:13px">
+      <label style="display:flex;gap:6px;align-items:center">
+        <input type="radio" name="mode" value="replace" checked style="width:auto">
+        <span>取代（對檔案中的學生先清空再寫入）</span>
+      </label>
+      <label style="display:flex;gap:6px;align-items:center">
+        <input type="radio" name="mode" value="merge" style="width:auto">
+        <span>合併（只新增／更新，其餘不動）</span>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button class="btn" type="submit"
+        onclick="return confirm('匯入課表？「取代」模式會清掉檔案中學生的既有課表。');">匯入</button>
+    </div>
+  </form>
+  <p class="muted" style="margin:10px 0 0;font-size:12px">
+    學號查不到帳號時該列略過並回報，不中斷其餘列；格式錯誤的列也一樣。
+    同一份檔重跑不會重複——同一學生同時段同一門課會被更新。
+  </p>
+</div>
+{% endblock %}

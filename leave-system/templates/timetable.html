@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}週課表 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>週課表{% if sel %} · {{ sel.name }}{% endif %}</h1>
+
+{% if not sel %}
+<p class="muted" style="margin-top:-6px">選擇學生查看課表。</p>
+<div class="card">
+  <h3>選擇學生</h3>
+  {% if students %}
+  <table>
+    <thead><tr><th>學號</th><th>姓名</th><th>班級</th><th>院系</th><th></th></tr></thead>
+    <tbody>
+    {% for s in students %}
+      <tr>
+        <td class="mono">{{ s.username }}</td>
+        <td><strong>{{ s.name }}</strong></td>
+        <td>{{ s.class_name or '—' }}</td>
+        <td>{{ s.department or '—' }}</td>
+        <td><a class="btn sm ghost" href="{{ url_for('timetable', uid=s.id) }}">查看</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">目前沒有你可查看的學生。</div>{% endif %}
+</div>
+{% else %}
+
+{% if is_demo %}
+<div class="flash error">
+  這份課表仍是<strong>示範資料</strong>（所有學生共用同一份），不代表
+  {{ sel.name }} 真實的課表——依它算出來的「受影響課程」僅供展示。
+</div>
+{% endif %}
+
+<div class="grid g2">
+{% for wd, wd_label in days %}
+  <div class="card">
+    <h3>{{ wd_label }}</h3>
+    {% set list = by_day.get(wd, []) %}
+    {% if list %}
+    <table>
+      <thead><tr><th style="width:110px">時間</th><th>課程</th><th>教室</th></tr></thead>
+      <tbody>
+      {% for r in list %}
+        <tr>
+          <td class="tnum mono">{{ r.start_time }}–{{ r.end_time }}</td>
+          <td><strong>{{ r.course_code }}</strong>
+            {% if r.kind %}<span class="tag grey">{{ r.kind }}</span>{% endif %}
+            {% if r.note %}<div class="muted" style="font-size:12px">{{ r.note }}</div>{% endif %}</td>
+          <td>{{ r.room or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">沒課</div>{% endif %}
+  </div>
+{% endfor %}
+</div>
+
+<p class="muted" style="font-size:12px;margin-top:6px">
+  請假時系統依這份課表推算受影響課程；週末與校曆假日不列入，補課日按「被補的星期幾」計算。
+</p>
+{% endif %}
+{% endblock %}

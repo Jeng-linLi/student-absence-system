@@ -26,17 +26,20 @@
     {% if current_user.role == 'student' %}
       <a href="{{ url_for('new_request') }}">提交假單</a>
       <a href="{{ url_for('my_requests') }}">我的假單</a>
+      <a href="{{ url_for('timetable') }}">我的課表</a>
     {% else %}
       <a href="{{ url_for('approvals') }}">待我審批
         {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}</a>
       <a href="{{ url_for('approvals', scope='all') }}">全部假單</a>
       <a href="{{ url_for('stats') }}">統計</a>
+      <a href="{{ url_for('timetable') }}">學生課表</a>
     {% endif %}
     {% if current_user.role == 'admin' %}
       <a href="{{ url_for('admin_users') }}">帳號管理</a>
       <a href="{{ url_for('admin_delegations') }}">委託審批</a>
       <a href="{{ url_for('admin_types') }}">假別管理</a>
       <a href="{{ url_for('admin_terms') }}">學期與校曆</a>
+      <a href="{{ url_for('admin_timetable') }}">課表管理</a>
       <a href="{{ url_for('admin_logs') }}">稽核日誌</a>
     {% endif %}
     <a href="{{ url_for('notifications') }}">通知

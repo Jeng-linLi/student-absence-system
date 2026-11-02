@@ -29,7 +29,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '1.6.0'
+APP_VERSION = '1.7.0'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')
@@ -62,6 +62,22 @@ MAX_BULK_DECIDE = 50
 # 閒置 session 逾時（分鐘）：超過此時間無操作即需重新登入。
 # session 是簽名 cookie，服務端無法主動逐出，只能以時間戳記在每次請求時檢驗。
 SESSION_IDLE_MINUTES = int(os.environ.get('LEAVE_SESSION_IDLE_MINUTES', '480'))
+
+
+def is_hhmm(s):
+    """是否為合法的 24 小時制 HH:MM（課表起訖時間，v1.7.0）。
+
+    不要求補零（`9:00` 也算）：Excel 匯出的時間常是這種寫法，
+    要求使用者補成 `09:00` 只會讓課表匯入被放棄。寫庫前統一由
+    timetable_import._parse_time() 補零成 `09:00`，避免字串比較
+    （`'9:00' < '12:00'` 為 False）把上午／下午的判斷搞反。
+    """
+    if not isinstance(s, str) or s.count(':') != 1:
+        return False
+    h, m = s.split(':')
+    if not (h.isdigit() and m.isdigit()):
+        return False
+    return 0 <= int(h) <= 23 and 0 <= int(m) <= 59
 
 
 def parse_date(s):

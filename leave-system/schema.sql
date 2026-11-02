@@ -94,6 +94,8 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 CREATE INDEX IF NOT EXISTS idx_login_attempts_key ON login_attempts(key, ts);
 
 -- 課表（依學生每週上課時間，用於推算請假受影響課程）
+-- v1.7.0：逐生課表不再是「所有人共用一份示範資料」——source 標記課表來源，
+-- 讓管理員一眼看出哪些學生的課表還是假的。
 CREATE TABLE IF NOT EXISTS timetable (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id  INTEGER NOT NULL REFERENCES users(id),
@@ -104,9 +106,14 @@ CREATE TABLE IF NOT EXISTS timetable (
     kind        TEXT    NOT NULL DEFAULT '',      -- Lecture / Tutorial / Lab
     room        TEXT    NOT NULL DEFAULT '',
     note        TEXT    NOT NULL DEFAULT '',
+    source      TEXT    NOT NULL DEFAULT 'demo',  -- demo / import / manual
     created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_tt_student ON timetable(student_id, weekday);
+-- 唯一索引：同一學生、同一時段、同一門課只會有一列。
+-- 課表匯入（merge 模式）靠它做冪等 UPSERT，重跑匯入不會長出重複的課。
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tt_slot
+    ON timetable(student_id, weekday, start_time, end_time, course_code);
 
 -- v1.4.0 · 委託審批（B4）：審批人不在時把該級的審批權暫時交給代理人。
 -- 只在 [start_date, end_date] 內生效；delegator 的角色決定可代審的範圍

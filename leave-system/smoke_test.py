@@ -494,7 +494,7 @@ _rr = c.post('/admin/users/add', data={'username': 'weakpw_smoke', 'password': '
                                        'name': '弱密碼', 'role': 'student',
                                        'department': '人工智能學域'},
              follow_redirects=True)
-_chk('後台新增帳號同受弱密碼擋鎖约束', '常見' in _rr.get_data(as_text=True))
+_chk('後台新增帳號同受弱密碼擋鎖約束', '常見' in _rr.get_data(as_text=True))
 _chk('被擋下的帳號未建立',
      db_query("SELECT id FROM users WHERE username='weakpw_smoke'") == [])
 
@@ -903,6 +903,151 @@ check('學生進不了批次審批端點', _bulk_post([_v16_role], follow=False)
 check('學生批次操作未生效',
       db_query('SELECT status FROM leave_requests WHERE id=?',
                (_v16_role,))[0]['status'] == 'pending')
+
+print('\n[+16] v1.7.0：課表真實化（逐生課表、CSV 匯入、覆蓋率警示）')
+
+db_exec('DELETE FROM login_attempts')   # [9] 的限流鎖窗可能還留著紀錄
+
+
+def _tt_codes(uid):
+    return [r['course_code'] for r in db_query(
+        'SELECT course_code FROM timetable WHERE student_id=? '
+        'ORDER BY weekday, start_time', (uid,))]
+
+
+def _tt_demo_only():
+    """課表全是示範資料的學生數——「課表還沒真實化」的量化指標。"""
+    rows = db_query("SELECT student_id, SUM(CASE WHEN source='demo' THEN 1 ELSE 0 END) d, "
+                    'COUNT(*) n FROM timetable GROUP BY student_id')
+    return sum(1 for r in rows if r['d'] == r['n'])
+
+
+_v17_u1 = db_query("SELECT id FROM users WHERE username='2024001'")[0]['id']
+_v17_u2 = db_query("SELECT id FROM users WHERE username='2024002'")[0]['id']
+
+check('種子課表全部標記為 demo（沒有人有真實課表）',
+      db_query("SELECT COUNT(*) c FROM timetable WHERE source<>'demo'")[0]['c'] == 0)
+_v17_before = _tt_demo_only()
+check('匯入前：五位種子學生的課表全是示範資料', _v17_before >= 5)
+
+# 學生課表頁必須明白講這是示範資料——否則「受影響課程」是假的還被當真
+login('2024001')
+_v17_stu_html = get('/timetable')
+check('學生課表頁示範資料警示', '示範資料' in _v17_stu_html)
+check('學生課表頁列出週一到週五', '週五' in _v17_stu_html)
+
+# 管理員匯入：兩位學生刻意給不同的課（v1.6.0 起所有人本來共用同一份）
+login('admin')
+check('管理頁顯示課表覆蓋率', '覆蓋率' in get('/admin/timetable'))
+_v17_csv = ('學號,星期,開始時間,結束時間,課程代碼,類型,教室\n'
+            '2024001,mon,9:00,10:20,V17-ONE,Lecture,"Rm 102, A棟"\n'
+            '2024001,mon,14:00,15:20,V17-ONE-PM,Lab,Rm 201\n'
+            '2024002,mon,9:00,10:20,V17-TWO,Lecture,Rm 103\n')
+_v17_html = c.post('/admin/timetable/import',
+                   data={'csv_text': _v17_csv, 'mode': 'replace'},
+                   follow_redirects=True).get_data(as_text=True)
+check('匯入課表成功（3 節課、2 位學生）',
+      '已匯入 3 節課' in _v17_html and '2 位學生' in _v17_html)
+check('匯入課表留稽核軌跡',
+      len(db_query("SELECT 1 FROM audit_logs WHERE action='import_timetable'")) >= 1)
+
+check('兩位學生的課表不再相同（v1.6.0 做不到的那件事）',
+      _tt_codes(_v17_u1) != _tt_codes(_v17_u2))
+check('時間補零存庫（9:00 → 09:00）',
+      db_query('SELECT start_time FROM timetable WHERE student_id=? AND course_code=?',
+               (_v17_u1, 'V17-ONE'))[0]['start_time'] == '09:00')
+check('含逗號的教室完整保留',
+      db_query('SELECT room FROM timetable WHERE student_id=? AND course_code=?',
+               (_v17_u1, 'V17-ONE'))[0]['room'] == 'Rm 102, A棟')
+check('匯入後覆蓋率警示解除（demo_only 下降）', _tt_demo_only() == _v17_before - 2)
+
+# 核心：同一天請假，兩位學生的受影響課程必須不同
+_v17_d = TODAY + datetime.timedelta(days=200)
+_v17_d -= datetime.timedelta(days=_v17_d.weekday())          # 對齊到週一
+_v17_off = {r['day'] for r in db_query('SELECT day FROM holidays')}
+_v17_mk = {r['day'] for r in db_query('SELECT day FROM makeup_days')}
+while _v17_d.isoformat() in _v17_off or _v17_d.isoformat() in _v17_mk:
+    _v17_d += datetime.timedelta(days=7)                     # 避開校曆假日與補課日
+_v17_iso = _v17_d.isoformat()
+_v17_a = [cc['course_code'] for d in _acf(_v17_u1, _v17_iso, _v17_iso)
+          for cc in d['courses']]
+_v17_b = [cc['course_code'] for d in _acf(_v17_u2, _v17_iso, _v17_iso)
+          for cc in d['courses']]
+check('受影響課程依學生課表而異', _v17_a == ['V17-ONE', 'V17-ONE-PM'] and _v17_b == ['V17-TWO'])
+check('上午半天只算上午的課（補零後判斷正確）',
+      [cc['course_code'] for d in _acf(_v17_u1, _v17_iso, _v17_iso, 'AM', 'AM')
+       for cc in d['courses']] == ['V17-ONE'])
+
+# 匯入真實課表後，學生頁不再顯示示範資料警示
+login('2024001')
+check('匯入後學生課表頁不再顯示示範資料', '示範資料' not in get('/timetable'))
+
+# 重複匯入同一份檔不長出重複的課（merge 冪等）
+login('admin')
+c.post('/admin/timetable/import', data={'csv_text': _v17_csv, 'mode': 'merge'},
+       follow_redirects=True)
+check('重複匯入不產生重複課（merge 冪等）',
+      len(_tt_codes(_v17_u1)) == 2)
+# merge 不動既有課；replace 才清掉再寫
+c.post('/admin/timetable/import',
+       data={'csv_text': '2024001,wed,10:00,11:40,V17-WED', 'mode': 'merge'},
+       follow_redirects=True)
+check('merge 模式保留學生既有的課', len(_tt_codes(_v17_u1)) == 3)
+c.post('/admin/timetable/import',
+       data={'csv_text': '2024001,wed,10:00,11:40,V17-WED', 'mode': 'replace'},
+       follow_redirects=True)
+check('replace 模式清空該學生舊課表', _tt_codes(_v17_u1) == ['V17-WED'])
+
+# 匯入結果要把「幾個學號查無此人、幾列格式有誤」講清楚，而不是默默吞掉
+_v17_bad = c.post('/admin/timetable/import', data={
+    'csv_text': '2024001,mon,09:00,10:20,V17-BADROW-SKIP\n'
+                '2024999,mon,09:00,10:20,NOBODY\n'
+                '2024001,sat,09:00,10:20,WEEKEND\n',
+    'mode': 'merge'}, follow_redirects=True).get_data(as_text=True)
+check('匯入回報查無帳號的學號', '查無帳號已略過' in _v17_bad)
+check('匯入回報格式有誤的列', '格式有誤已略過' in _v17_bad)
+check('週末與查無帳號的列未寫入',
+      db_query("SELECT COUNT(*) c FROM timetable "
+               "WHERE course_code IN ('NOBODY','WEEKEND')")[0]['c'] == 0)
+
+# 單筆新增（少量修正用）
+_v17_add = c.post('/admin/timetable/add', data={
+    'uid': _v17_u1, 'weekday': 2, 'start_time': '9:00', 'end_time': '10:20',
+    'course_code': 'V17-MANUAL', 'room': 'Rm 9'}, follow_redirects=True)
+check('單筆新增課表成功', '已加入' in _v17_add.get_data(as_text=True))
+check('單筆新增標記為 manual 且時間補零',
+      db_query('SELECT start_time, source FROM timetable WHERE course_code=?',
+               ('V17-MANUAL',))[0]['start_time'] == '09:00'
+      and db_query('SELECT source FROM timetable WHERE course_code=?',
+                   ('V17-MANUAL',))[0]['source'] == 'manual')
+_v17_badadd = c.post('/admin/timetable/add', data={
+    'uid': _v17_u1, 'weekday': 2, 'start_time': '10:00', 'end_time': '09:00',
+    'course_code': 'X'}, follow_redirects=True).get_data(as_text=True)
+check('單筆新增：結束早於開始被擋下', '結束時間需晚於開始時間' in _v17_badadd)
+check('單筆新增：驗證失敗不寫入',
+      db_query("SELECT COUNT(*) c FROM timetable WHERE course_code='X'")[0]['c'] == 0)
+
+# 刪除一節課
+_v17_tid = db_query('SELECT id FROM timetable WHERE course_code=?',
+                    ('V17-MANUAL',))[0]['id']
+check('刪除課表成功',
+      '已移除' in c.post(f'/admin/timetable/{_v17_tid}/delete',
+                         follow_redirects=True).get_data(as_text=True))
+check('刪除課表留稽核軌跡',
+      len(db_query("SELECT 1 FROM audit_logs WHERE action='del_timetable'")) >= 1)
+
+# 權限：課表與假單一樣是個人資料
+login('T001')                                    # 2024001/2 的導師
+check('導師可查看自己學生的課表', 'V17-WED' in get(f'/timetable/{_v17_u1}'))
+_v17_other = db_query("SELECT id FROM users WHERE username='2024005'")[0]['id']
+_v17_denied = c.get(f'/timetable/{_v17_other}',
+                    follow_redirects=True).get_data(as_text=True)
+check('導師看不到別的導師的學生課表', '你沒有權限查看該學生的課表' in _v17_denied)
+check('導師課表名單只含自己的學生', '2024005' not in get('/timetable'))
+_v17_admin_page = c.post('/admin/timetable/import', data={'csv_text': _v17_csv})
+check('導師不能匯入課表', _v17_admin_page.status_code == 302)
+login('2024001')
+check('學生進不了課表管理頁', c.get('/admin/timetable').status_code == 302)
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

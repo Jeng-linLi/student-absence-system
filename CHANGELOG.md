@@ -9,6 +9,78 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-02
+
+課表真實化版：把 `GAP-ANALYSIS.md` 裡**最大也最致命的那個 P0 —— C1（課表真實化）**
+關掉。在此之前，`DEMO_TIMETABLE` 被複製給每一位學生，「依課表算出受影響課程」這個
+賣點功能其實是空殼：任何人請假看到的都是同一份課。本版讓課表變成**逐生、可匯入、
+可編輯、可統計覆蓋率**的真實資料入口，並把「還有幾個人的課表是假的」變成管理頁上看
+得見的數字。
+
+> ⚠️ 界限說明：本版交付的是**匯入通道**，不是校方資料源對接。真實課表仍須由學校
+> 從 SIS／LMS 匯出 CSV 後匯入，或後續另行對接 API。在匯入真實課表之前，系統仍以
+> `source='demo'` 的示範課表運作，並在頁面上明確警示。
+
+### Added ｜新增
+
+- **`leave-system/timetable_import.py`**（新模組，對標既有的 `calendar_import.py`）：
+  - `parse_timetable_csv(text)`——純函式，寬鬆解析：接受中英／簡繁列名別名
+    （`student_id`／`學號`／`学号`、`course_code`／`課程代碼`／`课程代码` …）、
+    `#` 註解行、可省略表頭（退回位置對應）、含逗號的教室名（`"Rm 102, A棟"`）、
+    多餘空白行。單列錯誤**不中止整批**，逐列回報行號與原因。上限
+    `MAX_IMPORT_ROWS = 5000`，避免誤丟整個教務處資料庫。
+  - `apply_timetable(parsed, mode=…)`——寫庫：
+    - `replace`（整份匯出適用）：**只清空檔案中出現過的學生**的舊課表再寫入，
+      不會動到其他學生。
+    - `merge`（增量補課適用）：依唯一鍵冪等 UPSERT，同一份檔案重複匯入不會長出重複課。
+    - 學號查無此人只略過並回報，不讓整批失敗。
+  - `timetable_coverage()`——回傳學生總數、有真實課表人數、仍是示範資料
+    （`demo_only`）人數、覆蓋率百分比。
+  - `pad_time()`——`9:00` → `09:00`。
+- **課表來源標記**：`timetable.source` 新增欄位（`demo` / `import` / `manual`）。
+  種子資料一律寫 `demo`；匯入寫 `import`；管理後台單筆新增寫 `manual`。
+  「這份課表是不是假的」從此是資料可判定的，不用靠記憶。
+- **管理後台課表管理**（`templates/admin_timetable.html`）：
+  - `/admin/timetable`：覆蓋率四格（學生數／有真實課表／仍是示範／覆蓋率）＋
+    選擇學生查看週課表（含來源標籤）＋單筆新增表單＋CSV 貼上或上傳＋
+    `replace`／`merge` 模式單選＋格式說明。
+  - `/admin/timetable/add`、`/admin/timetable/<id>/delete`：單筆維護，含 `HH:MM`
+    驗證與稽核軌跡。
+  - `/admin/timetable/import`：匯入結果逐條回報——成功幾位學生幾節課、清除幾節舊課、
+    哪些學號查無此人、哪些列有錯（含行號）。
+- **課表檢視頁**（`templates/timetable.html`）：
+  - `/timetable`（學生看自己的）與 `/timetable/<uid>`（導師／院系／管理員看轄下學生）。
+  - 課表仍是 `demo` 時，**頁面上直接紅字警示**：「這份課表仍是示範資料（所有學生共用
+    同一份）……依它算出來的受影響課程僅供展示」。
+  - 權限沿用假單既有的範圍隔離（`approvable_advisor_ids()` ／
+    `approvable_departments()`，含職務代理人／委託視角）：學生只能看自己，導師只能看
+    自己的學生，院系只能看本院系。
+- **CLI**：`flask import-timetable data/timetable-sample.csv`（加 `--merge` 走增量）。
+  與既有的 `init-db`、`import-calendar` 並列，正式環境可用 systemd timer／cron 排程。
+- **範例檔**：`leave-system/data/timetable-sample.csv`，刻意讓 `2024001` 與 `2024002`
+  課表不同（才能一眼看出課表真的逐生分開），並示範含逗號的教室名。
+- **稽核**：`AUDIT_ACTION_LABEL` 新增 `add_timetable`、`del_timetable`、
+  `import_timetable`。
+
+### Changed ｜變更
+
+- `APP_VERSION` 1.6.0 → 1.7.0；根 README、`leave-system/README.md`、`COMMERCIAL.md`、
+  `GAP-ANALYSIS.md` 同步。
+- **`affected_courses_for()` 的語義真正生效**：同一天請假，不同學生現在會算出不同的
+  受影響課程（此前必然相同，因為課表是共用的一份）。這是 C1 之所以是 P0 的原因。
+- **測試**：單元測試 **140 → 168**（新增 `tests/test_v17.py` 28 項）；冒煙檢查
+  **200 → 231**（新增 `[+16]` 區塊 31 項）。
+
+### Fixed ｜修正
+
+- **時間格式陷阱**：`'9:00' < '12:00'` 在字串比較下是 `False`，會把早上 9 點的課誤判成
+  下午課，AM／PM 半天因此算反。現在所有課表起訖時間寫庫前一律 `pad_time()` 補零成
+  `HH:MM`，並以 `utils.is_hhmm()` 驗證（接受 Excel 常見的 `9:00` 寫法，不強迫補零輸入）。
+- **唯一索引相容**：新增 `uq_tt_slot` 支撐 `merge` 冪等；舊庫若已存在重複資料導致索引
+  建不起來，啟動時**只警告不阻擋**，匯入自動退化為「先 DELETE 同鍵列再 INSERT」。
+- 週末列（`sat`／`週六`／`6`）先前被報成「無法辨識的星期」，訊息誤導；現在明確回報
+  「是週末，課表只接受週一到週五」。
+
 ## [1.6.0] — 2026-11-02
 
 批次審批版：把 `GAP-ANALYSIS.md` 的 **B6（沒有批次審批 ★）** 關掉。班級集體公假

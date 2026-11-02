@@ -92,6 +92,16 @@ def init_db():
 MIGRATIONS = [
     ('leave_requests', 'affected_courses', "TEXT NOT NULL DEFAULT ''"),
     ('users', 'pwd_changed_at', 'TEXT'),
+    ('timetable', 'source', "TEXT NOT NULL DEFAULT 'demo'"),
+]
+
+# 補建索引（v1.7.0）：課表匯入的 merge 模式靠唯一索引做冪等 UPSERT。
+# 舊庫若已經有重複資料，索引建不起來——此時不該讓啟動失敗，
+# 匯入會自動退回「先刪同鍵列再寫入」（見 timetable_import._insert_row）。
+EXTRA_INDEXES = [
+    ('uq_tt_slot',
+     'CREATE UNIQUE INDEX IF NOT EXISTS uq_tt_slot '
+     'ON timetable(student_id, weekday, start_time, end_time, course_code)'),
 ]
 
 
@@ -101,3 +111,11 @@ def apply_migrations():
         cols = [r['name'] for r in q(f'PRAGMA table_info({table})')]
         if column not in cols:
             execute(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}')
+    for name, ddl in EXTRA_INDEXES:
+        if not q("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+                 (name,), one=True):
+            try:
+                execute(ddl)
+            except Exception:            # noqa: BLE001 — 建不出索引不阻擋啟動
+                print(f'[遷移警告] 索引 {name} 建立失敗（可能有重複資料），'
+                      '課表匯入將改用去重後寫入。')

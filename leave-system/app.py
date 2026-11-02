@@ -39,12 +39,14 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    APP_VERSION, LEAVE_STATUSES, MAX_TYPE_NAME_LEN,
                    MAX_BULK_DECIDE,
                    parse_date, calc_days, required_level_for,
-                   academic_year_start, allowed_file,
+                   academic_year_start, allowed_file, is_hhmm,
                    validate_password, temp_password, csv_safe,
                    valid_role, valid_username, valid_email, valid_phone,
                    sniff_allowed_type, valid_type_code)
 from calendar_import import (parse_calendar_text, apply_calendar,
                              load_preset, preset_for_today, PRESETS)
+from timetable_import import (parse_timetable_csv, apply_timetable,
+                              timetable_coverage, pad_time, MAX_IMPORT_ROWS)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -72,6 +74,8 @@ def _close_db(e=None):
 WEEKDAY_LABELS = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
 
 # 示範課表（demo 學生共用）。正式環境應由 SIS / LMS 同步，而非硬編碼。
+# v1.7.0：寫入時標 source='demo'。它是「讓受影響課程功能看得到東西」的
+# 展示用資料，不是任何一個真實學生的課表——管理後台會據此警示覆蓋率。
 DEMO_TIMETABLE = [
     # weekday, 開始, 結束, 課程代碼, 類型, 教室, 備註
     (0, '10:30', '11:50', 'AIAA 2205-L01', 'Lecture', 'Rm 102, W4', ''),
@@ -185,13 +189,18 @@ def affected_courses_for(student_id, start_date, end_date,
 
 
 def seed_timetable():
-    """寫入示範課表（冪等：已存在則跳過）。正式環境請由 SIS / LMS 同步。"""
+    """寫入示範課表（冪等：已存在則跳過）。正式環境請由 SIS / LMS 同步。
+
+    v1.7.0：這裡寫的每一列都標 source='demo'——它是整個示範環境的起點，
+    也是「課表還沒真實化」的證據。匯入真實課表後這些列會被取代，
+    管理後台的覆蓋率警示隨之解除。
+    """
     if q('SELECT 1 FROM timetable LIMIT 1'):
         return
     for sid in q('SELECT id FROM users WHERE role=?', ('student',)):
         for wd, st, et, code, kind, room, note in DEMO_TIMETABLE:
             execute('INSERT INTO timetable (student_id, weekday, start_time, end_time, '
-                    'course_code, kind, room, note) VALUES (?,?,?,?,?,?,?,?)',
+                    "course_code, kind, room, note, source) VALUES (?,?,?,?,?,?,?,?,'demo')",
                     (sid['id'], wd, st, et, code, kind, room, note))
 
 
@@ -961,6 +970,94 @@ def my_requests():
 
 
 # --------------------------------------------------------------------------
+# 課表（v1.7.0 · C1）：學生看自己的，審批人看轄下學生的
+# --------------------------------------------------------------------------
+def _timetable_by_student(sid):
+    """取某位學生的週課表，按星期與時間排序（供模板直接分組）。"""
+    return [dict(r, weekday_label=WEEKDAY_LABELS[r['weekday']]) for r in
+            q('SELECT * FROM timetable WHERE student_id=? '
+              'ORDER BY weekday, start_time', (sid,))]
+
+
+def _can_view_timetable(u, student):
+    """能否查看這位學生的課表。
+
+    比照 can_view_request() 的範圍邏輯：管理員全部、導師自己的學生
+    （含委託代理）、院系本院系。學生的課表跟假單一樣是個人資料，
+    不是任何一個登入者都該看得到。
+    """
+    if not student or student['role'] != 'student':
+        return False
+    if u['role'] == 'admin':
+        return True
+    if u['role'] == 'advisor':
+        return student['advisor_id'] in approvable_advisor_ids(u)
+    if u['role'] == 'faculty':
+        return student['department'] in approvable_departments(u)
+    return False
+
+
+def _visible_students(u):
+    """u 有權查看課表的學生清單（管理員全部，其餘按範圍）。"""
+    if u['role'] == 'admin':
+        return q("SELECT id, username, name, class_name, department FROM users "
+                 "WHERE role='student' AND active=1 ORDER BY username")
+    if u['role'] == 'advisor':
+        ids = sorted(approvable_advisor_ids(u))
+        if not ids:
+            return []
+        ph = ','.join('?' * len(ids))
+        return q('SELECT id, username, name, class_name, department FROM users '
+                 f"WHERE role='student' AND active=1 AND advisor_id IN ({ph}) "
+                 'ORDER BY username', ids)
+    if u['role'] == 'faculty':
+        depts = sorted(approvable_departments(u))
+        if not depts:
+            return []
+        ph = ','.join('?' * len(depts))
+        return q('SELECT id, username, name, class_name, department FROM users '
+                 f"WHERE role='student' AND active=1 AND department IN ({ph}) "
+                 'ORDER BY username', depts)
+    return []
+
+
+@app.route('/timetable')
+@app.route('/timetable/<int:uid>')
+@login_required
+def timetable(uid=None):
+    """週課表檢視。學生看自己的；導師／院系／管理員可指定學生。
+
+    審批人看得到學生課表，「受影響課程」才有意義——否則核准時只看得到
+    一串課程代碼，無法判斷這張假單到底會不會影響到關鍵的課。
+    """
+    u = current_user()
+    if u['role'] == 'student':
+        student = q('SELECT * FROM users WHERE id=?', (u['id'],), one=True)
+    else:
+        students = _visible_students(u)
+        if uid:
+            student = q('SELECT * FROM users WHERE id=?', (uid,), one=True)
+            if not _can_view_timetable(u, student):
+                flash('你沒有權限查看該學生的課表。', 'error')
+                return redirect(url_for('timetable'))
+        else:
+            # 沒指定學生 → 給名單讓他挑（課表不是單一頁面能列完的東西）
+            return render_template('timetable.html', students=students,
+                                   sel=None, rows=[], by_day={},
+                                   is_demo=False)
+    days = [(i, WEEKDAY_LABELS[i]) for i in range(5)]
+    rows = _timetable_by_student(student['id'])
+    by_day = {}
+    for r in rows:
+        by_day.setdefault(r['weekday'], []).append(r)
+    # 全是示範資料時明白講：這不是這位學生的真實課表
+    is_demo = bool(rows) and all(r['source'] == 'demo' for r in rows)
+    return render_template('timetable.html', students=students if u['role'] != 'student' else [],
+                           sel=student, rows=rows, by_day=by_day, is_demo=is_demo,
+                           days=days)
+
+
+# --------------------------------------------------------------------------
 # 新建假單
 # --------------------------------------------------------------------------
 @app.route('/new', methods=['GET', 'POST'])
@@ -1535,7 +1632,7 @@ def export_csv():
 
     def generate():
         # v1.2.0：改串流。舊版 q() 一次 fetchall 把整個範圍的假單讀進
-        # 記憶體——導師带幾十屆學生時，匯出能吃到數百 MB。現在用同一条
+        # 記憶體——導師帶幾十屆學生時，匯出能吃到數百 MB。現在用同一條
         # 連線的 cursor 逐批 fetchmany(200) 邊讀邊寫，記憶體用量與
         # 資料量脫鉤。stream_with_context 讓 app context 在串流期間
         # 保持存活，get_db() 才拿得到連線。
@@ -2227,6 +2324,160 @@ def admin_delete_makeup(mid):
     return redirect(url_for('admin_terms'))
 
 
+# --------------------------------------------------------------------------
+# 課表管理（v1.7.0 · C1）
+# --------------------------------------------------------------------------
+@app.route('/admin/timetable')
+@login_required
+@role_required('admin')
+def admin_timetable():
+    """逐生課表維護：選學生 → 看週課表 → 單筆增刪，或整份 CSV 匯入。
+
+    課表是「受影響課程」的唯一依據。它一直是全體共用的一份示範資料，
+    所以這裡把「多少人的課表還是假的」放在最上面——不解決這個，
+    整套課表感知功能都只是裝飾。
+    """
+    uid = request.args.get('uid', type=int)
+    students = q("SELECT id, username, name, class_name, department FROM users "
+                 "WHERE role='student' AND active=1 ORDER BY username")
+    sel, rows, by_day = None, [], {}
+    if uid:
+        sel = q('SELECT id, username, name, class_name, department FROM users '
+                "WHERE id=? AND role='student'", (uid,), one=True)
+        if sel:
+            rows = _timetable_by_student(sel['id'])
+            for r in rows:
+                by_day.setdefault(r['weekday'], []).append(r)
+    return render_template('admin_timetable.html', students=students, sel=sel,
+                           rows=rows, by_day=by_day,
+                           coverage=timetable_coverage(),
+                           days=[(i, WEEKDAY_LABELS[i]) for i in range(5)],
+                           max_rows=MAX_IMPORT_ROWS)
+
+
+@app.route('/admin/timetable/add', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_add_timetable_row():
+    """單筆新增一節課（少量修正用；整份課表請走匯入）。"""
+    try:
+        uid = int(request.form.get('uid', ''))
+        wd = int(request.form.get('weekday', ''))
+    except (TypeError, ValueError):
+        flash('請選擇學生與星期。', 'error')
+        return redirect(url_for('admin_timetable'))
+    student = q('SELECT id, name FROM users WHERE id=? AND role=?',
+                (uid, 'student'), one=True)
+    if not student:
+        flash('找不到該學生。', 'error')
+        return redirect(url_for('admin_timetable'))
+    if not 0 <= wd <= 4:
+        flash('星期只接受週一到週五。', 'error')
+        return redirect(url_for('admin_timetable', uid=uid))
+    start_t = request.form.get('start_time', '').strip()
+    end_t = request.form.get('end_time', '').strip()
+    if not (is_hhmm(start_t) and is_hhmm(end_t)):
+        flash('時間格式需為 HH:MM（24 小時制）。', 'error')
+        return redirect(url_for('admin_timetable', uid=uid))
+    # 統一補零後再比大小：'9:00' < '12:00' 是 False，直接比會把上午課判成下午
+    start_t, end_t = pad_time(start_t), pad_time(end_t)
+    if end_t <= start_t:
+        flash('結束時間需晚於開始時間。', 'error')
+        return redirect(url_for('admin_timetable', uid=uid))
+    code = request.form.get('course_code', '').strip()
+    if not code:
+        flash('課程代碼必填。', 'error')
+        return redirect(url_for('admin_timetable', uid=uid))
+    row = {'weekday': wd, 'start_time': start_t, 'end_time': end_t,
+           'course_code': code[:40], 'kind': request.form.get('kind', '').strip()[:20],
+           'room': request.form.get('room', '').strip()[:60],
+           'note': request.form.get('note', '').strip()[:80]}
+    with atomic():
+        # 手動新增只動這一節，不動學生其餘課表（先去重是為了舊庫沒有唯一索引時
+        # 仍不會長出重複的課）
+        execute('DELETE FROM timetable WHERE student_id=? AND weekday=? '
+                'AND start_time=? AND end_time=? AND course_code=?',
+                (uid, wd, start_t, end_t, row['course_code']))
+        execute('INSERT INTO timetable (student_id, weekday, start_time, end_time, '
+                "course_code, kind, room, note, source) VALUES (?,?,?,?,?,?,?,?,'manual')",
+                (uid, wd, start_t, end_t, row['course_code'], row['kind'],
+                 row['room'], row['note']))
+        log_action(None, current_user()['id'], 'add_timetable',
+                   f"{student['name']}（#{uid}）{WEEKDAY_LABELS[wd]} "
+                   f"{start_t}-{end_t} {row['course_code']}")
+    flash(f"已加入 {WEEKDAY_LABELS[wd]} {start_t}-{end_t} {row['course_code']}。",
+          'success')
+    return redirect(url_for('admin_timetable', uid=uid))
+
+
+@app.route('/admin/timetable/<int:tid>/delete', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_delete_timetable_row(tid):
+    r = q('SELECT t.*, u.name student_name FROM timetable t '
+          'JOIN users u ON u.id=t.student_id WHERE t.id=?', (tid,), one=True)
+    if not r:
+        flash('找不到該節課。', 'error')
+        return redirect(url_for('admin_timetable'))
+    with atomic():
+        execute('DELETE FROM timetable WHERE id=?', (tid,))
+        log_action(None, current_user()['id'], 'del_timetable',
+                   f"{r['student_name']}（#{r['student_id']}）"
+                   f"{WEEKDAY_LABELS[r['weekday']]} {r['start_time']}-{r['end_time']} "
+                   f"{r['course_code']}")
+    flash(f"已移除 {r['course_code']}。", 'success')
+    return redirect(url_for('admin_timetable', uid=r['student_id']))
+
+
+@app.route('/admin/timetable/import', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_import_timetable():
+    """CSV 匯入課表：貼上文字或上傳檔案。
+
+    mode=replace（預設）對「檔案裡出現的每一位學生」先清空再寫入——
+    教務處匯出的是整份課表，舊資料留著只會造成同一時段兩門課。
+    mode=merge 只新增／更新，適合增量補課。
+    """
+    mode = 'replace' if request.form.get('mode', 'replace') == 'replace' else 'merge'
+    text = request.form.get('csv_text', '')
+    f = request.files.get('csv_file')
+    if f and f.filename:
+        try:
+            text = f.read().decode('utf-8-sig', errors='replace')
+        except OSError:
+            flash('讀取上傳檔案失敗。', 'error')
+            return redirect(url_for('admin_timetable'))
+    parsed = parse_timetable_csv(text)
+    if not parsed['rows']:
+        flash('沒有解析到任何課，請檢查格式（學號,星期,開始,結束,課程代碼）。',
+              'error')
+        return redirect(url_for('admin_timetable'))
+    try:
+        with atomic():
+            stats = apply_timetable(parsed, mode=mode)
+            log_action(None, current_user()['id'], 'import_timetable',
+                       f"{mode} 模式：{stats['students']} 位學生、"
+                       f"{stats['rows']} 節課"
+                       + (f"、清除舊課 {stats['deleted']} 節" if mode == 'replace' else '')
+                       + (f"、學號查無此人 {len(stats['unknown'])} 個"
+                          if stats['unknown'] else ''))
+    except Exception:                  # 寫入失敗不該把整頁炸掉
+        flash('匯入時發生錯誤，資料庫未變更。', 'error')
+        return redirect(url_for('admin_timetable'))
+    msg = (f"已匯入 {stats['rows']} 節課，共 {stats['students']} 位學生"
+           + (f"（清除舊課 {stats['deleted']} 節）" if mode == 'replace' else '（增量合併）')
+           + '。')
+    if stats['unknown']:
+        shown = '、'.join(stats['unknown'][:5])
+        msg += f"有 {len(stats['unknown'])} 個學號查無帳號已略過：{shown}"
+    if parsed['errors']:
+        bad = '、'.join(f"第 {e['line']} 行" for e in parsed['errors'][:5])
+        msg += f"（{len(parsed['errors'])} 列格式有誤已略過：{bad}）"
+    flash(msg, 'success' if stats['rows'] else 'error')
+    return redirect(url_for('admin_timetable'))
+
+
 # 稽核日誌動作的人間可讀標籤（模板與篩選器共用）
 AUDIT_ACTION_LABEL = {
     'submit': '提交假單', 'approve': '核准', 'reject': '駁回', 'withdraw': '撤回',
@@ -2239,6 +2490,9 @@ AUDIT_ACTION_LABEL = {
     'add_holiday': '新增校曆假日', 'del_holiday': '刪除校曆假日', 'escalate': '催辦升級',
     # v1.5.0
     'import_calendar': '匯入校曆檔', 'del_makeup': '刪除補課日',
+    # v1.7.0
+    'add_timetable': '新增課表', 'del_timetable': '刪除課表',
+    'import_timetable': '匯入課表',
 }
 
 
@@ -2491,6 +2745,43 @@ def import_calendar_command(path):
         stats = apply_calendar(parsed)
     print(f"學期 {stats['terms']}、假日 {stats['holidays']} 天、"
           f"補課 {stats['makeups']} 天")
+    for e in parsed['errors']:
+        print(f"  第 {e['line']} 行略過：{e['msg']}（{e['raw']}）")
+
+
+@app.cli.command('import-timetable')
+@click.argument('path')
+@click.option('--merge', is_flag=True,
+              help='增量合併（預設：對檔案中的學生先清空再寫入）')
+def import_timetable_command(path, merge):
+    """匯入課表 CSV：`flask import-timetable data/timetable-sample.csv`
+
+    教務處每學期匯出一次課表，掛進排程就不用人手維護。重跑同一份檔
+    不會長出重複的課（同一學生同時段同一門課會被更新）。
+    格式：學號,星期,開始時間,結束時間,課程代碼[,類型,教室,備註]
+    """
+    try:
+        with open(path, encoding='utf-8-sig') as f:
+            text = f.read()
+    except OSError as exc:
+        print(f'讀取失敗：{exc}')
+        return
+    parsed = parse_timetable_csv(text)
+    if not parsed['rows']:
+        print('沒有解析到任何課，請檢查檔案格式。')
+        for e in parsed['errors'][:10]:
+            print(f"  第 {e['line']} 行：{e['msg']}（{e['raw']}）")
+        return
+    with app.app_context(), atomic():
+        stats = apply_timetable(parsed, mode='merge' if merge else 'replace')
+        log_action(None, None, 'import_timetable',
+                   f"CLI {path}（{'merge' if merge else 'replace'}）："
+                   f"{stats['students']} 位學生、{stats['rows']} 節課")
+    print(f"匯入完成：{stats['students']} 位學生、{stats['rows']} 節課"
+          + (f"（清除舊課 {stats['deleted']} 節）" if not merge else '（增量合併）'))
+    if stats['unknown']:
+        print(f"學號查無帳號已略過 {len(stats['unknown'])} 個："
+              + '、'.join(stats['unknown'][:10]))
     for e in parsed['errors']:
         print(f"  第 {e['line']} 行略過：{e['msg']}（{e['raw']}）")
 

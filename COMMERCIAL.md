@@ -65,14 +65,14 @@ One line: turn absence handling from an administrative chore into **audit-grade 
 
 ## 4. 商業化就緒度 ｜Readiness gate
 
-原型已達 `v1.5.0`，功能面足以演示與試點；但**可對外銷售**前須關閉下列
+原型已達 `v1.7.0`，功能面足以演示與試點；但**可對外銷售**前須關閉下列
 `GAP-ANALYSIS.md` 中的缺口（缺一項就不應籤生產合同）：
 
 | 缺口 | 說明 | 狀態 |
 | --- | --- | --- |
 | **A2 SSO** | 校內單點登錄（Entra ID / OIDC）；企業採購的硬門檻 | P0 · 未做 |
 | **A1 PostgreSQL** | SQLite 不適合多用戶生產部署 | P0 · 未做 |
-| **C1 課表真實化** | 課表須由 SIS／LMS 同步，而非手工維護 | P0 · 未做 |
+| **C1 課表真實化** | 課表須由 SIS／LMS 同步，而非手工維護。v1.7.0 已備妥逐生課表與 CSV／CLI 匯入通道，尚缺**校方的真實課表資料源對接** | P0 · 半完成（通道已就緒，資料源待校方） |
 | **D 組個資治理** | 數據分級、保存期、刪除權、稽核導出（對 FERPA／GDPR／個保法） | P1 · 未做 |
 | **SLA 與運維** | 若賣 Managed Service，需監控、備份、事件響應流程 | 未做 |
 
