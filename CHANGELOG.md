@@ -9,6 +9,35 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-11-03
+
+個資治理第二刀：把 `GAP-ANALYSIS.md` 的 **D1（附件永遠留著，沒有保留期與銷毀）**
+從「未做」推進到「已就緒」——終態假單的證明附件（病假證明等健康個資）超過留存期後，
+會先備份再銷毀、清空 `attachment` 欄並留 `purge_attachment` 稽核軌跡。這是 PIPL 留存最小化
+的具體落地：假單結案後證明檔不該無限期躺在活動上傳區。
+
+> ⚠️ 界限說明：本版補的是「留存期＋自動銷毀」機制，並保留可恢復副本（先備份再銷毀）。
+> D 組剩 **D2（附件掃毒）** 待補；路線圖上的 P0 **A1（資料庫升級 SQLite→PostgreSQL／MySQL）**
+> 仍因需 Postgres／Redis 等外部基礎設施而暫緩，本地原型環境無法完整演練，故維持 SQLite。
+
+### Added ｜新增
+
+- **附件留存期與銷毀**（`app.py` 的 `purge_expired_attachments()` + `/admin/cron/purge-attachments`
+  + `flask purge-attachments` CLI）：掃描「有附件、狀態為終態（approved／rejected／withdrawn）、
+  且 `updated_at` 超過留存期」的假單；先將檔案從 `uploads/` 搬至備份區 `attachments_purged/`
+  （先備份再銷毀），清空 `attachment` 欄切斷連結，並寫一筆 `purge_attachment` 稽核。
+  留存天數由 `LEAVE_ATTACHMENT_RETENTION_DAYS`（預設 365）控制，備份區可由
+  `LEAVE_ATTACHMENT_BACKUP_DIR` 指定；cron 路由與 escalate 同源：設 `LEAVE_CRON_TOKEN` 時以
+  token 鑑權（外部定時器），否則需管理員 session；支援 `dry_run` 預覽。
+- **稽核動作標籤**：`AUDIT_ACTION_LABEL` 補 `purge_attachment`（銷毀逾期附件），
+  後台稽核頁動作篩選下拉自動收錄。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v20.py`（6 項）：版本號、終態逾期附件被銷毀（搬離＋清空欄＋留稽核）、
+  pending 附件不動、留存期邊界（未超期不銷毀）、`dry_run` 不寫庫不留稽核、稽核標籤正確。
+- 單元測試 191 → 196；冒煙測試維持 236。
+
 ## [1.9.0] — 2026-11-03
 
 個資治理（PIPL／個人資料保護法）第一刀：把 `GAP-ANALYSIS.md` 的 **D3（匯出與敏感檢視沒有被稽核）**

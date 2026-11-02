@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v1.9.0）
+# 線上請假系統（原型 v1.10.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -123,6 +123,7 @@ makeup  2026-10-10  fri         補星期五課程（國慶假期調課）
 | CSV 匯出 | 自由文字若以 `= + - @` 開頭會加 `'` 前綴，防止 Excel／Sheets 公式注入 |
 | 帳號枚舉 | 帳號不存在時也跑一次固定 dummy hash 比對，拉平與「密碼錯誤」的回應時間差 |
 | 個資讀取稽核 | 三條跨範圍 PII 讀取路徑——統計頁（`/stats`）、CSV 匯出（`/export`）、帳號清單（`/admin/users`）——每次存取皆寫入 `view_pii`／`export` 稽核軌跡，誰看過／匯出過全範圍個資皆可追溯（v1.9.0，對應 GAP-ANALYSIS D3） |
+| 附件留存期與銷毀 | 終態假單（approved／rejected／withdrawn）的證明附件超過 `LEAVE_ATTACHMENT_RETENTION_DAYS`（內建 365）後，由 `purge_expired_attachments()` 先備份至 `attachments_purged/` 再銷毀、清空 `attachment` 欄並寫一筆 `purge_attachment` 稽核（可由 `/admin/cron/purge-attachments` 或 `flask purge-attachments` 觸發，支援 `dry_run`），落實 PIPL 留存最小化（v1.10.0，對應 GAP-ANALYSIS D1） |
 | 後台防呆 | 管理員不可停用自己、不可停用最後一位在職管理員；新增帳號強制角色白名單、帳號格式、Email 格式與導師歸屬校驗 |
 | 角色下限 | 「待我審批／全部假單」僅審批人與管理員可進入（v1.0.0 前學生可翻全系統待審假單）；儀表板彙總數字同樣依角色收斂範圍 |
 | 上傳邊界 | 附件超過 8 MB 回 413 並友善導回；超長原始檔名先截斷再落盤（避免超過檔案系統檔名上限而 500） |
@@ -143,8 +144,8 @@ makeup  2026-10-10  fri         補星期五課程（國慶假期調課）
 | 代理人 | 被委託期間與原審批人同一視角：看得到、審得動、附件打得開、通知同步收（過期自動失效） |
 | 院系 | 同導師（第 2 級複核，範圍為所屬院系）；亦受院系層級委託；**可查本院系學生課表** |
 | 管理員 | 帳號管理（分頁＋角色篩選）、停用/編輯、重設密碼、假別管理（是否需證明、是否需院系）、稽核日誌（動作篩選＋分頁）、委託審批管理（新增/刪除）、改派導師、學期管理（目前學期互斥）、每學期每假別額度設定、校曆假日（單日新增＋批次匯入）、**校曆檔匯入（學期／假日區間／補課日，內建預設一鍵帶入）**、**補課日管理（移除）**、**課表管理（覆蓋率警示／逐生週課表／單筆增刪／CSV 匯入）**、手動觸發催辦 |
-共通：站內通知（分頁＋未讀篩選＋單則標為已讀；可選 Email 通道，需設定 `LEAVE_SMTP_*`）、操作日誌（誰在何時做了什麼）、PII 讀取稽核（統計頁／CSV 匯出／帳號清單每次存取皆留 view_pii／export 軌跡）、淺色/深色主題切換。
-維運：`GET /healthz` 健康檢查（無需登入，回傳 JSON，資料庫異常時回 503）；`/admin/cron/escalate` 催辦升級（可設 `LEAVE_CRON_TOKEN` 給外部 cron，`LEAVE_ESCALATE_DAYS` 調門檻，同一單 24 小時只催一次）；`flask import-calendar [path]` 匯入／更新校曆、`flask import-timetable <csv> [--merge]` 匯入／更新課表（皆為冪等，政府公告假期或課表異動後重跑即可）。
+共通：站內通知（分頁＋未讀篩選＋單則標為已讀；可選 Email 通道，需設定 `LEAVE_SMTP_*`）、操作日誌（誰在何時做了什麼）、PII 讀取稽核（統計頁／CSV 匯出／帳號清單每次存取皆留 view_pii／export 軌跡）、附件留存期與銷毀（終態假單逾保存期即先備份再銷毀並留 purge_attachment 稽核）、淺色/深色主題切換。
+維運：`GET /healthz` 健康檢查（無需登入，回傳 JSON，資料庫異常時回 503）；`/admin/cron/escalate` 催辦升級（可設 `LEAVE_CRON_TOKEN` 給外部 cron，`LEAVE_ESCALATE_DAYS` 調門檻，同一單 24 小時只催一次）；`/admin/cron/purge-attachments` 附件留存期銷毀（同 escalate 之 token 鑑權，`LEAVE_ATTACHMENT_RETENTION_DAYS` 調留存期，支援 `dry_run`）、`flask purge-attachments [--days N] [--dry-run]` 手動觸發同一邏輯；`flask import-calendar [path]` 匯入／更新校曆、`flask import-timetable <csv> [--merge]` 匯入／更新課表（皆為冪等，政府公告假期或課表異動後重跑即可）。
 
 ## 目錄結構
 
@@ -158,7 +159,7 @@ leave-system/
   schema.sql          資料庫結構
   data/               內建校曆檔（hkustgz-2026-27.txt）、課表範例（timetable-sample.csv）
   smoke_test.py       全鏈路冒煙測試（236 項）
-  tests/              單元測試（pytest，191 項）
+  tests/              單元測試（pytest，196 項）
   start.bat           一鍵啟動（預設含 LEAVE_DEBUG=1 自動重載）
   templates/          Jinja2 頁面模板
   static/css/         樣式
@@ -169,7 +170,7 @@ leave-system/
 ## 測試
 
 ```bash
-python -m pytest tests/ -v   # 191 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化 / v1.8.0 單一登入 SSO / v1.9.0 PII 讀取稽核）
+python -m pytest tests/ -v   # 196 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化 / v1.8.0 單一登入 SSO / v1.9.0 PII 讀取稽核 / v1.10.0 附件留存期與銷毀）
 python smoke_test.py         # 236 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼、範圍隔離、假別管理、儀表板範圍、角色下限、撤回通知、稽核日誌、待辦分頁、重複審批守衛、撤回院系通知、單則已讀、電話格式、referrer 防護、SMTP 逾時、院系必填、交易內不寄信、狀態篩選、帳號分頁、CSV 串流、孤兒附件預檢、批次審批（越權／已結案略過、單次上限、模板勾選）、課表真實化（逐生課表、CSV 匯入與冪等、時間補零、覆蓋率、單筆增刪、課表檢視權限）、單一登入 SSO（預設關閉不顯示按鈕、/login/sso 導回登入、開啟後跳轉 IdP、/callback 身分對映並建立 session）
 ```
 
@@ -227,4 +228,4 @@ python smoke_test.py         # 236 項全鏈路冒煙：兩級審批、撤回、
    （CSRF token、參數化 SQL、`SECRET_KEY` 環境變數、附件權限已於 v0.2.0 補上。）
 3. **部署**：換 Gunicorn/Waitress + Nginx，SQLite 換 PostgreSQL（DDL 見 `../saas/schema.sql`）。
 4. **業務**：假期額度上限與學期/校曆已於 v1.4.0／v1.5.0 補上（假日不列受影響課程、補課日按被補星期幾計缺課）；課表已於 v1.7.0 改為**逐生可匯入**（CSV／CLI／管理後台），但真實課表仍須由學校匯出或對接 SIS/LMS，示範資料不可直接上線。仍待補：銷假流程、與教務考勤系統對接、企業微信通知（站內通知已就緒，Email 為可選通道，需自備 SMTP 伺服器）。
-5. **合規**：個資讀取路徑稽核已於 v1.9.0 落地（**D3**：統計頁／CSV 匯出／帳號清單每次存取皆留 `view_pii`／`export` 軌跡）；D 組剩 **D1**（保存期限與自動刪除）、**D2**（最小權限與欄位級遮蔽）待補。個資（請假事由、病假證明）保存期限與存取權限仍須符合學校與《個人信息保護法》要求。
+5. **合規**：個資讀取路徑稽核已於 v1.9.0 落地（**D3**：統計頁／CSV 匯出／帳號清單每次存取皆留 `view_pii`／`export` 軌跡）；附件留存期與銷毀已於 v1.10.0 落地（**D1**：終態假單逾保存期即先備份再銷毀並留 `purge_attachment` 稽核）。D 組剩 **D2**（附件掃毒、最小權限與欄位級遮蔽）待補。個資（請假事由、病假證明）保存期限與存取權限仍須符合學校與《個人信息保護法》要求。

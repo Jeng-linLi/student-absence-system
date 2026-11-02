@@ -1,4 +1,11 @@
-# 功能不足點與解法 — 線上請假系統（原型 v1.9.0）
+# 功能不足點與解法 — 線上請假系統（原型 v1.10.0）
+
+> **📦 v1.10.0 狀態更新（2026-11-03）**：**D1（附件留存期與銷毀）已落地**——
+> 終態假單（approved／rejected／withdrawn）的證明附件（病假證明等健康個資）超過留存期後，
+> `purge_expired_attachments()` 會先將檔案從 `uploads/` 搬至備份區 `attachments_purged/`、
+> 清空 `attachment` 欄、並寫一筆 `purge_attachment` 稽核軌跡。留存期由 `LEAVE_ATTACHMENT_RETENTION_DAYS`
+> （內建 365）控制，可由 cron 路由或 `flask purge-attachments` CLI 觸發，支援 `dry_run` 預覽。
+> D 組剩 **D2（附件掃毒）** 待補；路線圖 P0 **A1（資料庫升級）** 仍因需外部基礎設施暫緩。
 
 > **📦 v1.9.0 狀態更新（2026-11-03）**：**D3（匯出與敏感檢視沒有被稽核）已落地**——
 > 統計頁（`/stats`）、CSV 匯出（`/export`）、帳號清單（`/admin/users`）這三處跨範圍讀取
@@ -159,11 +166,15 @@
 
 ## D. 合規與資料治理（PIPL / 個資）
 
-### D1. 附件永遠留著，沒有保留期與銷毀  ★★
-- **不足**：`uploaded_file()` 讀取附件（`app.py:1542`），但 `uploads/` 下的病假證明
+### D1. 附件永遠留著，沒有保留期與銷毀  ★★ ✅ 已於 v1.10.0 實作
+- **不足**：`uploaded_file()` 讀取附件，但 `uploads/` 下的病假證明
   （健康個資）**從不被刪除**——假單撤回、學生畢業都不會清。違 PIPL 留存最小化。
-- **解法**：`leave_types` 或全局加 `retention_days`；定時任務到期後安全刪除檔案＋清空
-  `attachment` 欄（先備份再銷毀，留稽核紀錄）。
+- **解法（v1.10.0）**：`purge_expired_attachments()`（`app.py`）掃描「有附件、狀態為終態、
+  `updated_at` 超過留存期」的假單，先將檔案搬至備份區 `attachments_purged/`（先備份再銷毀）、
+  清空 `attachment` 欄、並寫一筆 `purge_attachment` 稽核。留存期由 `LEAVE_ATTACHMENT_RETENTION_DAYS`
+  （內建 365）控制；可由 `/admin/cron/purge-attachments`（與 escalate 同源 token 鑑權）或
+  `flask purge-attachments` CLI 觸發，支援 `dry_run` 預覽。備份區由 `LEAVE_ATTACHMENT_BACKUP_DIR`
+  指定，預設 `leave-system/attachments_purged/`（已納入 .gitignore，含個資不出版本控制）。
 
 ### D2. 附件只驗格式、不驗惡意內容  ★★
 - **不足**：`sniff_allowed_type()`（`app.py:800`）只查魔術位元組確認是 PDF/圖/Word，
@@ -218,7 +229,7 @@
 | ~~P0~~ | ~~A2 SSO~~ ✅ v1.8.0（OIDC 接線通道就緒，真實 IdP／角色對映待校方） | 大學採購第一問 |
 | P0 | A1 資料庫升級（**暫緩**：需 Postgres／Redis 外部基礎設施，本地原型無法完整演練） | 不升級撐不住量級 |
 | P1 | ~~B3 請假額度~~ ✅、B1/B2 自助密碼 | 營運成本直接下降 |
-| P1 | D1/D2 個資治理（**D3 ✅ v1.9.0**，剩 D1 留存銷毀、D2 附件掃毒） | 合規紅線 |
+| P1 | D1/D2 個資治理（**D3 ✅ v1.9.0，D1 ✅ v1.10.0**，剩 D2 附件掃毒） | 合規紅線 |
 | P1 | ~~B4 委託、B5 SLA 催辦~~ ✅ | 流程不卡關 |
 | P2 | E1 API、E2 i18n、~~B6 批次~~ ✅、E4 搜尋 | 整合與體驗 |
 | P3 | ~~C2/C3 學期與校曆~~ ✅、D4 通知偏好、E3 備份 | 精緻化 |

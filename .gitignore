@@ -10,6 +10,9 @@ env/
 leave-system/leave_system.db
 leave-system/uploads/*
 !leave-system/uploads/.gitkeep
+# D1 銷毀備份區（已脫離活動上傳區的逾期附件副本，含個資，勿入版本控制）
+leave-system/attachments_purged/*
+!leave-system/attachments_purged/.gitkeep
 *.log
 
 # 編輯器 / 系統

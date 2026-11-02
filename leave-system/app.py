@@ -12,6 +12,7 @@ import hmac
 import urllib.error
 import time
 import secrets
+import shutil
 import json
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
@@ -2566,6 +2567,8 @@ AUDIT_ACTION_LABEL = {
     'import_timetable': '匯入課表',
     # v1.9.0：D3 個資治理——PII 讀取類動作的稽核標籤
     'export': '匯出資料', 'view_pii': '檢視個資',
+    # v1.10.0：D1 附件留存期銷毀
+    'purge_attachment': '銷毀逾期附件',
 }
 
 
@@ -2672,6 +2675,123 @@ def cron_escalate():
     return jsonify({'status': 'ok', 'threshold_days': days, 'scanned': len(rows),
                     'reminded': reminded, 'escalated': escalated,
                     'skipped_cooldown': skipped})
+
+
+# --------------------------------------------------------------------------
+# D1 · 附件留存期與銷毀（v1.10.0）
+# --------------------------------------------------------------------------
+def purge_expired_attachments(days=None, dry_run=False):
+    """銷毀超過留存期的終態假單附件（D1 · v1.10.0）。
+
+    掃描 leave_requests 中「有附件、且狀態為終態（approved／rejected／
+    withdrawn）、且 updated_at 距今天數超過留存期」的紀錄：
+      1. 先將檔案搬離活動上傳區（uploads/）到備份區（attachments_purged/），
+         實作「先備份再銷毀」——活動儲存不再持有個資，但留可恢復副本；
+      2. 清空 attachment 欄，切斷連結；
+      3. 寫一筆 audit_log（action='purge_attachment'）當作銷毀憑據。
+
+    dry_run=True 時只回報會處理哪些，不動檔案、不寫庫、不留稽核。
+
+    參數：
+      days     留存天數；預設取 LEAVE_ATTACHMENT_RETENTION_DAYS（內建 365）。
+      dry_run  僅模擬，不實際執行。
+
+    回傳 dict：scanned / purged / missing_file / dry_run / retention_days / details。
+
+    設計說明：病假證明屬健康個資，PIPL 要求留存最小化——假單一旦進入終態，
+    證明檔就沒有繼續躺在活動上傳區的理由；超過留存期即銷毀，降低外洩面。
+    """
+    if days is None:
+        try:
+            days = int(os.environ.get('LEAVE_ATTACHMENT_RETENTION_DAYS', '365'))
+        except (TypeError, ValueError):
+            days = 365
+    days = max(days, 1)
+    now = datetime.now()
+    cutoff = (now - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+    backup_dir = os.environ.get('LEAVE_ATTACHMENT_BACKUP_DIR') \
+        or os.path.join(BASE_DIR, 'attachments_purged')
+    os.makedirs(backup_dir, exist_ok=True)
+
+    rows = q("SELECT r.id, r.student_id, r.status, r.attachment, r.updated_at "
+             "FROM leave_requests r "
+             "WHERE r.attachment != '' "
+             "AND r.status IN ('approved','rejected','withdrawn') "
+             "AND r.updated_at <= ? "
+             "ORDER BY r.updated_at ASC", (cutoff,))
+
+    purged = missing_file = 0
+    details = []
+    for r in rows:
+        fn = r['attachment']
+        src = os.path.join(UPLOAD_DIR, fn)
+        if not os.path.exists(src):
+            # 檔案已不在上傳區（可能曾手動清除）——仍切斷連結並留稽核。
+            if not dry_run:
+                with atomic():
+                    execute('UPDATE leave_requests SET attachment=? WHERE id=?',
+                            ('', r['id']))
+                    log_action(r['id'], None, 'purge_attachment',
+                               f'附件逾期（{r["status"]}，{fn}）檔案已不存在，'
+                               f'僅清空 attachment 欄')
+            missing_file += 1
+            details.append((r['id'], fn, 'missing'))
+            continue
+        if dry_run:
+            details.append((r['id'], fn, 'would_purge'))
+            continue
+        dest = os.path.join(backup_dir, fn)
+        try:
+            shutil.move(src, dest)
+        except OSError:
+            # 備份區寫入失敗：不放棄整批，個別標記後繼續，並在稽核中註明。
+            details.append((r['id'], fn, 'backup_failed'))
+            continue
+        try:
+            age = max((now - _parse_ts(r['updated_at'])).days, 0)
+        except (ValueError, TypeError):
+            age = days
+        with atomic():
+            execute('UPDATE leave_requests SET attachment=? WHERE id=?',
+                    ('', r['id']))
+            log_action(r['id'], None, 'purge_attachment',
+                       f'附件逾期銷毀（{r["status"]}，留存 {age} 天，{fn}）'
+                       f'→ 備份至 {os.path.basename(backup_dir)}/')
+        purged += 1
+        details.append((r['id'], fn, 'purged'))
+    return {'scanned': len(rows), 'purged': purged, 'missing_file': missing_file,
+            'dry_run': dry_run, 'retention_days': days, 'details': details}
+
+
+@app.route('/admin/cron/purge-attachments', methods=['GET', 'POST'])
+def cron_purge_attachments():
+    """附件留存期銷毀定時任務（D1 · v1.10.0）。
+
+    掃描超過留存期的終態假單附件，先備份再銷毀並留稽核。
+    鑑權：同 cron_escalate——設 LEAVE_CRON_TOKEN 時以 token 為準（外部 cron
+    ／容器定時器），否則要求管理員 session 手動觸發。支援 dry_run 預覽。
+    """
+    token = os.environ.get('LEAVE_CRON_TOKEN', '')
+    if token:
+        sent = request.args.get('token') or request.headers.get('X-Cron-Token', '')
+        if not sent or not hmac.compare_digest(str(sent), str(token)):
+            return jsonify({'status': 'error', 'message': 'invalid token'}), 403
+    else:
+        u = current_user()
+        if not u or u['role'] != 'admin':
+            return jsonify({'status': 'error', 'message': 'forbidden'}), 403
+
+    dry = (request.args.get('dry_run', '0') == '1'
+           or request.form.get('dry_run', '0') == '1')
+    try:
+        days = int(request.args.get(
+            'days', os.environ.get('LEAVE_ATTACHMENT_RETENTION_DAYS', '365')))
+    except (TypeError, ValueError):
+        days = 365
+    days = max(days, 1)
+
+    result = purge_expired_attachments(days=days, dry_run=dry)
+    return jsonify({'status': 'ok', **result})
 
 
 @app.route('/healthz')
@@ -2857,6 +2977,24 @@ def import_timetable_command(path, merge):
               + '、'.join(stats['unknown'][:10]))
     for e in parsed['errors']:
         print(f"  第 {e['line']} 行略過：{e['msg']}（{e['raw']}）")
+
+
+@app.cli.command('purge-attachments')
+@click.option('--days', default=None, type=int,
+              help='留存天數（預設取 LEAVE_ATTACHMENT_RETENTION_DAYS，內建 365）')
+@click.option('--dry-run', is_flag=True, help='只預覽會處理哪些，不動檔案不寫庫')
+def purge_attachments_command(days, dry_run):
+    """銷毀超過留存期的終態假單附件（D1）：flask purge-attachments [--days N] [--dry-run]
+
+    病假證明等附件屬健康個資，依 PIPL 留存最小化，終態假單超過留存期即銷毀。
+    先備份（attachments_purged/）再清空 attachment 欄並留稽核軌跡。
+    """
+    result = purge_expired_attachments(days=days, dry_run=dry_run)
+    print(f"掃描 {result['scanned']} 筆、已銷毀 {result['purged']} 筆、"
+          f"檔案遺失僅清欄 {result['missing_file']} 筆"
+          + ("（dry-run，未實際執行）" if result['dry_run'] else ""))
+    for rid, fn, status in result['details']:
+        print(f"  #{rid} {fn} → {status}")
 
 
 def seed_calendar():
