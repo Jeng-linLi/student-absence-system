@@ -74,12 +74,8 @@ def _stub_network(monkeypatch, claims):
 
 
 # --------------------------------------------------------------------------
-# 版本與組態門控
+# 組態門控
 # --------------------------------------------------------------------------
-def test_version_is_1_8_0():
-    assert APP_VERSION == '1.8.0'
-
-
 def test_sso_not_configured_by_default():
     assert sso_configured() is False
 

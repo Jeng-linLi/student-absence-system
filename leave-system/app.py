@@ -1641,6 +1641,9 @@ def notification_read(nid):
 @role_required('advisor', 'faculty', 'admin')
 def stats():
     u = current_user()
+    # v1.9.0：D3 個資治理——統計頁跨範圍讀取學生姓名／學號／院系等 PII，
+    # 每次檢視都留稽核軌跡，誰在何時看過全範圍統計可追溯到（GAP-ANALYSIS D3）。
+    log_action(None, u['id'], 'view_pii', 'stats 統計頁（跨範圍 PII）')
     conds, args = role_scope(u)
     # v1.4.0：按學期切。預設看目前學期，?term=<id> 可切換；
     # ?term=0 表示不按學期（全部歷史）。
@@ -1685,6 +1688,8 @@ def stats():
 @role_required('advisor', 'faculty', 'admin')
 def export_csv():
     u = current_user()
+    # v1.9.0：D3——匯出含事由等敏感欄位的全範圍 CSV，留稽核軌跡（GAP-ANALYSIS D3）。
+    log_action(None, u['id'], 'export', 'leave_requests CSV 匯出（含事由等 PII）')
     conds, args = role_scope(u)
     where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
     sql = ('SELECT r.id, s.username, s.name, s.class_name, s.department, t.name type_name, '
@@ -1782,6 +1787,9 @@ def _parse_advisor_id(raw):
 @login_required
 @role_required('admin')
 def admin_users():
+    me = current_user()
+    # v1.9.0：D3——帳號管理頁列出全體帳號的 email 等 PII，留稽核軌跡（GAP-ANALYSIS D3）。
+    log_action(None, me['id'], 'view_pii', 'admin/users 帳號清單（PII）')
     return _render_admin_users(request.args.get('role', ''),
                                page=request.args.get('page', 1, type=int))
 
@@ -2556,6 +2564,8 @@ AUDIT_ACTION_LABEL = {
     # v1.7.0
     'add_timetable': '新增課表', 'del_timetable': '刪除課表',
     'import_timetable': '匯入課表',
+    # v1.9.0：D3 個資治理——PII 讀取類動作的稽核標籤
+    'export': '匯出資料', 'view_pii': '檢視個資',
 }
 
 

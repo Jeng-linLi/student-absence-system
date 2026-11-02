@@ -9,6 +9,33 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-11-03
+
+個資治理（PIPL／個人資料保護法）第一刀：把 `GAP-ANALYSIS.md` 的 **D3（匯出與敏感檢視沒有被稽核）**
+從「未做」推進到「已就緒」——跨範圍讀取個資的動作現在都會留稽核軌跡。這是大學採購合規審查
+必然會翻的一頁：誰在什麼時候匯出了全系資料，必須追得到。
+
+> ⚠️ 界限說明：本版補的是「稽核留痕」這一層。D 組其餘項目（D1 附件留存期與銷毀、D2 附件掃毒）
+> 仍待補；其中 D1 的留存最小化直接影響 PIPL 合規，是下一個應優先關閉的缺口。
+> 另：路線圖上的下一個 P0 **A1（資料庫升級 SQLite→PostgreSQL／MySQL）** 因需要外部基礎設施
+> （Postgres、Redis），本地原型環境無法完整演練，故本版不貿然全量遷移；先從無外部依賴、對採購
+> 合規價值最高的 D3 著手。
+
+### Added ｜新增
+
+- **PII 讀取稽核**（`app.py` 的 `stats()` / `export_csv()` / `admin_users()` 三處）：
+  統計頁、CSV 匯出、帳號清單這類跨範圍讀取學生姓名／學號／院系／email 等個資的動作，
+  每次都寫入 `audit_logs`（動作分別為 `view_pii` 與 `export`），誰在何時看過／匯出了
+  全範圍個資可追溯到（沿用既有 `log_action` 基礎設施，無新依賴）。
+- **稽核動作標籤**：`AUDIT_ACTION_LABEL` 補 `export`（匯出資料）、`view_pii`（檢視個資），
+  後台稽核頁的動作篩選下拉自動收錄，標籤顯示為中文。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v19.py`（5 項）：版本號、`/stats` 與 `/admin/users` 觸發 `view_pii` 稽核、
+  `/export` 觸發 `export` 稽核、稽核頁篩選標籤正確。
+- 單元測試 187 → 191；冒煙測試維持 236。
+
 ## [1.8.0] — 2026-11-03
 
 單一登入（SSO / OIDC，A2）版：把 `GAP-ANALYSIS.md` 的 P0 **A2（沒有 SSO / 外部身分整合）**
