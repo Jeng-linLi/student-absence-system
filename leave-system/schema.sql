@@ -107,3 +107,52 @@ CREATE TABLE IF NOT EXISTS timetable (
     created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_tt_student ON timetable(student_id, weekday);
+
+-- v1.4.0 · 委託審批（B4）：審批人不在時把該級的審批權暫時交給代理人。
+-- 只在 [start_date, end_date] 內生效；delegator 的角色決定可代審的範圍
+-- （導師 → 自己名下學生；院系教師 → 自己院系的假單）。
+CREATE TABLE IF NOT EXISTS delegations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    delegator_id INTEGER NOT NULL REFERENCES users(id),   -- 委託人（原審批人）
+    delegate_id  INTEGER NOT NULL REFERENCES users(id),   -- 代理人
+    level        INTEGER NOT NULL CHECK (level IN (1, 2)),
+    start_date   TEXT    NOT NULL,                        -- YYYY-MM-DD（含）
+    end_date     TEXT    NOT NULL,                        -- YYYY-MM-DD（含）
+    note         TEXT    NOT NULL DEFAULT '',
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE (delegator_id, delegate_id, level, start_date, end_date)
+);
+CREATE INDEX IF NOT EXISTS idx_deleg_delegate ON delegations(delegate_id, level);
+CREATE INDEX IF NOT EXISTS idx_deleg_delegator ON delegations(delegator_id, level);
+
+-- v1.4.0 · 學期（C2）：dashboard / stats / 額度都按學期切。
+CREATE TABLE IF NOT EXISTS terms (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    label      TEXT    NOT NULL UNIQUE,           -- 例：2026-27 秋季
+    start_date TEXT    NOT NULL,
+    end_date   TEXT    NOT NULL,
+    is_current INTEGER NOT NULL DEFAULT 0,        -- 同時只應有一個 1
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+-- v1.4.0 · 請假額度（B3 / C2）：某學期、某假別的累計天數上限。
+-- scope 預留給未來「按院系／班級」設定，目前一律 'all'。
+CREATE TABLE IF NOT EXISTS leave_quotas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    term_id       INTEGER NOT NULL REFERENCES terms(id),
+    leave_type_id INTEGER NOT NULL REFERENCES leave_types(id),
+    max_days      REAL    NOT NULL,
+    scope         TEXT    NOT NULL DEFAULT 'all',
+    scope_value   TEXT    NOT NULL DEFAULT '',
+    UNIQUE (term_id, leave_type_id, scope, scope_value)
+);
+
+-- v1.4.0 · 校曆（C3）：非上課日（公眾假期、校曆假期）。
+-- affected_courses_for() 遇到這些日期不再列出受影響課程——
+-- 假日請假本來就不會缺課，列出來只會讓審批人誤判。
+CREATE TABLE IF NOT EXISTS holidays (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    day        TEXT    NOT NULL UNIQUE,           -- YYYY-MM-DD
+    label      TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);

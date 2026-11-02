@@ -4,8 +4,10 @@
 
 {% if current_user.role == 'student' %}
   <h1>你好，{{ current_user.name }}</h1>
-  <div class="grid g3" style="margin-bottom:18px">
+  <div class="grid g4" style="margin-bottom:18px">
     <div class="stat"><div class="n">{{ pending_mine }}</div><div class="l">審批中的假單</div></div>
+    <div class="stat"><div class="n">{{ term_days }}</div>
+      <div class="l">{{ term.label if term else '本學期' }}已核准</div></div>
     <div class="stat"><div class="n">{{ year_leave_days }}</div>
       <div class="l">本學年已核准（{{ year_start }} 起）</div></div>
     <div class="stat"><div class="n">{{ current_user.class_name or '—' }}</div><div class="l">班級</div></div>
@@ -14,6 +16,31 @@
     <a class="btn" href="{{ url_for('new_request') }}">＋ 提交假單</a>
     <a class="btn ghost" href="{{ url_for('my_requests') }}">查看我的假單</a>
   </div>
+
+  {% if quotas %}
+  <div class="card">
+    <h3>{{ term.label }} · 假別額度</h3>
+    <table>
+      <thead><tr><th>假別</th><th class="tnum">已用／上限</th><th class="tnum">剩餘</th></tr></thead>
+      <tbody>
+      {% for q in quotas %}
+        <tr>
+          <td>{{ q.type_name }}</td>
+          <td class="tnum">{{ '%g'|format(q.used) }} / {{ '%g'|format(q.max_days) }}</td>
+          <td class="tnum">
+            {% set left = q.max_days - q.used %}
+            {% if left > 0 %}{{ '%g'|format(left) }}
+            {% else %}<span class="tag red">已用盡</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin:10px 0 0;font-size:12px">
+      待審與已核准的假單都計入額度。
+    </p>
+  </div>
+  {% endif %}
 {% else %}
   <h1>你好，{{ current_user.name }}</h1>
   <div class="grid g4" style="margin-bottom:18px">

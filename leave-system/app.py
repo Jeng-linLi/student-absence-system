@@ -110,9 +110,24 @@ def _day_halves(is_start, is_end, start_period, end_period):
     return am, pm
 
 
+def is_school_off(d):
+    """是否非上課日（v1.4.0 · C3）：週六日，或校曆上的假日。
+
+    假日請假本來就不會缺課——affected_courses_for() 若照樣列出
+    「受影響課程」，審批人會誤以為學生缺了兩節課。
+    """
+    if d.weekday() >= 5:
+        return True
+    return bool(q('SELECT 1 FROM holidays WHERE day=?', (d.isoformat(),), one=True))
+
+
 def affected_courses_for(student_id, start_date, end_date,
                         start_period='AM', end_period='PM'):
-    """依學生課表，算出請假區間內受影響的課程（按半天粒度）。"""
+    """依學生課表，算出請假區間內受影響的課程（按半天粒度）。
+
+    v1.4.0：跳過非上課日（週末與校曆假日）。假日集合一次取出，
+    不在日期迴圈裡逐日查庫。
+    """
     try:
         s = date.fromisoformat(start_date)
         e = date.fromisoformat(end_date)
@@ -126,9 +141,14 @@ def affected_courses_for(student_id, start_date, end_date,
     by_wd = {}
     for r in rows:
         by_wd.setdefault(r['weekday'], []).append(dict(r))
+    off_days = {r['day'] for r in q('SELECT day FROM holidays')}
     out = []
     d = s
     while d <= e:
+        # 週末與校曆假日：不算缺課，直接跳過
+        if d.weekday() >= 5 or d.isoformat() in off_days:
+            d += timedelta(days=1)
+            continue
         wd = d.weekday()
         am, pm = _day_halves(d == s, d == e, start_period, end_period)
         day_courses = []
@@ -391,6 +411,209 @@ def role_scope(u):
     return [], []
 
 
+# --------------------------------------------------------------------------
+# 委託審批（B4 · v1.4.0）
+# --------------------------------------------------------------------------
+def active_delegations(delegate_id, level=None, on_date=None):
+    """在指定日期生效、委託給 delegate_id 的委託記錄。
+
+    只算「今天落在 [start_date, end_date] 內」的——過期的委託自動失效，
+    不需要額外清理任務（歷史記錄留著剛好當稽核軌跡）。
+    """
+    day = (on_date or date.today()).isoformat()
+    sql = ('SELECT d.*, u.name delegator_name, u.department delegator_dept, '
+           'u.role delegator_role '
+           'FROM delegations d JOIN users u ON u.id=d.delegator_id '
+           "WHERE d.delegate_id=? AND u.active=1 "
+           "AND date(?) BETWEEN date(d.start_date) AND date(d.end_date)")
+    args = [delegate_id, day]
+    if level is not None:
+        sql += ' AND d.level=?'
+        args.append(level)
+    return q(sql + ' ORDER BY d.level, d.start_date', args)
+
+
+def approvable_advisor_ids(u):
+    """導師這一級能審批的「導師 id」集合：自己的 id ＋ 委託給我的導師。"""
+    if u['role'] != 'advisor':
+        return set()
+    ids = {u['id']}
+    for d in active_delegations(u['id'], 1):
+        if d['delegator_role'] == 'advisor':
+            ids.add(d['delegator_id'])
+    return ids
+
+
+def approvable_departments(u):
+    """院系這一級能審批的院系集合：自己的院系 ＋ 委託給我的院系教師所屬院系。"""
+    if u['role'] != 'faculty':
+        return set()
+    depts = {u['department']} if u['department'] else set()
+    for d in active_delegations(u['id'], 2):
+        if d['delegator_role'] == 'faculty' and d['delegator_dept']:
+            depts.add(d['delegator_dept'])
+    return depts
+
+
+def todo_scope(u):
+    """待辦查詢的範圍條件。
+
+    回傳 (level, cond_sql, args)；level=None 表示管理員看全部。
+    v1.4.0：把「代理人視角」併進來——被委託的導師／院系教師，
+    待辦清單與數字都要跟原審批人一致，否則代理了卻看不到單。
+    """
+    if u['role'] == 'advisor':
+        ids = sorted(approvable_advisor_ids(u))
+        ph = ','.join('?' * len(ids))
+        return 1, f's.advisor_id IN ({ph})', ids
+    if u['role'] == 'faculty':
+        depts = sorted(approvable_departments(u))
+        if not depts:
+            return 2, '0', []
+        ph = ','.join('?' * len(depts))
+        return 2, f's.department IN ({ph})', depts
+    return None, '', []
+
+
+def can_approve_request(u, req):
+    """u 現在能否審批 req（含代理人身分）。req 需有 status/current_level/
+    department/advisor_id（學生的）。"""
+    if not req or req['status'] != 'pending':
+        return False
+    if u['role'] == 'admin':
+        return True
+    level = req['current_level']
+    if level == 1:
+        return u['role'] == 'advisor' and req['advisor_id'] in approvable_advisor_ids(u)
+    if level == 2:
+        return u['role'] == 'faculty' and req['department'] in approvable_departments(u)
+    return False
+
+
+def can_view_request(u, req):
+    """檢視權限：比審批權限寬一點——曾審批過的人即使學生換了導師，
+    也應該看得到自己經手過的單（否則稽核時查不到自己做了什麼）。"""
+    if u['role'] == 'admin':
+        return True
+    if u['role'] == 'student':
+        return req['student_id'] == u['id']
+    # 導師／院系依「範圍」看得到自己轄下所有假單（含非當前審批層級的，
+    # 供督導與稽核），不限於當下待審的那一級——否則院系看不到還停在
+    # 導師層級的本院系假單，與 v1.3.0 行為一致。
+    if u['role'] == 'advisor':
+        if req['advisor_id'] in approvable_advisor_ids(u):
+            return True
+    if u['role'] == 'faculty':
+        if req['department'] in approvable_departments(u):
+            return True
+    # 曾審批過的人也看得到自己經手過的單（即使學生後來換了導師）
+    return bool(q('SELECT 1 FROM approvals WHERE request_id=? AND approver_id=?',
+                  (req['id'], u['id']), one=True))
+
+
+def notify_approvers(level, department, advisor_id, rid, message, on_date=None):
+    """通知某一級的所有實際審批人（含代理人）。
+
+    v1.4.0：委託生效期間，代理人也是「實際審批人」——只通知原審批人
+    的話，代理人待辦裡有單卻收不到任何提醒，等於白委託。
+    """
+    day = (on_date or date.today()).isoformat()
+    targets = set()
+    if level == 1:
+        if advisor_id:
+            targets.add(advisor_id)
+            for d in q('SELECT d.delegate_id FROM delegations d '
+                       'JOIN users u ON u.id=d.delegator_id '
+                       'WHERE d.level=1 AND d.delegator_id=? AND u.active=1 '
+                       'AND date(?) BETWEEN date(d.start_date) AND date(d.end_date)',
+                       (advisor_id, day)):
+                targets.add(d['delegate_id'])
+    else:
+        for f in q("SELECT id FROM users WHERE role='faculty' AND active=1 AND department=?",
+                   (department,)):
+            targets.add(f['id'])
+        for d in q("SELECT d.delegate_id FROM delegations d "
+                   'JOIN users u ON u.id=d.delegator_id '
+                   "WHERE d.level=2 AND u.role='faculty' AND u.active=1 AND u.department=? "
+                   'AND date(?) BETWEEN date(d.start_date) AND date(d.end_date)',
+                   (department, day)):
+            targets.add(d['delegate_id'])
+    for tid in targets:
+        notify(tid, rid, message)
+
+
+# --------------------------------------------------------------------------
+# 學期與額度（C2 · v1.4.0）
+# --------------------------------------------------------------------------
+def current_term():
+    """目前學期：is_current 旗標 → 日期落在區間內 → 最近結束的學期。"""
+    t = q('SELECT * FROM terms WHERE is_current=1 ORDER BY start_date DESC LIMIT 1', one=True)
+    if t:
+        return t
+    today = date.today().isoformat()
+    t = q('SELECT * FROM terms WHERE date(?) BETWEEN date(start_date) AND date(end_date) '
+          'ORDER BY start_date DESC LIMIT 1', (today,), one=True)
+    if t:
+        return t
+    return q('SELECT * FROM terms ORDER BY end_date DESC LIMIT 1', one=True)
+
+
+def term_for_date(day):
+    """某一天屬於哪個學期（以請假起始日歸屬，避免跨學期假單重複計入）。"""
+    iso = day.isoformat() if isinstance(day, date) else str(day)
+    return q('SELECT * FROM terms WHERE date(?) BETWEEN date(start_date) AND date(end_date) '
+             'ORDER BY start_date DESC LIMIT 1', (iso,), one=True)
+
+
+def quota_limit(leave_type_id, term_id):
+    """該學期、該假別的額度上限；未設定回傳 None（視為不限）。"""
+    row = q("SELECT max_days FROM leave_quotas WHERE term_id=? AND leave_type_id=? "
+            "AND scope='all' ORDER BY id LIMIT 1", (term_id, leave_type_id), one=True)
+    return row['max_days'] if row else None
+
+
+def quota_used(student_id, leave_type_id, term):
+    """該學期已佔用的天數：待審＋已核准都算——否則學生可以連續提交
+    十張待審假單繞過額度。"""
+    return q("SELECT COALESCE(SUM(days),0) s FROM leave_requests "
+             "WHERE student_id=? AND leave_type_id=? "
+             "AND status IN ('pending','approved') "
+             "AND date(start_date) BETWEEN date(?) AND date(?)",
+             (student_id, leave_type_id, term['start_date'], term['end_date']),
+             one=True)['s']
+
+
+def quota_exceeded(student_id, ltype, start_date, days):
+    """提交前的額度校驗；回傳錯誤訊息或 None。"""
+    term = term_for_date(start_date)
+    if not term:
+        return None
+    limit = quota_limit(ltype['id'], term['id'])
+    if limit is None:
+        return None
+    used = quota_used(student_id, ltype['id'], term)
+    if used + days > limit + 1e-9:
+        return (f"本學期（{term['label']}）「{ltype['name']}」額度 {limit:g} 天，"
+                f"已用 {used:g} 天，本次 {days:g} 天將超出上限。")
+    return None
+
+
+def student_quota_board(student_id):
+    """學生儀表板用：本學期每個「有設額度」的假別用量。"""
+    term = current_term()
+    if not term:
+        return term, []
+    rows = q('SELECT qt.leave_type_id, qt.max_days, t.name type_name, '
+             "COALESCE((SELECT SUM(r.days) FROM leave_requests r "
+             "          WHERE r.student_id=? AND r.leave_type_id=qt.leave_type_id "
+             "          AND r.status IN ('pending','approved') "
+             "          AND date(r.start_date) BETWEEN date(?) AND date(?)), 0) used "
+             'FROM leave_quotas qt JOIN leave_types t ON t.id=qt.leave_type_id '
+             "WHERE qt.term_id=? AND qt.scope='all' ORDER BY t.id",
+             (student_id, term['start_date'], term['end_date'], term['id']))
+    return term, rows
+
+
 def _now_str():
     """統一時間字串格式（含微秒：auth_at 與 pwd_changed_at 只差不到一秒時
     秒級格式會判為相等，導致「重設密碼後舊 session 仍有效」的競態）。"""
@@ -586,16 +809,15 @@ def change_password():
 
 
 def count_todo(u):
-    """待當前用戶審批的假單數量。"""
-    if u['role'] == 'advisor':
-        return q("SELECT COUNT(*) c FROM leave_requests r JOIN users s ON s.id=r.student_id "
-                 "WHERE r.status='pending' AND r.current_level=1 AND s.advisor_id=?",
-                 (u['id'],), one=True)['c']
-    if u['role'] == 'faculty':
-        return q("SELECT COUNT(*) c FROM leave_requests r JOIN users s ON s.id=r.student_id "
-                 "WHERE r.status='pending' AND r.current_level=2 AND s.department=?",
-                 (u['department'],), one=True)['c']
-    return q("SELECT COUNT(*) c FROM leave_requests WHERE status='pending'", one=True)['c']
+    """待當前用戶審批的假單數量（v1.4.0：含代理人身分）。"""
+    level, cond, args = todo_scope(u)
+    if level is None:
+        return q("SELECT COUNT(*) c FROM leave_requests WHERE status='pending'", one=True)['c']
+    if cond == '0':                       # 院系帳號沒填院系：沒有可審的範圍
+        return 0
+    return q('SELECT COUNT(*) c FROM leave_requests r JOIN users s ON s.id=r.student_id '
+             f"WHERE r.status='pending' AND r.current_level=? AND {cond}",
+             [level] + list(args), one=True)['c']
 
 
 # --------------------------------------------------------------------------
@@ -606,7 +828,8 @@ def count_todo(u):
 def dashboard():
     u = current_user()
     ctx = {'pending_mine': 0, 'todo': 0, 'recent': [], 'stats': {},
-           'my_leave_days': 0, 'year_leave_days': 0, 'year_start': ''}
+           'my_leave_days': 0, 'year_leave_days': 0, 'year_start': '',
+           'term': None, 'quotas': [], 'term_days': 0}
 
     if u['role'] == 'student':
         ctx['pending_mine'] = q('SELECT COUNT(*) c FROM leave_requests WHERE student_id=? '
@@ -618,6 +841,16 @@ def dashboard():
                                    "AND date(start_date) >= date(?)",
                                    (u['id'], academic_year_start().isoformat()), one=True)['s']
         ctx['year_start'] = academic_year_start().isoformat()
+        # v1.4.0：學期切分＋額度。學年數字看不出「這學期還剩多少額度」，
+        # 學生要的是後者。
+        term, quotas = student_quota_board(u['id'])
+        ctx['term'] = term
+        ctx['quotas'] = quotas
+        ctx['term_days'] = q("SELECT COALESCE(SUM(days),0) s FROM leave_requests "
+                             "WHERE student_id=? AND status='approved' "
+                             "AND date(start_date) BETWEEN date(?) AND date(?)",
+                             (u['id'], term['start_date'], term['end_date']),
+                             one=True)['s'] if term else 0
         ctx['recent'] = q('SELECT r.*, t.name type_name FROM leave_requests r '
                           'JOIN leave_types t ON t.id=r.leave_type_id '
                           'WHERE r.student_id=? ORDER BY r.created_at DESC LIMIT 5', (u['id'],))
@@ -652,33 +885,28 @@ def dashboard():
 
 def todo_requests(u, limit=None, offset=0):
     """待當前用戶審批的假單。limit/offset 供分頁使用（v1.1.0：待辦清單
-    此前一次載入全部待審假單，審批人學生一多頁面就無限變長）。"""
-    if u['role'] == 'advisor':
-        sql = ('SELECT r.*, t.name type_name, s.name student_name, s.class_name '
-               'FROM leave_requests r '
-               'JOIN leave_types t ON t.id=r.leave_type_id '
-               'JOIN users s ON s.id=r.student_id '
-               "WHERE r.status='pending' AND r.current_level=1 AND s.advisor_id=? "
-               'ORDER BY r.created_at ASC')
-        args = (u['id'],)
-    elif u['role'] == 'faculty':
-        sql = ('SELECT r.*, t.name type_name, s.name student_name, s.class_name '
-               'FROM leave_requests r '
-               'JOIN leave_types t ON t.id=r.leave_type_id '
-               'JOIN users s ON s.id=r.student_id '
-               "WHERE r.status='pending' AND r.current_level=2 AND s.department=? "
-               'ORDER BY r.created_at ASC')
-        args = (u['department'],)
+    此前一次載入全部待審假單，審批人學生一多頁面就無限變長）。
+
+    v1.4.0：範圍改由 todo_scope() 決定，代理人的待辦與原審批人一致。
+    """
+    level, cond, args = todo_scope(u)
+    base = ('SELECT r.*, t.name type_name, s.name student_name, s.class_name '
+            'FROM leave_requests r '
+            'JOIN leave_types t ON t.id=r.leave_type_id '
+            'JOIN users s ON s.id=r.student_id ')
+    if level is None:
+        sql = base + "WHERE r.status='pending' ORDER BY r.created_at ASC"
+        params = []
+    elif cond == '0':
+        return []
     else:
-        sql = ('SELECT r.*, t.name type_name, s.name student_name, s.class_name '
-               'FROM leave_requests r '
-               'JOIN leave_types t ON t.id=r.leave_type_id '
-               'JOIN users s ON s.id=r.student_id '
-               "WHERE r.status='pending' ORDER BY r.created_at ASC")
-        args = ()
+        sql = (base + f"WHERE r.status='pending' AND r.current_level=? AND {cond} "
+               'ORDER BY r.created_at ASC')
+        params = [level] + list(args)
     if limit:
-        sql += f' LIMIT {int(limit)} OFFSET {max(int(offset or 0), 0)}'
-    return q(sql, args)
+        sql += ' LIMIT ? OFFSET ?'
+        params += [int(limit), max(int(offset or 0), 0)]
+    return q(sql, params)
 
 
 # --------------------------------------------------------------------------
@@ -777,6 +1005,10 @@ def new_request():
                 err = (f'你在此區間已有假單 #{clashes[0]["id"]}'
                        f'（{clashes[0]["start_date"]} ~ {clashes[0]["end_date"]}），'
                        '請先撤回或修改日期。')
+            else:
+                # v1.4.0：學期額度校驗（C2）。待審＋已核准都計入，
+                # 否則連續提交多張待審單就能繞過上限。
+                err = quota_exceeded(u['id'], ltype, start_date, days)
         if err:
             flash(err, 'error')
             return render_template('new_request.html', types=types, form=request.form)
@@ -834,8 +1066,9 @@ def new_request():
                 execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 2, 'pending'))
 
             log_action(rid, u['id'], 'submit', f"提交{ltype['name']} {days}天，審批層級{level}")
-            if u['advisor_id']:
-                notify(u['advisor_id'], rid, f"{u['name']} 提交了 {days} 天{ltype['name']}，待你審批。")
+            # v1.4.0：通知該級所有實際審批人（導師＋其代理人）
+            notify_approvers(1, u['department'], u['advisor_id'], rid,
+                             f"{u['name']} 提交了 {days} 天{ltype['name']}，待你審批。")
         flash('假單已提交，等待導師審批。', 'success')
         return redirect(url_for('detail', rid=rid))
 
@@ -875,16 +1108,10 @@ def detail(rid):
         flash('找不到該假單。', 'error')
         return redirect(url_for('dashboard'))
 
-    if u['role'] == 'student' and req['student_id'] != u['id']:
-        flash('你沒有權限查看他人的假單。', 'error')
-        return redirect(url_for('dashboard'))
     # v0.9.1：導師只看自己的學生、院系只看本院系、管理員看全部。
-    # 此前只擋了學生——任何導師都能翻開別人的病假事由、聯絡電話與附件，
-    # 而 decide 的審批權限本來就限定範圍，查看權限不該比審批權限還寬。
-    if u['role'] == 'advisor' and req['advisor_id'] != u['id']:
-        flash('你沒有權限查看該假單。', 'error')
-        return redirect(url_for('dashboard'))
-    if u['role'] == 'faculty' and req['department'] != u['department']:
+    # v1.4.0：改由 can_view_request 統一判斷——代理審批人、以及曾審批過的
+    # 人（即使學生後來換了導師）都要看得到，否則稽核時查不到自己經手的單。
+    if not can_view_request(u, req):
         flash('你沒有權限查看該假單。', 'error')
         return redirect(url_for('dashboard'))
 
@@ -895,23 +1122,20 @@ def detail(rid):
              'LEFT JOIN users u ON u.id=l.actor_id WHERE l.request_id=? '
              'ORDER BY l.created_at DESC, l.id DESC', (rid,))
 
-    can_approve = False
-    if req['status'] == 'pending':
-        if u['role'] == 'advisor' and req['current_level'] == 1:
-            stu = q('SELECT advisor_id FROM users WHERE id=?', (req['student_id'],), one=True)
-            can_approve = bool(stu and stu['advisor_id'] == u['id'])
-        elif u['role'] == 'faculty' and req['current_level'] == 2:
-            can_approve = (req['department'] == u['department'])
-        elif u['role'] == 'admin':
-            can_approve = True
+    # v1.4.0：含代理人身分（被委託的導師／院系教師也能審）
+    can_approve = can_approve_request(u, req)
 
     affected = []
     try:
         affected = json.loads(req['affected_courses'] or '[]')
     except (ValueError, TypeError):
         affected = []
+    # 管理員的改派表單需要導師清單（v1.4.0）
+    advisors = (q("SELECT id, name FROM users WHERE role='advisor' AND active=1 "
+                  'ORDER BY name') if u['role'] == 'admin' else [])
     return render_template('request_detail.html', req=req, approvals=approvals,
-                           logs=logs, can_approve=can_approve, affected=affected)
+                           logs=logs, can_approve=can_approve, affected=affected,
+                           advisors=advisors)
 
 
 # --------------------------------------------------------------------------
@@ -929,17 +1153,9 @@ def decide(rid):
         return redirect(url_for('detail', rid=rid))
 
     level = req['current_level']
-    # 權限校驗
-    if u['role'] == 'advisor':
-        if level != 1 or req['advisor_id'] != u['id']:
-            flash('你沒有權限審批這一單。', 'error')
-            return redirect(url_for('dashboard'))
-    elif u['role'] == 'faculty':
-        if level != 2 or req['department'] != u['department']:
-            flash('你沒有權限審批這一單。', 'error')
-            return redirect(url_for('dashboard'))
-    elif u['role'] != 'admin':
-        flash('你沒有審批權限。', 'error')
+    # 權限校驗（v1.4.0：含代理人身分，統一由 can_approve_request 判斷）
+    if not can_approve_request(u, req):
+        flash('你沒有權限審批這一單。', 'error')
         return redirect(url_for('dashboard'))
 
     action = request.form.get('action')
@@ -984,9 +1200,9 @@ def decide(rid):
             execute('UPDATE leave_requests SET current_level=?, updated_at=? WHERE id=?',
                     (level + 1, now, rid))
             log_action(rid, u['id'], 'approve', f'第{level}級核准，轉院系複核')
-            for f in q("SELECT id FROM users WHERE role='faculty' AND active=1 AND department=?",
-                       (req['department'],)):
-                notify(f['id'], rid, f"{req['student_name']} 的 {req['days']} 天{req['type_name']}待院系複核。")
+            # v1.4.0：院系審批人＋其代理人一起通知
+            notify_approvers(2, req['department'], None, rid,
+                             f"{req['student_name']} 的 {req['days']} 天{req['type_name']}待院系複核。")
             flash('已核准，已轉交院系複核。', 'success')
         else:
             execute("UPDATE leave_requests SET status='approved', updated_at=? WHERE id=?", (now, rid))
@@ -1023,18 +1239,18 @@ def withdraw(rid):
         log_action(rid, u['id'], 'withdraw', '學生撤回')
         # v1.0.0：撤回後通知導師——否則導師點開假單才發現已被撤回，
         # 待辦清單裡的數字也與實際對不上。
+        # v1.4.0：改走 notify_approvers，代理人同樣收到（他的待辦也會少一筆）。
         stu = q('SELECT advisor_id FROM users WHERE id=?', (u['id'],), one=True)
         if stu and stu['advisor_id']:
-            notify(stu['advisor_id'], rid,
-                   f"{u['name']} 撤回了假單 #{rid}（{req['start_date']} ~ {req['end_date']}）。")
+            notify_approvers(1, u['department'], stu['advisor_id'], rid,
+                             f"{u['name']} 撤回了假單 #{rid}"
+                             f"（{req['start_date']} ~ {req['end_date']}）。")
         # v1.1.0：撤回時若已審到院系級，院系審批人也該收到通知——
         # 他們的待辦數字同樣不能對不上。
         if req['current_level'] == 2:
-            for f in q("SELECT id FROM users WHERE role='faculty' AND active=1 AND department=?",
-                       (u['department'],)):
-                notify(f['id'], rid,
-                       f"{u['name']} 撤回了待院系複核的假單 #{rid}"
-                       f"（{req['start_date']} ~ {req['end_date']}）。")
+            notify_approvers(2, u['department'], None, rid,
+                             f"{u['name']} 撤回了待院系複核的假單 #{rid}"
+                             f"（{req['start_date']} ~ {req['end_date']}）。")
     flash('假單已撤回。', 'success')
     return redirect(url_for('my_requests'))
 
@@ -1152,6 +1368,20 @@ def notification_read(nid):
 def stats():
     u = current_user()
     conds, args = role_scope(u)
+    # v1.4.0：按學期切。預設看目前學期，?term=<id> 可切換；
+    # ?term=0 表示不按學期（全部歷史）。
+    terms = q('SELECT * FROM terms ORDER BY start_date DESC')
+    raw_term = request.args.get('term', '')
+    term = None
+    if raw_term == '0':
+        pass
+    elif raw_term.isdigit():
+        term = q('SELECT * FROM terms WHERE id=?', (int(raw_term),), one=True)
+    else:
+        term = current_term()
+    if term:
+        conds.append('date(r.start_date) BETWEEN date(?) AND date(?)')
+        args += [term['start_date'], term['end_date']]
     where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
     rows = q(f'SELECT s.id, s.name, s.username, s.class_name, s.department, '
              f'COUNT(r.id) total_cnt, '
@@ -1164,12 +1394,16 @@ def stats():
     # 假別統計同樣受範圍限制（導師只看自己的學生、院系只看本院系）
     type_conds, type_args = role_scope(u)
     type_conds.append("r.status='approved'")
+    if term:
+        type_conds.append('date(r.start_date) BETWEEN date(?) AND date(?)')
+        type_args += [term['start_date'], term['end_date']]
     by_type = q("SELECT t.name, COUNT(r.id) cnt, COALESCE(SUM(r.days),0) days "
                 'FROM leave_requests r JOIN leave_types t ON t.id=r.leave_type_id '
                 'JOIN users s ON s.id=r.student_id '
                 f"WHERE {' AND '.join(type_conds)} GROUP BY t.id ORDER BY days DESC",
                 type_args)
-    return render_template('stats.html', rows=rows, by_type=by_type)
+    return render_template('stats.html', rows=rows, by_type=by_type,
+                           terms=terms, term=term, no_term=(raw_term == '0'))
 
 
 @app.route('/export')
@@ -1434,6 +1668,152 @@ def admin_edit_user(uid):
     return redirect(url_for('admin_users'))
 
 
+# --------------------------------------------------------------------------
+# 改派與委託（B4 · v1.4.0）
+# --------------------------------------------------------------------------
+@app.route('/admin/request/<int:rid>/reassign', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_reassign(rid):
+    """管理員手動改派：把該生的導師歸屬改成另一位導師。
+
+    為什麼改「學生的導師」而不是單張假單的審批人：待辦清單、通知、
+    範圍隔離全部按 `users.advisor_id` 匹配。只改單張假單的審批人，
+    會出現「這單看得到、下單看不到」的分裂狀態。導師異動本來就是
+    學生層級的事實，改在這裡最一致。
+    """
+    me = current_user()
+    req = q('SELECT r.id, r.status, r.current_level, r.student_id, '
+            's.name student_name, s.advisor_id '
+            'FROM leave_requests r JOIN users s ON s.id=r.student_id '
+            'WHERE r.id=?', (rid,), one=True)
+    if not req:
+        flash('找不到該假單。', 'error')
+        return redirect(url_for('admin_users'))
+    advisor_id, adv_err = _parse_advisor_id(request.form.get('advisor_id'))
+    if adv_err:
+        flash(adv_err, 'error')
+        return redirect(url_for('detail', rid=rid))
+    if advisor_id == req['advisor_id']:
+        flash('該生已由這位導師指導，無需改派。', 'error')
+        return redirect(url_for('detail', rid=rid))
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with atomic():
+        execute('UPDATE users SET advisor_id=? WHERE id=?', (advisor_id, req['student_id']))
+        log_action(rid, me['id'], 'reassign',
+                   f"學生 {req['student_name']} 的導師由 #{req['advisor_id'] or '無'} "
+                   f"改派為 #{advisor_id or '無'}")
+        if advisor_id and req['status'] == 'pending' and req['current_level'] == 1:
+            notify_approvers(1, '', advisor_id, rid,
+                             f"{req['student_name']} 的假單 #{rid} 已改派給你審批。")
+        notify(req['student_id'], rid,
+               f"你的導師歸屬已由教務處調整，假單 #{rid} 之後由新導師處理。")
+    flash('已改派該生的導師歸屬。', 'success')
+    return redirect(url_for('detail', rid=rid))
+
+
+@app.route('/admin/delegations')
+@login_required
+@role_required('admin')
+def admin_delegations():
+    """委託審批管理：誰在什麼期間把哪一級交給誰。"""
+    today = date.today().isoformat()
+    rows = q('SELECT d.*, a.name delegator_name, a.role delegator_role, '
+             'a.department delegator_dept, b.name delegate_name, b.role delegate_role, '
+             "CASE WHEN date(?) BETWEEN date(d.start_date) AND date(d.end_date) "
+             "     THEN 1 ELSE 0 END active "
+             'FROM delegations d '
+             'JOIN users a ON a.id=d.delegator_id '
+             'JOIN users b ON b.id=d.delegate_id '
+             'ORDER BY d.start_date DESC, d.id DESC', (today,))
+    staff = q("SELECT id, name, role, department FROM users "
+              "WHERE role IN ('advisor','faculty') AND active=1 ORDER BY role, name")
+    return render_template('admin_delegations.html', rows=rows, staff=staff,
+                           today=today)
+
+
+@app.route('/admin/delegations/add', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_add_delegation():
+    try:
+        level = int(request.form.get('level', '1'))
+        start = parse_date(request.form.get('start_date', ''))
+        end = parse_date(request.form.get('end_date', ''))
+    except (TypeError, ValueError):
+        flash('委託期間的日期格式不合法。', 'error')
+        return redirect(url_for('admin_delegations'))
+    if level not in (1, 2):
+        flash('委託層級只能是 1（導師）或 2（院系）。', 'error')
+        return redirect(url_for('admin_delegations'))
+    if end < start:
+        flash('委託結束日不可早於開始日。', 'error')
+        return redirect(url_for('admin_delegations'))
+    try:
+        delegator_id = int(request.form.get('delegator_id', ''))
+        delegate_id = int(request.form.get('delegate_id', ''))
+    except (TypeError, ValueError):
+        flash('請選擇委託人與代理人。', 'error')
+        return redirect(url_for('admin_delegations'))
+    if delegator_id == delegate_id:
+        flash('委託人與代理人不可為同一人。', 'error')
+        return redirect(url_for('admin_delegations'))
+    want_role = 'advisor' if level == 1 else 'faculty'
+    a = q('SELECT id, name, role, active FROM users WHERE id=?', (delegator_id,), one=True)
+    b = q('SELECT id, name, role, active FROM users WHERE id=?', (delegate_id,), one=True)
+    if not a or not b:
+        flash('委託人或代理人不存在。', 'error')
+        return redirect(url_for('admin_delegations'))
+    if a['role'] != want_role or b['role'] != want_role:
+        flash(f"第 {level} 級的委託人與代理人都必須是"
+              f"{'導師' if level == 1 else '院系教師'}角色。", 'error')
+        return redirect(url_for('admin_delegations'))
+    if not a['active'] or not b['active']:
+        flash('停用的帳號不可參與委託。', 'error')
+        return redirect(url_for('admin_delegations'))
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with atomic():
+        try:
+            execute('INSERT INTO delegations (delegator_id, delegate_id, level, '
+                    'start_date, end_date, note) VALUES (?,?,?,?,?,?)',
+                    (delegator_id, delegate_id, level, start.isoformat(), end.isoformat(),
+                     request.form.get('note', '').strip()[:200]))
+        except Exception:  # noqa: BLE001 — 重複的委託撞 UNIQUE，提示而非 500
+            flash('相同的委託（人、層級、期間）已存在。', 'error')
+            return redirect(url_for('admin_delegations'))
+        log_action(None, current_user()['id'], 'add_delegation',
+                   f"{a['name']} → {b['name']}（第 {level} 級，"
+                   f"{start.isoformat()} ~ {end.isoformat()}）")
+        notify(delegate_id, None,
+               f"{a['name']} 已將第 {level} 級審批權委託給你（{start.isoformat()} ~ "
+               f"{end.isoformat()}），期間你會在待辦看到其範圍內的假單。")
+    flash(f"已新增委託：{a['name']} → {b['name']}。", 'success')
+    return redirect(url_for('admin_delegations'))
+
+
+@app.route('/admin/delegations/<int:did>/delete', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_delete_delegation(did):
+    d = q('SELECT d.*, a.name delegator_name, b.name delegate_name '
+          'FROM delegations d JOIN users a ON a.id=d.delegator_id '
+          'JOIN users b ON b.id=d.delegate_id WHERE d.id=?', (did,), one=True)
+    if not d:
+        flash('找不到該委託。', 'error')
+        return redirect(url_for('admin_delegations'))
+    with atomic():
+        execute('DELETE FROM delegations WHERE id=?', (did,))
+        log_action(None, current_user()['id'], 'del_delegation',
+                   f"刪除委託 {d['delegator_name']} → {d['delegate_name']}"
+                   f"（第 {d['level']} 級）")
+        notify(d['delegate_id'], None,
+               f"{d['delegator_name']} 的第 {d['level']} 級委託已被取消。")
+    flash('已刪除該委託。', 'success')
+    return redirect(url_for('admin_delegations'))
+
+
 @app.route('/admin/types')
 @login_required
 @role_required('admin')
@@ -1489,12 +1869,196 @@ def admin_toggle_type(tid):
     return redirect(url_for('admin_types'))
 
 
+# --------------------------------------------------------------------------
+# 學期 / 額度 / 校曆（C2 + C3 · v1.4.0）
+# --------------------------------------------------------------------------
+@app.route('/admin/terms')
+@login_required
+@role_required('admin')
+def admin_terms():
+    terms = q('SELECT * FROM terms ORDER BY start_date DESC')
+    quotas = q('SELECT qt.*, t.name type_name, t.code type_code, tm.label term_label '
+               'FROM leave_quotas qt JOIN leave_types t ON t.id=qt.leave_type_id '
+               'JOIN terms tm ON tm.id=qt.term_id '
+               'ORDER BY tm.start_date DESC, t.id')
+    holidays = q('SELECT * FROM holidays ORDER BY day')
+    types = q('SELECT id, code, name FROM leave_types WHERE active=1 ORDER BY id')
+    return render_template('admin_terms.html', terms=terms, quotas=quotas,
+                           holidays=holidays, types=types,
+                           cur=current_term())
+
+
+@app.route('/admin/terms/add', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_add_term():
+    label = request.form.get('label', '').strip()
+    try:
+        start = parse_date(request.form.get('start_date', ''))
+        end = parse_date(request.form.get('end_date', ''))
+    except (TypeError, ValueError):
+        flash('學期日期格式不合法。', 'error')
+        return redirect(url_for('admin_terms'))
+    if not label:
+        flash('學期標籤必填（例：2026-27 秋季）。', 'error')
+        return redirect(url_for('admin_terms'))
+    if len(label) > 40:
+        flash('學期標籤過長（上限 40 字）。', 'error')
+        return redirect(url_for('admin_terms'))
+    if end < start:
+        flash('學期結束日不可早於開始日。', 'error')
+        return redirect(url_for('admin_terms'))
+    if q('SELECT id FROM terms WHERE label=?', (label,), one=True):
+        flash(f'學期「{label}」已存在。', 'error')
+        return redirect(url_for('admin_terms'))
+    make_current = 1 if request.form.get('is_current') else 0
+    with atomic():
+        if make_current:
+            execute('UPDATE terms SET is_current=0')
+        execute('INSERT INTO terms (label, start_date, end_date, is_current) '
+                'VALUES (?,?,?,?)', (label, start.isoformat(), end.isoformat(), make_current))
+        log_action(None, current_user()['id'], 'add_term',
+                   f'{label}（{start.isoformat()} ~ {end.isoformat()}）')
+    flash(f'已新增學期「{label}」。', 'success')
+    return redirect(url_for('admin_terms'))
+
+
+@app.route('/admin/terms/<int:tid>/current', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_set_current_term(tid):
+    t = q('SELECT * FROM terms WHERE id=?', (tid,), one=True)
+    if not t:
+        flash('找不到該學期。', 'error')
+        return redirect(url_for('admin_terms'))
+    with atomic():
+        execute('UPDATE terms SET is_current=0')
+        execute('UPDATE terms SET is_current=1 WHERE id=?', (tid,))
+        log_action(None, current_user()['id'], 'set_current_term', t['label'])
+    flash(f"已將「{t['label']}」設為目前學期。", 'success')
+    return redirect(url_for('admin_terms'))
+
+
+@app.route('/admin/quotas/set', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_set_quota():
+    try:
+        term_id = int(request.form.get('term_id', ''))
+        type_id = int(request.form.get('leave_type_id', ''))
+    except (TypeError, ValueError):
+        flash('請選擇學期與假別。', 'error')
+        return redirect(url_for('admin_terms'))
+    raw = request.form.get('max_days', '').strip()
+    if not raw:
+        execute("DELETE FROM leave_quotas WHERE term_id=? AND leave_type_id=? AND scope='all'",
+                (term_id, type_id))
+        flash('已取消該假別的額度限制。', 'success')
+        return redirect(url_for('admin_terms'))
+    try:
+        max_days = float(raw)
+    except ValueError:
+        flash('額度必須是數字。', 'error')
+        return redirect(url_for('admin_terms'))
+    if max_days < 0 or max_days > 365:
+        flash('額度需介於 0 與 365 天之間。', 'error')
+        return redirect(url_for('admin_terms'))
+    if not q('SELECT 1 FROM terms WHERE id=?', (term_id,), one=True) or \
+            not q('SELECT 1 FROM leave_types WHERE id=?', (type_id,), one=True):
+        flash('學期或假別不存在。', 'error')
+        return redirect(url_for('admin_terms'))
+    execute('INSERT INTO leave_quotas (term_id, leave_type_id, max_days, scope, scope_value) '
+            "VALUES (?,?,?,'all','') "
+            'ON CONFLICT(term_id, leave_type_id, scope, scope_value) '
+            'DO UPDATE SET max_days=excluded.max_days',
+            (term_id, type_id, max_days))
+    log_action(None, current_user()['id'], 'set_quota',
+               f'學期 #{term_id} 假別 #{type_id} 額度 {max_days:g} 天')
+    flash('已更新額度。', 'success')
+    return redirect(url_for('admin_terms'))
+
+
+@app.route('/admin/holidays/add', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_add_holiday():
+    raw = request.form.get('day', '').strip()
+    try:
+        day = parse_date(raw)
+    except (TypeError, ValueError):
+        flash('日期格式不合法（YYYY-MM-DD）。', 'error')
+        return redirect(url_for('admin_terms'))
+    label = request.form.get('label', '').strip()[:60]
+    execute('INSERT INTO holidays (day, label) VALUES (?,?) '
+            'ON CONFLICT(day) DO UPDATE SET label=excluded.label',
+            (day.isoformat(), label))
+    log_action(None, current_user()['id'], 'add_holiday', f'{day.isoformat()} {label}')
+    flash(f'已加入校曆假日 {day.isoformat()}。', 'success')
+    return redirect(url_for('admin_terms'))
+
+
+@app.route('/admin/holidays/import', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_import_holidays():
+    """批次匯入校曆：每行 `YYYY-MM-DD` 或 `YYYY-MM-DD,標籤`。
+
+    手動一天天加整學期的假期不現實——校曆通常是教務處給的一份清單，
+    貼進來就好。
+    """
+    raw = request.form.get('lines', '')
+    added = skipped = 0
+    bad = []
+    for ln in raw.splitlines():
+        ln = ln.strip()
+        if not ln or ln.startswith('#'):
+            continue
+        parts = [p.strip() for p in ln.replace('\t', ',').split(',', 1)]
+        try:
+            day = parse_date(parts[0])
+        except (TypeError, ValueError):
+            bad.append(parts[0])
+            continue
+        label = parts[1] if len(parts) > 1 else ''
+        execute('INSERT INTO holidays (day, label) VALUES (?,?) '
+                'ON CONFLICT(day) DO UPDATE SET label=excluded.label',
+                (day.isoformat(), label[:60]))
+        added += 1
+    if bad:
+        skipped = len(bad)
+    log_action(None, current_user()['id'], 'add_holiday',
+               f'批次匯入 {added} 天（略過 {skipped} 行格式錯誤）')
+    msg = f'已匯入 {added} 個校曆假日。'
+    if skipped:
+        msg += f'另有 {skipped} 行格式不合法已略過。'
+    flash(msg, 'success' if added else 'error')
+    return redirect(url_for('admin_terms'))
+
+
+@app.route('/admin/holidays/<int:hid>/delete', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_delete_holiday(hid):
+    h = q('SELECT * FROM holidays WHERE id=?', (hid,), one=True)
+    if not h:
+        flash('找不到該假日。', 'error')
+        return redirect(url_for('admin_terms'))
+    execute('DELETE FROM holidays WHERE id=?', (hid,))
+    log_action(None, current_user()['id'], 'del_holiday', h['day'])
+    flash(f"已移除 {h['day']}。", 'success')
+    return redirect(url_for('admin_terms'))
+
+
 # 稽核日誌動作的人間可讀標籤（模板與篩選器共用）
 AUDIT_ACTION_LABEL = {
     'submit': '提交假單', 'approve': '核准', 'reject': '駁回', 'withdraw': '撤回',
     'add_user': '新增帳號', 'toggle_user': '停用／啟用帳號',
     'reset_password': '重設密碼', 'edit_user': '編輯帳號', 'change_password': '修改密碼',
     'add_type': '新增假別', 'toggle_type': '停用／啟用假別',
+    # v1.4.0
+    'reassign': '改派導師', 'add_delegation': '新增委託', 'del_delegation': '刪除委託',
+    'add_term': '新增學期', 'set_current_term': '設定目前學期', 'set_quota': '設定額度',
+    'add_holiday': '新增校曆假日', 'del_holiday': '刪除校曆假日', 'escalate': '催辦升級',
 }
 
 
@@ -1528,6 +2092,81 @@ def admin_logs():
                            audit_labels=AUDIT_ACTION_LABEL)
 
 
+@app.route('/admin/cron/escalate', methods=['GET', 'POST'])
+def cron_escalate():
+    """催辦升級定時任務（B5 · v1.4.0）。
+
+    掃描「提交超過 N 天仍是 pending」的假單：
+      1. 提醒當前審批人（含代理人）；
+      2. 升級通知其上級——第 1 級通知該院系所有院系教師，第 2 級通知管理員；
+      3. 寫一筆 audit_log（action='escalate'）當作催辦憑據。
+
+    鑑權：設定 LEAVE_CRON_TOKEN 時以 token 為準（給外部 cron／容器定時器），
+    否則要求管理員 session（可在瀏覽器手動觸發）。
+    同一張單 24 小時內只催一次，避免每小時跑一次就把通知欄洗版。
+    """
+    token = os.environ.get('LEAVE_CRON_TOKEN', '')
+    if token:
+        sent = request.args.get('token') or request.headers.get('X-Cron-Token', '')
+        if not sent or not hmac.compare_digest(str(sent), str(token)):
+            return jsonify({'status': 'error', 'message': 'invalid token'}), 403
+    else:
+        u = current_user()
+        if not u or u['role'] != 'admin':
+            return jsonify({'status': 'error', 'message': 'forbidden'}), 403
+
+    try:
+        days = int(request.args.get('days', os.environ.get('LEAVE_ESCALATE_DAYS', '3')))
+    except (TypeError, ValueError):
+        days = 3
+    days = max(days, 1)
+    now = datetime.now()
+    cutoff = (now - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+    cooldown = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+
+    rows = q("SELECT r.id, r.days, r.created_at, r.current_level, r.student_id, "
+             's.name student_name, s.department, s.advisor_id, t.name type_name '
+             'FROM leave_requests r JOIN users s ON s.id=r.student_id '
+             'JOIN leave_types t ON t.id=r.leave_type_id '
+             "WHERE r.status='pending' AND r.created_at <= ? "
+             'ORDER BY r.created_at ASC', (cutoff,))
+    admins = [a['id'] for a in
+              q("SELECT id FROM users WHERE role='admin' AND active=1")]
+
+    reminded = escalated = skipped = 0
+    for r in rows:
+        # 24 小時冷卻：同一張單不重複催
+        if q("SELECT 1 FROM audit_logs WHERE request_id=? AND action='escalate' "
+             "AND created_at >= ?", (r['id'], cooldown), one=True):
+            skipped += 1
+            continue
+        try:
+            age = max((now - _parse_ts(r['created_at'])).days, 0)
+        except (ValueError, TypeError):
+            age = days
+        level = r['current_level']
+        msg = (f"【催辦】假單 #{r['id']}（{r['student_name']} {r['days']} 天"
+               f"{r['type_name']}）已待審 {age} 天，請儘速處理。")
+        with atomic():
+            notify_approvers(level, r['department'], r['advisor_id'], r['id'], msg)
+            reminded += 1
+            # 升級：第 1 級找院系（導師的上級），第 2 級找管理員
+            if level == 1:
+                notify_approvers(2, r['department'], None, r['id'],
+                                 f"【升級】{r['student_name']} 的假單 #{r['id']} "
+                                 f"已待導師審批 {age} 天，請協助跟進。")
+            for aid in admins:
+                notify(aid, r['id'],
+                       f"【升級】假單 #{r['id']}（{r['student_name']}）"
+                       f"已待第 {level} 級審批 {age} 天。")
+            escalated += 1
+            log_action(r['id'], None, 'escalate',
+                       f'待審 {age} 天，已提醒第 {level} 級審批人並升級通知上級')
+    return jsonify({'status': 'ok', 'threshold_days': days, 'scanned': len(rows),
+                    'reminded': reminded, 'escalated': escalated,
+                    'skipped_cooldown': skipped})
+
+
 @app.route('/healthz')
 def healthz():
     """健康檢查（無需登入）：供負載均衡 / 容器探測 / CI 使用。"""
@@ -1553,11 +2192,13 @@ def uploaded_file(filename):
     if not req:
         flash('找不到該附件。', 'error')
         return redirect(url_for('dashboard'))
+    # v1.4.0：代理人與原審批人同權——否則代理了卻打不開病假證明，
+    # 只能盲審。
     allowed = (
         u['role'] == 'admin'
         or u['id'] == req['student_id']
-        or (u['role'] == 'advisor' and u['id'] == req['advisor_id'])
-        or (u['role'] == 'faculty' and u['department'] == req['department'])
+        or (u['role'] == 'advisor' and req['advisor_id'] in approvable_advisor_ids(u))
+        or (u['role'] == 'faculty' and req['department'] in approvable_departments(u))
     )
     if not allowed:
         flash('你沒有權限存取該檔案。', 'error')
@@ -1638,7 +2279,38 @@ def seed():
 def init_db_command():
     init_db()
     seed_timetable()
+    seed_calendar()
     print('資料庫已初始化。')
+
+
+def seed_calendar():
+    """示範學期與校曆（冪等）。
+
+    刻意與 seed() 分開：seed() 只在空庫寫示範帳號，測試也是走
+    init_db() + seed()。學期一旦寫入，/stats 預設就會按學期篩選——
+    為了不讓既有測試的資料範圍被學期邊界切掉，學期只在實際啟動
+    應用（`python app.py` 或 `flask init-db`）時才建立。
+    """
+    if not q('SELECT 1 FROM terms LIMIT 1'):
+        today = date.today()
+        y = today.year if today.month >= ACADEMIC_YEAR_START_MONTH else today.year - 1
+        autumn_start, autumn_end = date(y, 9, 1), date(y + 1, 1, 15)
+        spring_start, spring_end = date(y + 1, 2, 1), date(y + 1, 6, 30)
+        autumn_current = 1 if today <= autumn_end else 0
+        execute('INSERT INTO terms (label, start_date, end_date, is_current) '
+                'VALUES (?,?,?,?)',
+                (f'{y}-{str(y + 1)[2:]} 秋季', autumn_start.isoformat(),
+                 autumn_end.isoformat(), autumn_current))
+        execute('INSERT INTO terms (label, start_date, end_date, is_current) '
+                'VALUES (?,?,?,?)',
+                (f'{y}-{str(y + 1)[2:]} 春季', spring_start.isoformat(),
+                 spring_end.isoformat(), 0 if autumn_current else 1))
+    if not q('SELECT 1 FROM holidays LIMIT 1'):
+        # 只放兩個明確的固定假日當示範；實際校曆由 /admin/terms 批次匯入
+        y = date.today().year
+        for d, label in ((date(y, 10, 1), '國慶日'), (date(y + 1, 1, 1), '元旦')):
+            execute('INSERT INTO holidays (day, label) VALUES (?,?) '
+                    'ON CONFLICT(day) DO NOTHING', (d.isoformat(), label))
 
 
 if __name__ == '__main__':
@@ -1648,6 +2320,7 @@ if __name__ == '__main__':
         if created:
             print('已寫入示範資料。')
         seed_timetable()
+        seed_calendar()
     # debug 模式（Werkzeug 除錯器／自動重載）預設關閉：誰都能 `python app.py`
     # 直接把服務跑起來，不該預設附帶一個可執行任意程式碼的除錯控制台。
     # 本機開發時用 LEAVE_DEBUG=1 開啟（start.bat 已預設設定）。

@@ -9,7 +9,60 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-11-02
+
+功能強化版：主軸是**收斂 GAP-ANALYSIS.md 盤點出的五項部署前功能缺口**
+（B3 額度、B4 委託審批＋改派、B5 SLA 催辦、C2 學期、C3 校曆）。
+程式碼、資料庫結構（4 張新表）與管理後台 UI 均有變更。
+
+### Added ｜新增
+
+- **委託審批（B4）**：`delegations` 表（委託人 → 代理人＋層級＋生效期間）。
+  導師／院系教師出差時可把該級審批權暫交代理人：`todo_scope()` /
+  `can_approve_request()` / `can_view_request()` / 附件下載授權全部納入代理人
+  視角（代理了就看得到、審得動、打得開病假證明），`notify_approvers()`
+  讓代理人與原審批人同步收到通知；過期自動失效，無須清理任務。
+  管理後台 `/admin/delegations` 新增／刪除委託（角色、層級、期間、重複
+  委託均有校驗）。
+- **管理員改派導師（B4）**：`/admin/request/<id>/reassign` 把學生的導師歸屬
+  改成另一位導師（改 `users.advisor_id` 而非單張假單——待辦、通知、範圍
+  隔離全部按此匹配，才不會出現「這單看得到、下單看不到」的分裂）。
+  改派後通知新導師與學生，並寫入稽核日誌。
+- **學期與請假額度（C2 + B3）**：`terms` ＋ `leave_quotas` 表。學期可設定
+  目前旗標（互斥）；每學期、每假別可設天數上限，`new_request()` 提交前校驗
+  ——**待審＋已核准都計入用量**，連續提交多張待審單繞不過上限。學生儀表板
+  顯示本學期額度用量板；清空上限即取消限制。
+- **校曆假日（C3）**：`holidays` 表＋管理後台單日新增／批次匯入（每行
+  `YYYY-MM-DD` 或 `YYYY-MM-DD,標籤`，格式錯誤行略過）。`is_school_off()`
+  統一判斷非上課日；`affected_courses_for()` 跳過週末與校曆假日——假日請假
+  本來就不會缺課，列出受影響課程只會讓審批人誤判。
+- **催辦升級 cron（B5）**：`/admin/cron/escalate`（`GET/POST`）掃描提交超過
+  N 天（預設 3，`LEAVE_ESCALATE_DAYS` 可調）仍是 pending 的假單：提醒當前
+  審批人（含代理人）、升級通知其上級（第 1 級 → 院系教師；第 2 級 →
+  管理員）、寫入 `audit_logs`（action='escalate'）。同一張單 24 小時內只催
+  一次。鑑權：設定 `LEAVE_CRON_TOKEN` 時以 token 為準（外部 cron／容器
+  定時器），否則要求管理員 session。
+- `tests/test_v14.py`：10 項新回歸測試（委託校驗／代理人待辦與審批權限
+  收回／跨院系院系委託／改派導師／學期旗標互斥／額度擋單與儀表板用量板／
+  校曆新增批次匯入刪除／催辦 token 鑑權與冷卻／撤回院系級假單迴歸保護）。
+  單元測試 105 → 115；冒煙檢查 183 項不變。
+- `GAP-ANALYSIS.md`：對照 v1.3.0 的部署前功能缺口盤點（A 架構、B 自助、
+  C 學術深度、D 合規、E 整合五構面，附難度與實施順序建議）；本版實作
+  B3／B4／B5／C2／C3 五項，其餘項目標記為待辦。
+- 稽核日誌動作標籤新增：`reassign`、`add_delegation`、`del_delegation`、
+  `add_term`、`set_current_term`、`set_quota`、`add_holiday`、`del_holiday`、
+  `escalate`。
+- 管理後台導覽新增「委託審批」「學期／額度／校曆」入口；儀表板與統計頁
+  依學期呈現資訊。
+
 ### Changed ｜變更
+
+- `APP_VERSION` 1.3.0 → 1.4.0；根 README 版本號與功能表同步。
+- `notify` 類函式（提交／核准／駁回／撤回通知）統一改走
+  `notify_approvers()`，通知對象涵蓋代理人。
+- `withdraw()` 撤回通知改走 `notify_approvers()`（代理人待辦數字同步回收）。
+
+### Changed ｜變更（授權）
 
 - **授權從 MIT 升級為商業授權 (Commercial License)**：保留所有權利。個人／評估用途免費，
   商業用途須另購授權。詳見 [`LICENSE`](LICENSE) 與 README〈License〉。

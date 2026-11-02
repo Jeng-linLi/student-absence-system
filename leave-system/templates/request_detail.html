@@ -92,6 +92,31 @@
 </div>
 {% endif %}
 
+{% if current_user.role == 'admin' %}
+<div class="card">
+  <h3>改派導師（教務處）</h3>
+  <p class="muted" style="margin:0 0 10px;font-size:12px">
+    改派會調整該生的導師歸屬——之後所有假單的待辦、通知與範圍隔離都按新導師走。
+  </p>
+  <form method="post" action="{{ url_for('admin_reassign', rid=req.id) }}"
+        onsubmit="return confirm('確定改派該生的導師歸屬？');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row" style="grid-template-columns:1fr auto;align-items:end">
+      <div>
+        <label>新導師（留空＝解除歸屬）</label>
+        <select name="advisor_id">
+          <option value="">（不指派）</option>
+          {% for a in advisors %}
+            <option value="{{ a.id }}" {{ 'selected' if req.advisor_id == a.id }}>{{ a.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div><button class="btn" type="submit">改派</button></div>
+    </div>
+  </form>
+</div>
+{% endif %}
+
 <div class="card">
   <h3>操作日誌</h3>
   {% if logs %}

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}學期與校曆 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>學期 · 額度 · 校曆</h1>
+<p class="muted" style="margin-top:-6px">
+  目前學期：<strong>{{ cur.label if cur else '未設定' }}</strong>
+  {% if cur %}（{{ cur.start_date }} ~ {{ cur.end_date }}）{% endif %}
+  · 儀表板與統計預設按目前學期切分
+</p>
+
+<div class="grid g2">
+  <div class="card">
+    <h3>新增學期</h3>
+    <form method="post" action="{{ url_for('admin_add_term') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>標籤 *</label>
+      <input name="label" placeholder="2026-27 秋季" maxlength="40" required>
+      <div class="row" style="grid-template-columns:1fr 1fr">
+        <div><label>開始日 *</label><input type="date" name="start_date" required></div>
+        <div><label>結束日 *</label><input type="date" name="end_date" required></div>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:12px">
+        <input type="checkbox" name="is_current" style="width:auto">
+        <span style="font-size:13px">設為目前學期</span>
+      </label>
+      <div class="actions"><button class="btn" type="submit">新增</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>設定請假額度</h3>
+    <form method="post" action="{{ url_for('admin_set_quota') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row" style="grid-template-columns:1fr 1fr">
+        <div>
+          <label>學期 *</label>
+          <select name="term_id" required>
+            {% for t in terms %}
+              <option value="{{ t.id }}" {{ 'selected' if cur and cur.id == t.id }}>
+                {{ t.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>假別 *</label>
+          <select name="leave_type_id" required>
+            {% for t in types %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <label>上限天數（留空＝取消限制）</label>
+      <input name="max_days" type="number" step="0.5" min="0" max="365" placeholder="30">
+      <div class="actions"><button class="btn" type="submit">儲存</button></div>
+    </form>
+    <p class="muted" style="margin:10px 0 0;font-size:12px">
+      額度按「請假起始日所屬學期」計算，待審與已核准都計入——
+      連續提交待審單無法繞過上限。
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>學期列表</h3>
+  <table>
+    <thead><tr><th>標籤</th><th>開始</th><th>結束</th><th>狀態</th><th></th></tr></thead>
+    <tbody>
+    {% for t in terms %}
+      <tr>
+        <td><strong>{{ t.label }}</strong></td>
+        <td class="tnum">{{ t.start_date }}</td>
+        <td class="tnum">{{ t.end_date }}</td>
+        <td>{% if t.is_current %}<span class="tag green">目前學期</span>
+            {% else %}<span class="tag grey">—</span>{% endif %}</td>
+        <td>
+          {% if not t.is_current %}
+          <form method="post" action="{{ url_for('admin_set_current_term', tid=t.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn sm ghost" type="submit">設為目前</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted">尚未建立學期。</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>額度設定</h3>
+  {% if quotas %}
+  <table>
+    <thead><tr><th>學期</th><th>假別</th><th class="tnum">上限天數</th></tr></thead>
+    <tbody>
+    {% for q in quotas %}
+      <tr><td>{{ q.term_label }}</td>
+        <td>{{ q.type_name }} <span class="muted mono">{{ q.type_code }}</span></td>
+        <td class="tnum">{{ '%g'|format(q.max_days) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">尚未設定額度（未設定＝不限）。</div>{% endif %}
+</div>
+
+<div class="card">
+  <h3>校曆假日</h3>
+  <form method="post" action="{{ url_for('admin_add_holiday') }}" style="margin-bottom:14px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row" style="grid-template-columns:180px 1fr auto;align-items:end">
+      <div><label>日期 *</label><input type="date" name="day" required></div>
+      <div><label>名稱</label><input name="label" maxlength="60" placeholder="國慶日"></div>
+      <div><button class="btn" type="submit">加入</button></div>
+    </div>
+  </form>
+
+  <form method="post" action="{{ url_for('admin_import_holidays') }}" style="margin-bottom:14px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>批次匯入（每行 <span class="mono">YYYY-MM-DD</span> 或
+      <span class="mono">YYYY-MM-DD,名稱</span>，<span class="mono">#</span> 開頭為註解）</label>
+    <textarea name="lines" rows="5" placeholder="2026-10-01,國慶日&#10;2026-12-25,聖誕假期"></textarea>
+    <div class="actions"><button class="btn ghost" type="submit">匯入</button></div>
+  </form>
+
+  {% if holidays %}
+  <table>
+    <thead><tr><th>日期</th><th>名稱</th><th></th></tr></thead>
+    <tbody>
+    {% for h in holidays %}
+      <tr><td class="tnum mono">{{ h.day }}</td><td>{{ h.label or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_delete_holiday', hid=h.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn sm danger" type="submit"
+              onclick="return confirm('確定移除 {{ h.day }}？');">移除</button>
+          </form>
+        </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">尚未匯入校曆假日。</div>{% endif %}
+  <p class="muted" style="margin:10px 0 0;font-size:12px">
+    校曆假日與週末都不列入「受影響課程」——假日請假本來就不會缺課。
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}委託審批 · 線上請假系統{% endblock %}
+{% block content %}
+<h1>委託審批</h1>
+<p class="muted" style="margin-top:-6px">
+  審批人出差、休假時，可把某一級的審批權在指定期間內交給代理人。
+  委託期間代理人的待辦清單、通知與附件權限都與原審批人一致；到期自動失效。
+</p>
+
+<div class="card">
+  <h3>新增委託</h3>
+  <form method="post" action="{{ url_for('admin_add_delegation') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row" style="grid-template-columns:120px 1fr 1fr">
+      <div>
+        <label>層級 *</label>
+        <select name="level" required>
+          <option value="1">第 1 級（導師）</option>
+          <option value="2">第 2 級（院系）</option>
+        </select>
+      </div>
+      <div>
+        <label>委託人 *</label>
+        <select name="delegator_id" required>
+          {% for s in staff %}
+            <option value="{{ s.id }}">{{ s.name }}（{{ '導師' if s.role=='advisor' else '院系' }}·{{ s.department }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>代理人 *</label>
+        <select name="delegate_id" required>
+          {% for s in staff %}
+            <option value="{{ s.id }}">{{ s.name }}（{{ '導師' if s.role=='advisor' else '院系' }}·{{ s.department }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="row" style="grid-template-columns:1fr 1fr">
+      <div><label>生效起日 *</label><input type="date" name="start_date" value="{{ today }}" required></div>
+      <div><label>生效迄日 *</label><input type="date" name="end_date" required></div>
+    </div>
+    <label>備註</label>
+    <input name="note" maxlength="200" placeholder="例：出差一週">
+    <div class="actions"><button class="btn" type="submit">新增委託</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>現有委託</h3>
+  {% if rows %}
+  <table>
+    <thead><tr><th>層級</th><th>委託人</th><th>代理人</th><th>期間</th><th>狀態</th><th>備註</th><th></th></tr></thead>
+    <tbody>
+    {% for d in rows %}
+      <tr>
+        <td>{{ '第 1 級（導師）' if d.level == 1 else '第 2 級（院系）' }}</td>
+        <td>{{ d.delegator_name }}<div class="muted">{{ d.delegator_dept }}</div></td>
+        <td>{{ d.delegate_name }}</td>
+        <td class="tnum">{{ d.start_date }} ~ {{ d.end_date }}</td>
+        <td>{% if d.active %}<span class="tag green">生效中</span>
+            {% else %}<span class="tag grey">未生效／已過期</span>{% endif %}</td>
+        <td class="muted">{{ d.note or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_delete_delegation', did=d.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn sm danger" type="submit"
+              onclick="return confirm('確定刪除這筆委託？');">刪除</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">目前沒有委託記錄。</div>{% endif %}
+</div>
+{% endblock %}

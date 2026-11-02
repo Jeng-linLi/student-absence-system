@@ -227,12 +227,12 @@
     <h3 style="margin-top:22px">6.4 De-risked — a working prototype, not a slide deck<span class="zh">6.4 降低決策風險 — 可執行原型，而非簡報</span></h3>
     <p style="font-size:13.5px;color:var(--ink-2)">
       Most enterprise proposals ask for a budget on the strength of mockups. This package ships a
-      <b>runnable prototype</b> (<code class="inl">leave-system/</code>, v1.2.1, 105 unit tests + 183 smoke checks in
+      <b>runnable prototype</b> (<code class="inl">leave-system/</code>, v1.4.0, 115 unit tests + 183 smoke checks in
       CI) that the steering committee can <i>try before approving</i>: submit a request, walk it through two-level
       approval, watch the timetable-aware affected-course preview, inspect the audit log. The prototype already
       implements CSRF protection, attachment content-sniffing, transaction-safe email delivery, scope isolation and
       paginated account admin — the design package is not aspirational, it is a specification of what already runs.
-      <span class="zh">多數企業級提案只憑介面稿就要預算。本提案附帶<b>可執行原型</b>（<code class="inl">leave-system/</code>，v1.2.1，CI 內 105 項單元測試 + 183 項冒煙檢查）——指導委員可在核准前<i>先試用</i>：提交假單、走完兩級審批、查看課表感知的受影響課程預覽、檢視稽核日誌。原型已實作 CSRF 防護、附件內容嗅探、交易安全郵件投遞、範圍隔離與帳號管理分頁——設計提案不是空想，而是對「已經在跑的系統」的規格說明。</span></p>
+      <span class="zh">多數企業級提案只憑介面稿就要預算。本提案附帶<b>可執行原型</b>（<code class="inl">leave-system/</code>，v1.4.0，CI 內 115 項單元測試 + 183 項冒煙檢查）——指導委員可在核准前<i>先試用</i>：提交假單、走完兩級審批、查看課表感知的受影響課程預覽、檢視稽核日誌。原型已實作 CSRF 防護、附件內容嗅探、交易安全郵件投遞、範圍隔離與帳號管理分頁——設計提案不是空想，而是對「已經在跑的系統」的規格說明。</span></p>
     <div class="note">
       <b>Pilot safety net（試點安全網）:</b> Phase-1 pilot runs two programmes in parallel with the existing email
       process, with an explicit rollback plan. If adoption or CSAT thresholds are not met at week 14, the university

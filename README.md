@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v1.3.0`**（2026-10-28）· Commercial License · CI passing
+**Prototype version ｜原型版本：`v1.4.0`**（2026-11-02）· Commercial License · CI passing
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
 periods instantly previews the classes a leave would make a student miss (`GET
@@ -47,11 +47,20 @@ remaining scale gaps: a status filter on `/approvals?scope=all`, pagination for 
 account admin page, and streamed CSV export (memory use no longer scales with data
 volume), plus a pre-save check that keeps rejected attachment uploads from leaving
 orphaned files on disk. It builds on v0.5.0's clickjacking protection, v0.4.0's
-pagination / unit tests, and a 183-check smoke suite in CI.
+pagination / unit tests, and a 183-check smoke suite in CI. **v1.4.0** closes five
+gaps from the deployment gap analysis: approval **delegation** (an advisor or faculty
+member can hand their level to a stand-in for a date range — the delegate's todo list,
+notifications and attachment access all follow), an admin **advisor-reassign** action,
+**academic terms** with per-term, per-leave-type **quotas** (pending + approved both
+count, so a stack of pending requests cannot bypass the cap), a **holiday calendar**
+(non-teaching days no longer appear as affected courses), and an **SLA escalation
+cron** (`/admin/cron/escalate`, token-authenticated) that reminds the current
+approver, escalates to the next level, and writes an audit record with a 24-hour
+cooldown. 115 unit tests + 183 smoke checks.
 
 | Folder | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v1.3.0**) — student leave, two-level approval (advisor → faculty), CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, streamed CSV export, 183-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、CSV 串流匯出 |
+| `leave-system/` | Flask + SQLite prototype (**v1.4.0**) — student leave, two-level approval (advisor → faculty), approval delegation (advisor/faculty can hand their level to a stand-in for a date range), admin advisor-reassignment, academic terms with per-term leave quotas (pending + approved both count), holiday calendar (non-teaching days skipped in affected courses), SLA escalation cron with 24h cooldown, CSRF protection, attachment access control + content sniffing, timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, streamed CSV export, 115 unit tests + 183-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、委託審批（導師／院系可把審批權暫交代理人）、管理員改派導師、學期制請假額度（待審＋已核准都計入）、校曆假日（受影響課程跳過非上課日）、催辦升級 cron（24 小時冷卻）、CSRF 防護、附件權限＋內容嗅探、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、CSV 串流匯出 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
@@ -102,7 +111,11 @@ Demo accounts (password `Demo@2026`): student `2024001`, advisor `T001`, faculty
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — **v1.3.0** adds competitive comparison against
+See [`CHANGELOG.md`](CHANGELOG.md) — **v1.4.0** closes five gaps from the
+deployment gap analysis (`GAP-ANALYSIS.md`): approval delegation, admin advisor
+reassignment, academic terms with per-term leave quotas, a holiday calendar, and an
+SLA escalation cron (plus 10 new regression tests, 115 total);
+**v1.3.0** adds competitive comparison against
 DingTalk and Feishu (13-dimension table showing why general-purpose IM tools cannot
 handle the multi-step academic absence-and-assessment flow), plus a monthly report
 page with MVP outcomes, standout features, and roadmap; v1.2.1 strengthens the
