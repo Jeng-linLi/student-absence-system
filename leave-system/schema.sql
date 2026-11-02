@@ -156,3 +156,15 @@ CREATE TABLE IF NOT EXISTS holidays (
     label      TEXT    NOT NULL DEFAULT '',
     created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
+
+-- v1.5.0 · 補課 / 調課日（C3）：週末（或假日）要補平日的課。
+-- 校曆上常見「10/10（六）補星期五的課」——這天雖然是週六，學生請假
+-- 照樣會缺課，所以 is_school_off() 要為它開例外，而且受影響課程要按
+-- 「被補的那個星期幾」的課表算，不是按週六算（週六本來就沒課）。
+CREATE TABLE IF NOT EXISTS makeup_days (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    day           TEXT    NOT NULL UNIQUE,        -- 補課日 YYYY-MM-DD
+    cover_weekday INTEGER NOT NULL,               -- 補星期幾的課：0=週一 .. 4=週五
+    label         TEXT    NOT NULL DEFAULT '',
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);

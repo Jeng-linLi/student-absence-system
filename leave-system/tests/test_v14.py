@@ -370,7 +370,13 @@ def test_withdraw_at_level2_no_error(admin_client):
              (_uid('F001'), rid, '%撤回%'), one=True), '院系審批人應收到撤回通知'
 
 
-def test_healthz_reports_v140():
+def test_healthz_reports_version():
+    """/healthz 的版本號要與 utils.APP_VERSION 一致。
+
+    版本號每次發版都會動，所以這裡只驗「一致」＋「不小於 v1.4.0」，
+    不再把數字寫死在測試裡（否則每次發版都得回來改測試）。
+    """
     r = app.test_client().get('/healthz')
     assert r.status_code == 200
-    assert r.get_json()['version'] == APP_VERSION == '1.4.0'
+    assert r.get_json()['version'] == APP_VERSION
+    assert tuple(map(int, APP_VERSION.split('.'))) >= (1, 4, 0)

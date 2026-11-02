@@ -26,6 +26,8 @@ from werkzeug.utils import secure_filename
 import smtplib
 from email.message import EmailMessage
 
+import click
+
 from db import (BASE_DIR, DB_PATH, UPLOAD_DIR, get_db, close_db,  # noqa: F401
                 q, execute, execute_guard, transaction, init_db)
 from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
@@ -40,6 +42,8 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    validate_password, temp_password, csv_safe,
                    valid_role, valid_username, valid_email, valid_phone,
                    sniff_allowed_type, valid_type_code)
+from calendar_import import (parse_calendar_text, apply_calendar,
+                             load_preset, preset_for_today, PRESETS)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-production')
@@ -115,10 +119,16 @@ def is_school_off(d):
 
     假日請假本來就不會缺課——affected_courses_for() 若照樣列出
     「受影響課程」，審批人會誤以為學生缺了兩節課。
+
+    v1.5.0：補課日（makeup_days）是例外——那天就算落在週六，學校照常
+    上（別的星期幾的）課，請假一樣算缺課。
     """
+    iso = d.isoformat()
+    if q('SELECT 1 FROM makeup_days WHERE day=?', (iso,), one=True):
+        return False
     if d.weekday() >= 5:
         return True
-    return bool(q('SELECT 1 FROM holidays WHERE day=?', (d.isoformat(),), one=True))
+    return bool(q('SELECT 1 FROM holidays WHERE day=?', (iso,), one=True))
 
 
 def affected_courses_for(student_id, start_date, end_date,
@@ -142,14 +152,22 @@ def affected_courses_for(student_id, start_date, end_date,
     for r in rows:
         by_wd.setdefault(r['weekday'], []).append(dict(r))
     off_days = {r['day'] for r in q('SELECT day FROM holidays')}
+    # v1.5.0：補課日 → 當天要上的是「被補的那個星期幾」的課
+    makeup = {r['day']: r['cover_weekday']
+              for r in q('SELECT day, cover_weekday FROM makeup_days')}
     out = []
     d = s
     while d <= e:
-        # 週末與校曆假日：不算缺課，直接跳過
-        if d.weekday() >= 5 or d.isoformat() in off_days:
+        iso = d.isoformat()
+        if iso in makeup:
+            # 補課日優先：即使是週六／假日，當天照常上課
+            wd = makeup[iso]
+        elif d.weekday() >= 5 or iso in off_days:
+            # 週末與校曆假日：不算缺課，直接跳過
             d += timedelta(days=1)
             continue
-        wd = d.weekday()
+        else:
+            wd = d.weekday()
         am, pm = _day_halves(d == s, d == e, start_period, end_period)
         day_courses = []
         for c in by_wd.get(wd, []):
@@ -1882,10 +1900,14 @@ def admin_terms():
                'JOIN terms tm ON tm.id=qt.term_id '
                'ORDER BY tm.start_date DESC, t.id')
     holidays = q('SELECT * FROM holidays ORDER BY day')
+    # v1.5.0：補課日 + 可一鍵帶入的內建校曆
+    makeups = [dict(m, cover_label=WEEKDAY_LABELS[m['cover_weekday']])
+               for m in q('SELECT * FROM makeup_days ORDER BY day')]
+    presets = [{'key': k, 'label': v[1]} for k, v in PRESETS.items()]
     types = q('SELECT id, code, name FROM leave_types WHERE active=1 ORDER BY id')
     return render_template('admin_terms.html', terms=terms, quotas=quotas,
-                           holidays=holidays, types=types,
-                           cur=current_term())
+                           holidays=holidays, types=types, makeups=makeups,
+                           presets=presets, cur=current_term())
 
 
 @app.route('/admin/terms/add', methods=['POST'])
@@ -2049,6 +2071,66 @@ def admin_delete_holiday(hid):
     return redirect(url_for('admin_terms'))
 
 
+# --------------------------------------------------------------------------
+# 校曆檔匯入（v1.5.0）
+# --------------------------------------------------------------------------
+@app.route('/admin/calendar/import', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_import_calendar():
+    """一次匯入「學期 + 假日 + 補課日」。
+
+    單筆加假日對一整份校曆不現實：光國慶節就要連按七天。校曆檔支援
+    日期區間，也把學期與補課日一起收進來——匯入一次，整學年的日期
+    邊界就都對了。
+    """
+    preset = request.form.get('preset', '').strip()
+    if preset:
+        text = load_preset(preset)
+        source = PRESETS.get(preset, (preset, preset))[1]
+        if text is None:
+            flash('找不到指定的內建校曆。', 'error')
+            return redirect(url_for('admin_terms'))
+    else:
+        text = request.form.get('calendar_text', '')
+        source = '手動貼上'
+    parsed = parse_calendar_text(text)
+    if not (parsed['terms'] or parsed['holidays'] or parsed['makeups']):
+        flash('沒有解析到任何項目，請檢查檔案格式。', 'error')
+        return redirect(url_for('admin_terms'))
+    try:
+        stats = apply_calendar(parsed)
+    except Exception:                      # 匯入寫入失敗不該把整頁炸掉
+        flash('匯入時發生錯誤，資料庫未變更。', 'error')
+        return redirect(url_for('admin_terms'))
+    log_action(None, current_user()['id'], 'import_calendar',
+               f"{source}：學期 {stats['terms']}、假日 {stats['holidays']} 天、"
+               f"補課 {stats['makeups']} 天")
+    msg = (f"已匯入 {source}：{stats['terms']} 個學期、"
+           f"{stats['holidays']} 個假日、{stats['makeups']} 個補課日。")
+    if parsed['errors']:
+        bad = '、'.join(f"第 {e['line']} 行" for e in parsed['errors'][:5])
+        msg += f"（{len(parsed['errors'])} 行格式有誤已略過：{bad}）"
+        flash(msg, 'error' if not stats['terms'] else 'success')
+    else:
+        flash(msg, 'success')
+    return redirect(url_for('admin_terms'))
+
+
+@app.route('/admin/makeup/<int:mid>/delete', methods=['POST'])
+@login_required
+@role_required('admin')
+def admin_delete_makeup(mid):
+    m = q('SELECT * FROM makeup_days WHERE id=?', (mid,), one=True)
+    if not m:
+        flash('找不到該補課日。', 'error')
+        return redirect(url_for('admin_terms'))
+    execute('DELETE FROM makeup_days WHERE id=?', (mid,))
+    log_action(None, current_user()['id'], 'del_makeup', m['day'])
+    flash(f"已移除補課日 {m['day']}。", 'success')
+    return redirect(url_for('admin_terms'))
+
+
 # 稽核日誌動作的人間可讀標籤（模板與篩選器共用）
 AUDIT_ACTION_LABEL = {
     'submit': '提交假單', 'approve': '核准', 'reject': '駁回', 'withdraw': '撤回',
@@ -2059,6 +2141,8 @@ AUDIT_ACTION_LABEL = {
     'reassign': '改派導師', 'add_delegation': '新增委託', 'del_delegation': '刪除委託',
     'add_term': '新增學期', 'set_current_term': '設定目前學期', 'set_quota': '設定額度',
     'add_holiday': '新增校曆假日', 'del_holiday': '刪除校曆假日', 'escalate': '催辦升級',
+    # v1.5.0
+    'import_calendar': '匯入校曆檔', 'del_makeup': '刪除補課日',
 }
 
 
@@ -2283,6 +2367,38 @@ def init_db_command():
     print('資料庫已初始化。')
 
 
+@app.cli.command('import-calendar')
+@click.argument('path', required=False)
+def import_calendar_command(path):
+    """匯入校曆檔：`flask import-calendar data/hkustgz-2026-27.txt`
+
+    公眾假期每年由政府公告（且常與校曆初版不同），公告後重跑一次即可
+    更新學期、假日與補課日——不用進管理介面手改。不給 path 時匯入
+    涵蓋今天的內建校曆。
+    """
+    if path:
+        try:
+            with open(path, encoding='utf-8') as f:
+                text = f.read()
+        except OSError as exc:
+            print(f'讀取失敗：{exc}')
+            return
+    else:
+        name = preset_for_today()
+        if not name:
+            print('找不到涵蓋今天的內建校曆，請指定檔案路徑。')
+            return
+        text = load_preset(name)
+        print(f'使用內建校曆：{name}')
+    parsed = parse_calendar_text(text)
+    with app.app_context():
+        stats = apply_calendar(parsed)
+    print(f"學期 {stats['terms']}、假日 {stats['holidays']} 天、"
+          f"補課 {stats['makeups']} 天")
+    for e in parsed['errors']:
+        print(f"  第 {e['line']} 行略過：{e['msg']}（{e['raw']}）")
+
+
 def seed_calendar():
     """示範學期與校曆（冪等）。
 
@@ -2290,7 +2406,21 @@ def seed_calendar():
     init_db() + seed()。學期一旦寫入，/stats 預設就會按學期篩選——
     為了不讓既有測試的資料範圍被學期邊界切掉，學期只在實際啟動
     應用（`python app.py` 或 `flask init-db`）時才建立。
+
+    v1.5.0：data/ 下若有涵蓋今天的內建校曆檔（例如港科大（廣州）
+    2026-27），就直接匯入真實校曆，不再用下面的佔位學期。學年往前走
+    時只要把新學年的校曆檔放進 data/，不必改程式碼。
     """
+    preset = preset_for_today()
+    if preset and not q('SELECT 1 FROM terms LIMIT 1'):
+        parsed = parse_calendar_text(load_preset(preset) or '')
+        if parsed['terms'] and not parsed['errors']:
+            stats = apply_calendar(parsed)
+            print(f"已匯入內建校曆 {preset}：{stats['terms']} 個學期、"
+                  f"{stats['holidays']} 個假日、{stats['makeups']} 個補課日。")
+            return
+        print(f"內建校曆 {preset} 解析有誤，改用佔位學期。")
+
     if not q('SELECT 1 FROM terms LIMIT 1'):
         today = date.today()
         y = today.year if today.month >= ACADEMIC_YEAR_START_MONTH else today.year - 1

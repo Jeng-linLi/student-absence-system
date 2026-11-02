@@ -9,6 +9,48 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-11-02
+
+校曆落地版：把**港科大（廣州）2026–27 學年官方校曆**匯入系統，並補上
+v1.4.0 校曆假日缺的「區間」與「補課／調課日」兩塊。主軸是
+`GAP-ANALYSIS.md` 的 C3（校曆感知）從「單日假日」推進到「可維護的真實校曆」。
+
+### Added ｜新增
+
+- **校曆檔匯入（學期 ＋ 假日 ＋ 補課日）**：新增 `calendar_import.py`，定義純
+  文字校曆檔格式，三種行 `term`（學期起訖）／`holiday`（放假區間，含端點
+  自動展開）／`makeup`（補課日，標註被補的星期幾）。解析與寫庫分層：
+  `parse_calendar_text()` 為可脫離 DB 單獨測試的純函式（單行錯誤不中止、
+  錯行進 `errors`、對的照常匯入），`apply_calendar()` 用 `ON CONFLICT DO
+  UPDATE` 冪等 UPSERT，重複匯入不長出重複資料；無目前學期時自動把涵蓋
+  今天的學期設為目前，已有則不擅改。
+- **補課／調課日（C3）**：`makeup_days` 表（`day` UNIQUE、`cover_weekday`、
+  `label`）。`is_school_off()` 對補課日開例外（即使落週六／假日也照常上課），
+  `affected_courses_for()` 補課日改按「被補的星期幾」取課表，而非當天星期
+  ——例：10/10（六）補星期五的課，請假要算缺課，且算的是星期五的課。
+- **內建校曆預設 ＋ 自動比對**：`data/hkustgz-2026-27.txt` 收錄官方
+  2026–27 學年四學期（秋／冬／春／夏）、六段公眾假期與國慶調課日，檔頭
+  記錄來源 URL、擷取方式與原文「2027 假期為 TBC」警告。`preset_for_today()`
+  自動挑出涵蓋今天的內建校曆；白名單 `PRESETS` 擋路徑穿越。
+  `seed_calendar()` 在 `terms` 表為空且內建檔涵蓋今天時直接匯入真實校曆，
+  否則才回退佔位學期。
+- **管理後台 ＋ CLI**：`/admin/calendar/import`（POST，管理員）可一鍵帶入
+  預設或貼上校曆檔，`/admin/makeup/<id>/delete` 移除補課日；
+  `flask import-calendar [path]` CLI 便於政府公告假期後重跑更新。兩者皆
+  寫入稽核日誌（動作 `import_calendar`／`del_makeup`）。
+- `tests/test_v15.py`：13 項新回歸測試（解析 term/holiday/makeup、星期幾
+  別名、壞行不致命、內建檔內容、自動比對、路由匯入與冪等、補課日對
+  `is_school_off`／`affected_courses_for` 的實際效果含國慶對照、刪除補課日）。
+  單元測試 115 → 128；冒煙檢查 183 項不變。
+
+### Changed ｜變更
+
+- `APP_VERSION` 1.4.0 → 1.5.0；根 README、`leave-system/README.md` 版本號、
+  功能表與測試計數同步。
+- `tests/test_v14.py` 健康檢查測試不再寫死版本號，改為斷言「與
+  `APP_VERSION` 一致且 ≥ 1.4.0」，避免每次發版都要改測試。
+- `GAP-ANALYSIS.md` C3 標注升級為「真實校曆 ＋ 補課日」。
+
 ## [1.4.0] — 2026-11-02
 
 功能強化版：主軸是**收斂 GAP-ANALYSIS.md 盤點出的五項部署前功能缺口**

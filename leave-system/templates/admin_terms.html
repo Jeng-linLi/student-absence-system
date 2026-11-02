@@ -143,4 +143,65 @@
     校曆假日與週末都不列入「受影響課程」——假日請假本來就不會缺課。
   </p>
 </div>
+
+<div class="card">
+  <h3>校曆檔匯入（學期 ＋ 假日 ＋ 補課日）</h3>
+  <p class="muted" style="margin:0 0 12px;font-size:13px">
+    整份校曆一次寫入，不用逐筆加。格式每行一筆，<span class="mono">#</span> 開頭為註解：
+  </p>
+  <pre class="mono" style="background:var(--surface-2);padding:10px 12px;border-radius:8px;font-size:12px;overflow:auto;margin:0 0 14px">term    2026-09-01  2026-12-25  2026-27 秋季學期
+holiday 2026-10-01  2026-10-07  國慶節     # 結束日可省略＝單日
+makeup  2026-10-10  fri         補星期五課程（國慶假期調課）</pre>
+
+  {% if presets %}
+  <div class="actions" style="margin-bottom:14px">
+    {% for p in presets %}
+      <form method="post" action="{{ url_for('admin_import_calendar') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="preset" value="{{ p.key }}">
+        <button class="btn ghost" type="submit"
+          onclick="return confirm('帶入「{{ p.label }}」？同名的學期與同日的假日會被覆蓋。');">
+          一鍵帶入：{{ p.label }}</button>
+      </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('admin_import_calendar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>或貼上校曆檔內容</label>
+    <textarea name="calendar_text" rows="6"
+      placeholder="term 2026-09-01 2026-12-25 2026-27 秋季學期&#10;holiday 2026-10-01 2026-10-07 國慶節"></textarea>
+    <div class="actions"><button class="btn ghost" type="submit">匯入</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>補課 / 調課日</h3>
+  <p class="muted" style="margin:0 0 12px;font-size:13px">
+    落在週末（或假日）但要上課的日子，例如「10/10（六）補星期五的課」。
+    這類日子請假照樣算缺課，受影響課程按「被補的星期幾」的課表計算。
+  </p>
+  {% if makeups %}
+  <table>
+    <thead><tr><th>補課日</th><th>補星期幾</th><th>名稱</th><th></th></tr></thead>
+    <tbody>
+    {% for m in makeups %}
+      <tr>
+        <td class="tnum mono">{{ m.day }}</td>
+        <td>{{ m.cover_label }}</td>
+        <td>{{ m.label or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_delete_makeup', mid=m.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn sm danger" type="submit"
+              onclick="return confirm('確定移除補課日 {{ m.day }}？');">移除</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty">尚無補課日（可由上方校曆檔匯入）。</div>{% endif %}
+</div>
 {% endblock %}
