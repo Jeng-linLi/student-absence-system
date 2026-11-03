@@ -9,6 +9,40 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-11-03
+
+個資治理第三刀：把 `GAP-ANALYSIS.md` 的 **D2（附件只驗格式、不驗惡意內容）**
+從「未做」推進到「已就緒」——上傳附件先落臨時檔過掃毒引擎，乾淨才移入 `uploads/`；
+感染檔自始不進入附件區、不寫假單、並留 `av_block` 稽核軌跡。掃毒通道採組態門控
+（與 v1.8.0 SSO 同款模式）：未配置 `LEAVE_AV_CMD` 時通道關閉、系統照常運行，
+配置 ClamAV（`clamdscan --no-summary {file}`）或任何退出碼合約為 0=乾淨／1=感染
+的掃描命令後即啟用。
+
+> ⚠️ 界限說明：本版補的是「上傳時掃毒＋存量重掃」通道與攔截機制；隨附的掃毒引擎
+> （ClamAV 等）須由部署環境安裝，本地原型不捆綁。掃描器故障時的放行策略由
+> `LEAVE_AV_FAIL_POLICY` 控制（預設 `reject` fail-closed，可設 `allow` fail-open）。
+> 路線圖 P0 **A1（資料庫升級 SQLite→PostgreSQL）** 仍因需外部基礎設施暫緩。
+
+### Added ｜新增
+
+- **上傳時掃毒**（`app.py` 的 `scan_file_for_malware()` + 上傳路由接線）：上傳檔先存
+  系統臨時檔，掃毒乾淨才 `shutil.move` 進 `uploads/`——感染檔不落盤、不寫假單，
+  並寫一筆 `av_block` 稽核（`AUDIT_ACTION_LABEL` 同步補標籤）。命令模板
+  `LEAVE_AV_CMD`（`{file}` 佔位符）、逾時 `LEAVE_AV_TIMEOUT`（預設 30 秒）、
+  故障策略 `LEAVE_AV_FAIL_POLICY`（`reject`／`allow`）。
+- **存量重掃**：`flask av-scan [--no-quarantine]` CLI 遍歷 `uploads/` 既有附件，
+  感染檔隔離到 `uploads/quarantine/`、清空對應假單 `attachment` 欄並留稽核；
+  供病毒庫更新後定期補掃。
+- **稽核動作標籤**：`AUDIT_ACTION_LABEL` 補 `av_block`（附件掃毒攔截），
+  後台稽核頁動作篩選下拉自動收錄。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v21.py`（8 項）：版本號、通道關閉時行為不變、感染檔拒收
+  （不落盤＋不寫假單＋留稽核）、乾淨檔正常收件、掃描器故障策略 reject／allow
+  兩態、稽核標籤註冊、`flask av-scan` 隔離感染檔並清空欄位。
+- 單元測試 196 → 203；冒煙測試維持 236。
+
 ## [1.10.0] — 2026-11-03
 
 個資治理第二刀：把 `GAP-ANALYSIS.md` 的 **D1（附件永遠留著，沒有保留期與銷毀）**

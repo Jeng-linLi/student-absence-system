@@ -13,7 +13,10 @@ import urllib.error
 import time
 import secrets
 import shutil
+import shlex
+import tempfile
 import json
+import subprocess
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from functools import wraps
@@ -1224,7 +1227,26 @@ def new_request():
             safe_name = f'{stem}{dot}{ext}' if dot else stem
             fn = secure_filename(
                 f"{u['username']}_{datetime.now():%Y%m%d%H%M%S}_{secrets.token_hex(6)}_{safe_name}")
-            file.save(os.path.join(UPLOAD_DIR, fn))
+            # D2 · v1.11.0：先落臨時檔掃毒，乾淨才移入 uploads/——感染檔
+            # 自始不進入附件區（GAP-ANALYSIS D2：掃描不通過則不落盤）。
+            fd, tmp_path = tempfile.mkstemp(prefix='avscan-')
+            os.close(fd)
+            file.save(tmp_path)
+            av_status, av_detail = scan_file_for_malware(tmp_path)
+            if av_status == 'infected' or (
+                    av_status == 'error' and AV_FAIL_POLICY == 'reject'):
+                os.remove(tmp_path)
+                log_action(None, u['id'], 'av_block',
+                           f"上傳攔截（{av_detail}）：{safe_name}")
+                flash('證明文件未通過安全掃描，已拒收。' if av_status == 'infected'
+                      else '證明文件安全掃描未完成（掃描器故障），已拒收；請稍後再試。',
+                      'error')
+                return render_template('new_request.html', types=types, form=request.form)
+            if av_status == 'error':
+                # fail-open：掃描器故障但策略允許放行，照常收件並留稽核軌跡
+                log_action(None, u['id'], 'av_block',
+                           f"掃描器故障（策略放行，{av_detail}）：{safe_name}")
+            shutil.move(tmp_path, os.path.join(UPLOAD_DIR, fn))
             attachment = fn
 
         level = required_level_for(days, ltype)
@@ -2569,6 +2591,8 @@ AUDIT_ACTION_LABEL = {
     'export': '匯出資料', 'view_pii': '檢視個資',
     # v1.10.0：D1 附件留存期銷毀
     'purge_attachment': '銷毀逾期附件',
+    # v1.11.0：D2 附件掃毒攔截
+    'av_block': '附件掃毒攔截',
 }
 
 
@@ -2675,6 +2699,47 @@ def cron_escalate():
     return jsonify({'status': 'ok', 'threshold_days': days, 'scanned': len(rows),
                     'reminded': reminded, 'escalated': escalated,
                     'skipped_cooldown': skipped})
+
+
+# --------------------------------------------------------------------------
+# D2 · 附件掃毒通道（v1.11.0）——組態門控，未配置 LEAVE_AV_CMD 時通道關閉
+# --------------------------------------------------------------------------
+AV_TIMEOUT_SEC = int(os.environ.get('LEAVE_AV_TIMEOUT', '30'))
+AV_FAIL_POLICY = os.environ.get('LEAVE_AV_FAIL_POLICY', 'reject').lower()
+
+
+def av_configured():
+    """掃毒通道是否已啟用（LEAVE_AV_CMD 已配置即視為啟用）。"""
+    return bool(os.environ.get('LEAVE_AV_CMD', '').strip())
+
+
+def scan_file_for_malware(path):
+    """呼叫外部掃毒命令掃描單一檔案（D2 · v1.11.0）。
+
+    `LEAVE_AV_CMD` 為命令模板，`{file}` 會替換為檔案路徑，例如：
+        LEAVE_AV_CMD='clamdscan --no-summary {file}'
+    依 ClamAV 慣例判讀退出碼：0=乾淨、1=感染、其他=掃描器故障。
+    回傳 (status, detail)，status ∈ 'clean' | 'infected' | 'error'。
+    未配置 LEAVE_AV_CMD 時回傳 ('clean', 'av-disabled')——通道關閉，不攔截，
+    與 A2 SSO 同款「組態門控」模式：本地無掃毒引擎時系統仍可用（降級運行）。
+    掃描器故障（崩潰／逾時／非 0、1 退出碼）時的放行策略由 LEAVE_AV_FAIL_POLICY
+    決定：'reject'（預設，fail-closed）或 'allow'（fail-open）。
+    """
+    cmd = os.environ.get('LEAVE_AV_CMD', '').strip()
+    if not cmd:
+        return 'clean', 'av-disabled'
+    try:
+        proc = subprocess.run(
+            shlex.split(cmd.replace('{file}', path)),
+            capture_output=True, text=True, timeout=AV_TIMEOUT_SEC)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return 'error', f'av-failed-{exc.__class__.__name__}'
+    if proc.returncode == 0:
+        return 'clean', 'av-clean'
+    if proc.returncode == 1:
+        lines = [l for l in (proc.stdout or '').strip().splitlines() if l.strip()]
+        return 'infected', (lines[-1] if lines else 'infected')[:200]
+    return 'error', f'av-exit-{proc.returncode}'
 
 
 # --------------------------------------------------------------------------
@@ -2995,6 +3060,50 @@ def purge_attachments_command(days, dry_run):
           + ("（dry-run，未實際執行）" if result['dry_run'] else ""))
     for rid, fn, status in result['details']:
         print(f"  #{rid} {fn} → {status}")
+
+
+@app.cli.command('av-scan')
+@click.option('--no-quarantine', is_flag=True,
+              help='只報告感染檔，不隔離（預設隔離到 uploads/quarantine/）')
+def av_scan_command(no_quarantine):
+    """重掃 uploads/ 下既有附件（D2 · v1.11.0）：flask av-scan [--no-quarantine]
+
+    上傳時已逐檔掃毒，本命令供定期重掃存量（病毒庫更新後補掃）。
+    感染檔隔離到 uploads/quarantine/ 並清空對應假單的 attachment 欄，
+    孤兒檔（無 DB 紀錄）隔離後留稽核軌跡。
+    """
+    if not av_configured():
+        print('LEAVE_AV_CMD 未配置，掃毒通道關閉。')
+        return
+    quarantine = os.path.join(UPLOAD_DIR, 'quarantine')
+    names = sorted(n for n in os.listdir(UPLOAD_DIR)
+                   if os.path.isfile(os.path.join(UPLOAD_DIR, n)) and n != '.gitkeep')
+    infected = errors = 0
+    for n in names:
+        status, detail = scan_file_for_malware(os.path.join(UPLOAD_DIR, n))
+        if status == 'clean':
+            continue
+        if status == 'infected':
+            infected += 1
+            print(f'[感染] {n}（{detail}）')
+            if no_quarantine:
+                continue
+            os.makedirs(quarantine, exist_ok=True)
+            shutil.move(os.path.join(UPLOAD_DIR, n), os.path.join(quarantine, n))
+            row = q('SELECT id FROM leave_requests WHERE attachment=?', (n,), one=True)
+            with atomic():
+                if row:
+                    execute('UPDATE leave_requests SET attachment=? WHERE id=?',
+                            ('', row['id']))
+                    log_action(row['id'], None, 'av_block',
+                               f'存量附件重掃感染，已隔離：{n}（{detail}）')
+                else:
+                    log_action(None, None, 'av_block',
+                               f'孤兒檔案重掃感染，已隔離：{n}（{detail}）')
+        else:
+            errors += 1
+            print(f'[錯誤] {n}（{detail}）')
+    print(f'掃描完成：{len(names)} 個檔案，感染 {infected}，錯誤 {errors}。')
 
 
 def seed_calendar():
