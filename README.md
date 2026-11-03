@@ -98,6 +98,43 @@ cleared and a `purge_attachment` audit trail is written). 196 unit tests + 236 s
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 
+## Target users ｜目標用戶
+
+**Who this is for — and who touches it every day.** SAAS is built for universities where absence
+handling still lives in private email — especially Chinese-foreign joint-venture and
+internationalised campuses with English-medium instruction, two-tier academic advising, and
+PIPL obligations.
+
+**Who buys it (decision makers)：**
+
+- **Registry / 教務處 & Student Affairs / 學生事務部** — the process owner: today they adjudicate
+  forwarded emails, chase missing proof documents, and hold the PIPL risk. SAAS gives them the
+  structured ledger, the audit trail and the retention controls.
+- **IT / 資訊系統部門** — wants OIDC SSO against the campus IdP, a small ops footprint (Flask + SQLite
+  for pilot, PostgreSQL DDL provided for production), cron-friendly maintenance endpoints, and
+  no third-party data sharing.
+
+**Who uses it daily (end users)：**
+
+- **Students / 學生** — submit a leave request with an uploaded proof document, see their affected
+  courses per their real timetable, track approval status, and get notifications — no email threads.
+- **Academic advisors / 導師（第一級審批）** — approve/reject level 1 (batch or one by one), delegate
+  during leave, with full scope isolation: they only ever see their own advisees.
+- **Faculty & programme heads / 院系（第二級審批）** — the escalation tier for long or high-risk absences,
+  with quota visibility and an SLA escalation cron to keep queues moving.
+- **System administrators / 系統管理員** — accounts, advisor reassignment, leave types, academic
+  calendar & timetable imports, audit-log review.
+
+**One prototype, two audiences:** the steering committee gets a clickable, testable flow before any
+budget approval; the vendor/engineering team gets a hardened, test-covered codebase (196 unit tests +
+236 smoke checks) to grow into production.
+
+<span class="zh">**賣給誰（決策者）：** 教務處與學生事務部——流程所有者，今天在裁決轉發郵件、追討證明文件、扛著個人資料保護法風險，SAAS 給他們結構化帳本、稽核軌跡與留存控制；資訊系統部門——要校內 IdP 的 OIDC 單一登入、小運維 footprint（試點 Flask＋SQLite，生產環境 DDL 已備）、cron 友善的維護端點，且不外流任何第三方資料。</span>
+
+<span class="zh">**誰每天在用（終端用戶）：** 學生——上傳證明提交假單、按真實課表看到受影響課程、追蹤進度、收站內通知；導師——第一級審批（可批次、可委託），只看得到自己的學生；院系——長假與高風險假單的升級審批層，有額度可見性與催辦升級 cron；系統管理員——帳號、改派、假單類型、校曆與課表匯入、稽核日誌覆核。</span>
+
+<span class="zh">**一份原型，兩類受眾：** 指導委員會在核准預算前就能點按試用完整流程；工程團隊拿到的是有 196 項單元測試＋236 項冒煙測試覆蓋的硬化代碼庫，可直接長成生產系統。</span>
+
 ## Why adopt ｜為什麼採用（for universities）
 
 This isn't a slide-deck proposal — it ships a **runnable prototype** alongside the enterprise design package, so a
