@@ -9,6 +9,62 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-11-04
+
+營運自助第一刀：把 `GAP-ANALYSIS.md` 的 **B1（忘記密碼只能找管理員）** 與
+**B2（帳號建立時不驗證 Email）** 從「未做」推進到「已就緒」。使用者忘記密碼時
+可自助透過 Email 一次性連結重設，管理員不再被密碼救援淹沒；同時建立 Email
+驗證基礎（`email_verified` 標記），確保重設信不會發進死信箱。郵件通道採組態
+門控（與 v1.8.0 SSO、v1.11.0 掃毒同款模式）：未配置 SMTP 時通道關閉、系統
+照常運行，行為與 v1.11.0 完全一致。
+
+> 安全設計：DB 只存 token 的 SHA-256 雜湊（洩庫不可重放）；`/forgot` 對已登記
+> 與未登記的 Email 一律回同一句泛用訊息（帳號枚舉防護）；兌換守衛
+> `used_at IS NULL` 與寫入新密碼同交易（併發雙開連結只有一方成功）；同一帳號
+> 一小時內的重設申請有頻率上限（防郵件轟炸）；重設成功即視為 Email 已驗證，
+> 並刷新 `pwd_changed_at` 使所有舊 session 立即失效。
+
+### Added ｜新增
+
+- **忘記密碼自助重設**（`/forgot` → `/reset/<token>`）：`forgot_password`、
+  `reset_password` 路由與模板；token 時效 `LEAVE_RESET_TOKEN_MINUTES`
+  （預設 30 分鐘）、連結僅能使用一次；重設成功導回登入頁。
+- **頻率限制**：同一帳號一小時內的重設信申請上限 `LEAVE_RESET_MAX_PER_HOUR`
+  （預設 5 次），超額靜默壓下（對外仍是同一句泛用訊息）。
+- **Email 驗證**（B2）：`users.email_verified` 欄位（舊庫自動遷移，預設 0）；
+  管理端新增含 Email 的帳號且 SMTP 已配置時自動寄驗證信；`/verify/<token>`
+  一次性連結兌換後轉 1 並留稽核。
+- **`password_resets` 表**：`token_hash`（UNIQUE）、`purpose`（`reset`／
+  `verify`）、`expires_at`、`used_at`；舊庫由 `apply_migrations()` 冪等補表。
+- **稽核動作標籤**：`AUDIT_ACTION_LABEL` 補 `forgot_password`（申請重設密碼）、
+  `verify_email`（驗證 Email）。
+
+### Changed ｜變更
+
+- **登入頁補上 flash 訊息區**：`login.html` 為獨立頁面、未繼承 `base.html`，
+  過去登入失敗、限流、SSO 未啟用、重設連結失效等導向登入頁的提示全都顯示
+  不出來——本版補上與 `base.html` 同款樣式的訊息區塊（既有 UX 缺陷，隨本輪
+  測試發現一併修正）。
+- **郵件佇列支援自訂主旨**：`_queue_email()` 改為三元素 `(to, subject, body)`，
+  重設信、驗證信分別使用「重設密碼」「驗證 Email」主旨，不再一律「系統通知」。
+- 登入頁新增「忘記密碼？」連結。
+
+### Env ｜環境變數
+
+- `LEAVE_RESET_TOKEN_MINUTES`：重設連結時效（分鐘，預設 30）。
+- `LEAVE_RESET_MAX_PER_HOUR`：同一帳號每小時重設申請上限（預設 5）。
+- `LEAVE_BASE_URL`：郵件連結的對外基底網址（預設 `http://localhost:5000`；
+  請求週期內自動取自 `request.url_root`，此變數供非請求場景使用）。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v22.py`（11 案）：帳號枚舉防護、SMTP 未配置通道關閉、
+  完整重設流程（舊密碼失效／`email_verified` 轉 1／token 重放被擋／稽核留痕）、
+  弱密碼與同密碼拒絕、token 過期、頻率限制、驗證信流程、稽核標籤。
+- `smoke_test.py` 補 11 條 B1/B2 冒煙檢查（236 → 247），含 CSRF 關閉路徑下的
+  完整鏈路。
+- `tests/test_v21.py` 版本斷言 1.11.0 → 1.12.0。pytest 全量 213 綠。
+
 ## [1.11.0] — 2026-11-03
 
 個資治理第三刀：把 `GAP-ANALYSIS.md` 的 **D2（附件只驗格式、不驗惡意內容）**

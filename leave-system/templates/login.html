@@ -12,6 +12,11 @@
 </script>
 <div class="container">
   <div class="login-wrap">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}<div class="flashes">
+        {% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}
+      </div>{% endif %}
+    {% endwith %}
     <div class="brand">
       <span class="logo">假</span>
       <div><strong>線上請假系統</strong><small>Leave Management System</small></div>
@@ -27,6 +32,10 @@
         <input name="password" type="password" placeholder="••••••" required>
         <div class="actions"><button class="btn" type="submit">登入</button></div>
       </form>
+
+      <p class="muted" style="margin:8px 0 0; text-align:right">
+        <a href="{{ url_for('forgot_password') }}">忘記密碼？</a>
+      </p>
 
       {% if sso_enabled %}
       <div class="sso-row">

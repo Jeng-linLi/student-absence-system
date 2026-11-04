@@ -9,6 +9,7 @@ import os
 import csv
 import io
 import hmac
+import hashlib
 import urllib.error
 import time
 import secrets
@@ -268,7 +269,7 @@ def notify(user_id, request_id, message):
                 _queue_email(u['email'], message)
 
 
-def _queue_email(to_addr, message):
+def _queue_email(to_addr, message, subject=None):
     """把通知郵件放進佇列，延到交易提交後再寄（v1.2.0）。
 
     原因：寄信是網路 I/O，SMTP 連線最長可達 LEAVE_SMTP_TIMEOUT 秒
@@ -278,10 +279,12 @@ def _queue_email(to_addr, message):
 
     - 請求週期內：由 atomic() 在最外層交易成功提交後寄出；
     - 非請求週期（CLI、seed）：沒有 after_request 會來收割，立即寄出。
+
+    v1.12.0：支援自訂主旨（密碼重設／Email 驗證信不用「系統通知」標題）。
     """
     if getattr(g, '_pending_emails', None) is None:
         g._pending_emails = []
-    g._pending_emails.append((to_addr, message))
+    g._pending_emails.append((to_addr, message, subject))
     # 非請求週期（CLI、seed）且不在交易中：沒有 after_request 會來收割、
     # 也沒有 atomic() 會在提交後寄出——立即寄出。若在交易中（縱然沒有
     # 請求週期），是否寄出交給 atomic() 依提交／回滾決定。
@@ -295,8 +298,8 @@ def _flush_emails():
     if not pending:
         return
     g._pending_emails = []
-    for to_addr, message in pending:
-        send_email(to_addr, '線上請假系統通知', message)
+    for to_addr, message, subject in pending:
+        send_email(to_addr, subject or '線上請假系統通知', message)
 
 
 @contextmanager
@@ -902,6 +905,159 @@ def change_password():
             flash('密碼已更新，請用新密碼重新登入。', 'success')
             return redirect(url_for('logout'))
     return render_template('change_password.html')
+
+
+# --------------------------------------------------------------------------
+# 自助密碼重設與 Email 驗證（B1/B2 · v1.12.0）
+# 忘記密碼不再只能找管理員：寄送帶時效 token 的郵件連結。token 在資料庫
+# 只存 SHA-256 雜湊；同一帳號申請頻率有限制；成功重設即視為 Email 已驗證
+# （能收到信就證明信箱在用）。SMTP 未配置時通道自動關閉，行為與舊版一致。
+# --------------------------------------------------------------------------
+RESET_TOKEN_MINUTES = int(os.environ.get('LEAVE_RESET_TOKEN_MINUTES', '30'))
+RESET_MAX_PER_HOUR = int(os.environ.get('LEAVE_RESET_MAX_PER_HOUR', '5'))
+RESET_BASE_URL = os.environ.get('LEAVE_BASE_URL', 'http://localhost:5000').rstrip('/')
+
+
+def _hash_token(token):
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def issue_token(user_id, purpose, minutes=None):
+    """簽發一次性時效 token，回傳明文（只出現在郵件連結裡）。"""
+    minutes = minutes or RESET_TOKEN_MINUTES
+    expires = (datetime.now() + timedelta(minutes=minutes)).strftime('%Y-%m-%d %H:%M:%S')
+    for _ in range(5):                     # 撞 UNIQUE 機率趨近零，迴圈僅為防禦
+        raw = secrets.token_urlsafe(32)
+        if not q('SELECT 1 FROM password_resets WHERE token_hash=?',
+                 (_hash_token(raw),), one=True):
+            execute('INSERT INTO password_resets (token_hash, user_id, purpose, expires_at) '
+                    'VALUES (?,?,?,?)', (_hash_token(raw), user_id, purpose, expires))
+            return raw
+    return None
+
+
+def consume_token(token, purpose):
+    """取回有效（未使用、未過期、目的相符）的 token 列；無效回 None。
+
+    只做查詢不標記——「標記已用」與「寫入新密碼」放在同一個交易裡
+    （見 reset_password），避免併發下同一 token 被兌換兩次。
+    """
+    if not token:
+        return None
+    row = q('SELECT * FROM password_resets WHERE token_hash=? AND purpose=?',
+            (_hash_token(token), purpose), one=True)
+    if not row or row['used_at'] or row['expires_at'] < _now_str():
+        return None
+    return row
+
+
+def _reset_rate_limited(user_id):
+    """同一帳號一小時內的重設信申請上限（防郵件轟炸）。"""
+    cutoff = (datetime.now() - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
+    n = q('SELECT COUNT(*) c FROM password_resets WHERE user_id=? AND purpose=? '
+          'AND created_at > ?', (user_id, 'reset', cutoff), one=True)['c']
+    return n >= RESET_MAX_PER_HOUR
+
+
+def _external_base_url():
+    """組絕對連結用的基底網址：請求週期內以 Host 為準，否則用 LEAVE_BASE_URL。"""
+    if has_request_context():
+        root = request.url_root.rstrip('/')
+        if root.startswith(('http://', 'https://')):
+            return root
+    return RESET_BASE_URL
+
+
+def _queue_reset_email(user, minutes=None):
+    """寄重設連結（進佇列，交易外寄出）。回傳是否真的寄了。"""
+    if not _smtp_configured() or not user['email']:
+        return False
+    if _reset_rate_limited(user['id']):
+        return False
+    minutes = minutes or RESET_TOKEN_MINUTES
+    raw = issue_token(user['id'], 'reset', minutes)
+    if not raw:
+        return False
+    link = f"{_external_base_url()}{url_for('reset_password', token=raw)}"
+    body = (f"{user['name']} 您好，\n\n"
+            f"請在 {minutes} 分鐘內開啟以下連結重設密碼：\n{link}\n\n"
+            '若您沒有申請重設，請忽略這封信，您的密碼不會被變更。\n'
+            '— 線上請假系統')
+    _queue_email(user['email'], body, subject='重設密碼 · 線上請假系統')
+    return True
+
+
+@app.route('/forgot', methods=['GET', 'POST'])
+def forgot_password():
+    """忘記密碼：一律回相同的泛用訊息，不洩漏「此 Email 是否已登記」。"""
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        if valid_email(email):
+            user = q('SELECT * FROM users WHERE LOWER(email)=LOWER(?) AND active=1',
+                     (email,), one=True)
+            if user:
+                log_action(None, user['id'], 'forgot_password', f'申請重設密碼連結（{email}）')
+                _queue_reset_email(user)
+        # 對外永遠同一句話：帳號枚舉防護（與登入的時序均化同一思路）
+        flash('若此 Email 已登記，重設連結已寄出，請查收（含垃圾郵件夾）。', 'success')
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html')
+
+
+@app.route('/reset/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """開信點連結 → 設新密碼。兌換 token 與寫入新密碼在同一交易。"""
+    row = consume_token(token, 'reset')
+    if not row:
+        flash('重設連結無效或已逾期，請重新申請。', 'error')
+        return redirect(url_for('forgot_password'))
+    u = q('SELECT * FROM users WHERE id=? AND active=1', (row['user_id'],), one=True)
+    if not u:
+        flash('此帳號不存在或已停用，請聯絡管理員。', 'error')
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        new = request.form.get('new_password', '')
+        confirm = request.form.get('confirm_password', '')
+        err = validate_password(new, u['username'])
+        if err:
+            flash(err, 'error')
+        elif new != confirm:
+            flash('兩次輸入的新密碼不一致。', 'error')
+        elif check_password_hash(u['password_hash'], new):
+            flash('新密碼不可與目前密碼相同。', 'error')
+        else:
+            with transaction():
+                # 兌換守衛：used_at 仍是 NULL 才動筆——併發雙開連結時只有一方成功
+                ok = execute_guard('UPDATE password_resets SET used_at=? '
+                                   'WHERE id=? AND used_at IS NULL', (_now_str(), row['id']))
+                if ok:
+                    execute('UPDATE users SET password_hash=?, pwd_changed_at=?, '
+                            'email_verified=1 WHERE id=?',
+                            (generate_password_hash(new), _now_str(), u['id']))
+                    log_action(None, u['id'], 'reset_password', '自助重設密碼（郵件連結）')
+            flash('密碼已重設，請用新密碼登入。', 'success')
+            return redirect(url_for('login'))
+    return render_template('reset_password.html', token=token)
+
+
+@app.route('/verify/<token>')
+def verify_email(token):
+    """Email 驗證連結（B2）：能收信即證明信箱在用，標記 email_verified=1。"""
+    row = consume_token(token, 'verify')
+    if not row:
+        flash('驗證連結無效或已逾期，請聯絡管理員重發。', 'error')
+        return redirect(url_for('login'))
+    u = q('SELECT id, name FROM users WHERE id=?', (row['user_id'],), one=True)
+    if not u:
+        flash('此帳號不存在。', 'error')
+        return redirect(url_for('login'))
+    with transaction():
+        execute_guard('UPDATE password_resets SET used_at=? '
+                      'WHERE id=? AND used_at IS NULL', (_now_str(), row['id']))
+        execute('UPDATE users SET email_verified=1 WHERE id=?', (u['id'],))
+    log_action(None, u['id'], 'verify_email', f'完成 Email 驗證（{u["name"]}）')
+    flash('Email 驗證完成，謝謝。', 'success')
+    return redirect(url_for('login'))
 
 
 def count_todo(u):
@@ -1864,6 +2020,17 @@ def admin_add_user():
             (username, generate_password_hash(password), name, role,
              department, class_name, email, advisor_id))
     log_action(None, current_user()['id'], 'add_user', f'新增帳號 {username}（{role}）')
+    # B2（v1.12.0）：填了 Email 且 SMTP 已配置時寄驗證信（最好能有，失敗靜默）。
+    # 未驗證標記 email_verified=0；使用者開信點連結後轉 1。
+    new_user = q('SELECT id, name, email FROM users WHERE username=?', (username,), one=True)
+    if new_user and new_user['email'] and _smtp_configured():
+        raw = issue_token(new_user['id'], 'verify')
+        if raw:
+            link = f"{_external_base_url()}{url_for('verify_email', token=raw)}"
+            body = (f"{new_user['name']} 您好，\n\n"
+                    f'您的帳號 {username} 已建立。請開啟以下連結完成 Email 驗證：\n'
+                    f'{link}\n\n— 線上請假系統')
+            _queue_email(new_user['email'], body, subject='驗證 Email · 線上請假系統')
     # 明文密碼不進 flash：flash 存放在 session cookie 裡，而 cookie 只是簽名並非加密，
     # 任何拿到 cookie 的人都能讀出密碼，且它會一直待到下次請求被消費。
     # 改為僅在本次回應中呈現一次，任何地方都不留持久痕跡。
@@ -2593,6 +2760,8 @@ AUDIT_ACTION_LABEL = {
     'purge_attachment': '銷毀逾期附件',
     # v1.11.0：D2 附件掃毒攔截
     'av_block': '附件掃毒攔截',
+    # v1.12.0：B1/B2 自助密碼與 Email 驗證
+    'forgot_password': '申請重設密碼', 'verify_email': '驗證 Email',
 }
 
 

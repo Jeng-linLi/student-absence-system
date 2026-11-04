@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     department    TEXT    NOT NULL DEFAULT '',      -- 所屬院系
     class_name    TEXT    NOT NULL DEFAULT '',      -- 班級（學生）
     email         TEXT    NOT NULL DEFAULT '',
+    email_verified INTEGER NOT NULL DEFAULT 0,        -- B2（v1.12.0）：Email 是否已驗證（0/1）
     external_id   TEXT,                              -- SSO / 外部身分對映（A2，v1.8.0）；本地帳號為 NULL
     advisor_id    INTEGER REFERENCES users(id),     -- 學生的導師
     active        INTEGER NOT NULL DEFAULT 1,
@@ -93,6 +94,20 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     ts  REAL    NOT NULL                           -- Unix timestamp
 );
 CREATE INDEX IF NOT EXISTS idx_login_attempts_key ON login_attempts(key, ts);
+
+-- v1.12.0 · 自助密碼重設／Email 驗證（B1/B2）：一次性時效 token。
+-- 資料庫只存 token 的 SHA-256 雜湊——明文 token 只出現在寄給使用者的連結裡，
+-- 資料庫外洩也造不出有效連結。
+CREATE TABLE IF NOT EXISTS password_resets (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT    NOT NULL UNIQUE,             -- SHA-256(token)
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    purpose    TEXT    NOT NULL DEFAULT 'reset' CHECK (purpose IN ('reset','verify')),
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    expires_at TEXT    NOT NULL,
+    used_at    TEXT                                     -- 兌換時間；NULL=尚未使用
+);
+CREATE INDEX IF NOT EXISTS idx_pwd_reset_user ON password_resets(user_id, purpose, created_at);
 
 -- 課表（依學生每週上課時間，用於推算請假受影響課程）
 -- v1.7.0：逐生課表不再是「所有人共用一份示範資料」——source 標記課表來源，

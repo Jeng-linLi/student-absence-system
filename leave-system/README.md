@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v1.11.0）
+# 線上請假系統（原型 v1.12.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -122,6 +122,8 @@ makeup  2026-10-10  fri         補星期五課程（國慶假期調課）
 | SQL | 全部參數化查詢 |
 | CSV 匯出 | 自由文字若以 `= + - @` 開頭會加 `'` 前綴，防止 Excel／Sheets 公式注入 |
 | 帳號枚舉 | 帳號不存在時也跑一次固定 dummy hash 比對，拉平與「密碼錯誤」的回應時間差 |
+| 自助密碼重設 | `/forgot` 對已登記與未登記的 Email 一律回同一句泛用訊息（不洩漏帳號是否存在）；重設信含一次性時效連結（`LEAVE_RESET_TOKEN_MINUTES` 預設 30 分鐘），DB 只存 token 的 SHA-256 雜湊；兌換守衛 `used_at IS NULL` 與寫入新密碼同交易（併發雙開只有一方成功）；同一帳號一小時內申請上限 `LEAVE_RESET_MAX_PER_HOUR`（預設 5，防郵件轟炸）；重設成功即視為 Email 已驗證並刷新 `pwd_changed_at` 使所有舊 session 立即失效（v1.12.0，對應 GAP-ANALYSIS B1） |
+| Email 驗證 | `users.email_verified` 欄位（預設 0，舊庫自動遷移）；管理端新增含 Email 的帳號且 SMTP 已配置時自動寄驗證信，`/verify/<token>` 一次性連結兌換後轉 1 並留稽核——確保重設信不會發進死信箱（v1.12.0，對應 GAP-ANALYSIS B2） |
 | 個資讀取稽核 | 三條跨範圍 PII 讀取路徑——統計頁（`/stats`）、CSV 匯出（`/export`）、帳號清單（`/admin/users`）——每次存取皆寫入 `view_pii`／`export` 稽核軌跡，誰看過／匯出過全範圍個資皆可追溯（v1.9.0，對應 GAP-ANALYSIS D3） |
 | 附件留存期與銷毀 | 終態假單（approved／rejected／withdrawn）的證明附件超過 `LEAVE_ATTACHMENT_RETENTION_DAYS`（內建 365）後，由 `purge_expired_attachments()` 先備份至 `attachments_purged/` 再銷毀、清空 `attachment` 欄並寫一筆 `purge_attachment` 稽核（可由 `/admin/cron/purge-attachments` 或 `flask purge-attachments` 觸發，支援 `dry_run`），落實 PIPL 留存最小化（v1.10.0，對應 GAP-ANALYSIS D1） |
 | 附件掃毒 | 上傳證明文件先落系統臨時檔過掃毒引擎（`scan_file_for_malware()`，相容 ClamAV 退出碼：0=乾淨／1=感染），乾淨才移入 `uploads/`——感染檔自始不進附件區、不寫假單、寫 `av_block` 稽核。組態門控：設 `LEAVE_AV_CMD`（如 `clamdscan --no-summary {file}`）即啟用，未配置則通道關閉照常運行；掃描器故障依 `LEAVE_AV_FAIL_POLICY`（預設 `reject` fail-closed）處理，逾時 `LEAVE_AV_TIMEOUT`（30 秒）。存量重掃 `flask av-scan`：感染檔隔離到 `uploads/quarantine/`、清空對應假單欄位並留稽核（v1.11.0，對應 GAP-ANALYSIS D2） |
@@ -159,8 +161,8 @@ leave-system/
   timetable_import.py 課表 CSV 解析（純函式）＋ 冪等寫庫 ＋ 覆蓋率統計（v1.7.0）
   schema.sql          資料庫結構
   data/               內建校曆檔（hkustgz-2026-27.txt）、課表範例（timetable-sample.csv）
-  smoke_test.py       全鏈路冒煙測試（236 項）
-  tests/              單元測試（pytest，203 項）
+  smoke_test.py       全鏈路冒煙測試（247 項）
+  tests/              單元測試（pytest，213 項）
   start.bat           一鍵啟動（預設含 LEAVE_DEBUG=1 自動重載）
   templates/          Jinja2 頁面模板
   static/css/         樣式
@@ -171,8 +173,8 @@ leave-system/
 ## 測試
 
 ```bash
-python -m pytest tests/ -v   # 203 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化 / v1.8.0 單一登入 SSO / v1.9.0 PII 讀取稽核 / v1.10.0 附件留存期與銷毀 / v1.11.0 附件掃毒通道）
-python smoke_test.py         # 236 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼、範圍隔離、假別管理、儀表板範圍、角色下限、撤回通知、稽核日誌、待辦分頁、重複審批守衛、撤回院系通知、單則已讀、電話格式、referrer 防護、SMTP 逾時、院系必填、交易內不寄信、狀態篩選、帳號分頁、CSV 串流、孤兒附件預檢、批次審批（越權／已結案略過、單次上限、模板勾選）、課表真實化（逐生課表、CSV 匯入與冪等、時間補零、覆蓋率、單筆增刪、課表檢視權限）、單一登入 SSO（預設關閉不顯示按鈕、/login/sso 導回登入、開啟後跳轉 IdP、/callback 身分對映並建立 session）
+python -m pytest tests/ -v   # 213 項單元測試（calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化 / v1.8.0 單一登入 SSO / v1.9.0 PII 讀取稽核 / v1.10.0 附件留存期與銷毀 / v1.11.0 附件掃毒通道 / v1.12.0 自助密碼重設與 Email 驗證）
+python smoke_test.py         # 247 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼、範圍隔離、假別管理、儀表板範圍、角色下限、撤回通知、稽核日誌、待辦分頁、重複審批守衛、撤回院系通知、單則已讀、電話格式、referrer 防護、SMTP 逾時、院系必填、交易內不寄信、狀態篩選、帳號分頁、CSV 串流、孤兒附件預檢、批次審批（越權／已結案略過、單次上限、模板勾選）、課表真實化（逐生課表、CSV 匯入與冪等、時間補零、覆蓋率、單筆增刪、課表檢視權限）、單一登入 SSO（預設關閉不顯示按鈕、/login/sso 導回登入、開啟後跳轉 IdP、/callback 身分對映並建立 session、自助密碼重設（忘記密碼頁、寄重設信、一次性連結、重放被擋、重設後視為已驗證、未知 Email 泛用回應、無效驗證連結））
 ```
 
 測試會使用**全新的暫存資料庫**，不會動到 `leave_system.db`。
@@ -188,6 +190,9 @@ python smoke_test.py         # 236 項全鏈路冒煙：兩級審批、撤回、
 | `LEAVE_UPLOAD_DIR` | `uploads/` | 附件上傳目錄 |
 | `LEAVE_SMTP_HOST` / `LEAVE_SMTP_USER` / `LEAVE_SMTP_FROM` / `LEAVE_SMTP_PASS` / `LEAVE_SMTP_PORT` / `LEAVE_SMTP_TLS` | （未設則不啟用） | 選用 Email 通知通道；`HOST`/`USER`/`FROM` 三者齊全才啟用，發送失敗不影響主流程 |
 | `LEAVE_SMTP_TIMEOUT` | `10` | SMTP 連線逾時（秒）。防止郵件伺服器不可達時請求無限期掛起 |
+| `LEAVE_RESET_TOKEN_MINUTES` | `30` | 自助重設連結時效（分鐘），逾時即作廢（v1.12.0） |
+| `LEAVE_RESET_MAX_PER_HOUR` | `5` | 同一帳號每小時重設信申請上限，超出靜默壓下（防郵件轟炸，v1.12.0） |
+| `LEAVE_BASE_URL` | `http://localhost:5000` | 郵件連結對外基底網址；請求週期內自動取 `request.url_root`，此變數供非請求場景（CLI 等）使用（v1.12.0） |
 | `LEAVE_DEBUG` | `0` | 設 `1` 開啟 Flask debug（自動重載＋除錯器）；`start.bat` 已預設開啟，正式部署請保持 `0` |
 | `SSO_CLIENT_ID` | （未設則不啟用） | OIDC client_id；與下方四個 `SSO_*` 端點齊全時 SSO 才啟用 |
 | `SSO_CLIENT_SECRET` | （未設則不啟用） | OIDC client_secret（授權碼兌換 access_token 用） |

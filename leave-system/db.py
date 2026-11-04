@@ -94,6 +94,20 @@ MIGRATIONS = [
     ('users', 'pwd_changed_at', 'TEXT'),
     ('timetable', 'source', "TEXT NOT NULL DEFAULT 'demo'"),
     ('users', 'external_id', 'TEXT'),   # A2 SSO（v1.8.0）：外部身分對映，本地帳號為 NULL
+    ('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 0'),   # B2（v1.12.0）：Email 驗證標記
+]
+
+# 補建資料表（v1.12.0）：MIGRATIONS 只補欄位，整表新增走這裡（冪等）。
+EXTRA_TABLES = [
+    """CREATE TABLE IF NOT EXISTS password_resets (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT    NOT NULL UNIQUE,
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    purpose    TEXT    NOT NULL DEFAULT 'reset' CHECK (purpose IN ('reset','verify')),
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    expires_at TEXT    NOT NULL,
+    used_at    TEXT
+)""",
 ]
 
 # 補建索引（v1.7.0）：課表匯入的 merge 模式靠唯一索引做冪等 UPSERT。
@@ -112,6 +126,8 @@ def apply_migrations():
         cols = [r['name'] for r in q(f'PRAGMA table_info({table})')]
         if column not in cols:
             execute(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}')
+    for ddl in EXTRA_TABLES:
+        execute(ddl)
     for name, ddl in EXTRA_INDEXES:
         if not q("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
                  (name,), one=True):

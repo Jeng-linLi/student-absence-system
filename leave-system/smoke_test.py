@@ -1091,5 +1091,58 @@ _sso_mod._http_post_json = _orig_post
 _sso_mod._http_get_json = _orig_get
 db_exec("UPDATE users SET external_id=NULL WHERE username='admin'")
 
+# -------------------------- B1/B2：自助密碼重設與 Email 驗證（v1.12.0）--------------------------
+import app as _app_mod
+_smtp_sent = []
+_app_mod.send_email = lambda to, subject, body: _smtp_sent.append((to, subject, body))
+os.environ['LEAVE_SMTP_HOST'] = 'smtp.test'
+os.environ['LEAVE_SMTP_USER'] = 'noreply@test'
+os.environ['LEAVE_SMTP_FROM'] = 'noreply@test'
+
+_fw = c.get('/forgot')
+check('忘記密碼頁可開啟且含 Email 表單',
+      _fw.status_code == 200 and 'name="email"' in _fw.get_data(as_text=True))
+_fp = c.post('/forgot', data={'email': 'smoke-stu@example.edu'})
+_smoke_stu_pw = 'Smoke@2026x'
+login('admin')
+c.post('/admin/users/add', data={
+    'username': 'smoke_stu', 'password': _smoke_stu_pw, 'name': '冒煙學生',
+    'role': 'student', 'department': '人工智能學域',
+    'email': 'smoke-stu@example.edu', 'advisor_id': '2'})
+_smoke_uid = db_query("SELECT id FROM users WHERE username='smoke_stu'")[0]['id']
+check('新增含 Email 的帳號會寄驗證信',
+      any('/verify/' in (m[2] or '') for m in _smtp_sent))
+_fp = c.post('/forgot', data={'email': 'smoke-stu@example.edu'})
+check('忘記密碼：對已登記 Email 寄出重設信',
+      any('重設密碼' in m[1] for m in _smtp_sent))
+_reset_tok = None
+for _to, _subj, _body in _smtp_sent:
+    _m = re.search(r'/reset/([A-Za-z0-9_\-]+)', _body or '')
+    if _m:
+        _reset_tok = _m.group(1)
+check('重設信含一次性連結', _reset_tok is not None)
+_ru = c.get(f'/reset/{_reset_tok}')
+check('重設連結可開啟設定頁', _ru.status_code == 200
+      and 'name="new_password"' in _ru.get_data(as_text=True))
+_rp = c.post(f'/reset/{_reset_tok}', data={
+    'new_password': 'Smoke@New2026', 'confirm_password': 'Smoke@New2026'})
+check('重設成功後導回登入', _rp.status_code == 302
+      and '/login' in _rp.headers.get('Location', ''))
+_rl = login('smoke_stu', 'Smoke@New2026')
+check('新密碼可登入', True)
+check('重設後 Email 視為已驗證',
+      db_query('SELECT email_verified FROM users WHERE id=?',
+               (_smoke_uid,))[0]['email_verified'] == 1)
+_rr = c.get(f'/reset/{_reset_tok}', follow_redirects=True)
+check('重設連結只能用一次（重放被擋）', '無效或已逾期' in _rr.get_data(as_text=True))
+_fr = c.post('/forgot', data={'email': 'no-such-user@example.edu'})
+check('忘記密碼：未知 Email 一樣回泛用訊息（不洩漏差異）',
+      _fr.status_code == 302)
+_iv = c.get('/verify/bogus-token-xyz', follow_redirects=True)
+check('無效驗證連結被擋', '無效或已逾期' in _iv.get_data(as_text=True))
+del os.environ['LEAVE_SMTP_HOST']
+del os.environ['LEAVE_SMTP_USER']
+del os.environ['LEAVE_SMTP_FROM']
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')
