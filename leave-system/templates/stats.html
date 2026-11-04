@@ -2,19 +2,27 @@
 {% block title %}統計 · 線上請假系統{% endblock %}
 {% block content %}
 <h1>請假統計</h1>
+{% set term_value = '0' if no_term else (term.id if term else '0') %}
 
-{% if terms %}
-<form method="get" class="actions" style="margin-bottom:14px">
+<form method="get" class="actions" style="margin-bottom:14px;align-items:center">
+  {% if terms %}
   <label style="margin:0;align-self:center;font-size:13px">學期</label>
-  <select name="term" onchange="this.form.submit()" style="max-width:240px">
+  <select name="term" style="max-width:240px">
     <option value="0" {{ 'selected' if no_term }}>全部（不按學期）</option>
     {% for t in terms %}
       <option value="{{ t.id }}" {{ 'selected' if term and term.id == t.id }}>{{ t.label }}</option>
     {% endfor %}
   </select>
-  <noscript><button class="btn sm" type="submit">套用</button></noscript>
+  {% endif %}
+  <input type="search" name="q" value="{{ search_q }}" maxlength="{{ MAX_SEARCH_Q_LEN }}"
+         placeholder="搜尋學生／學號／班級／院系" style="max-width:240px">
+  <label style="margin:0;align-self:center;font-size:13px">請假起</label>
+  <input type="date" name="date_from" value="{{ date_from }}" style="max-width:160px">
+  <label style="margin:0;align-self:center;font-size:13px">請假訖</label>
+  <input type="date" name="date_to" value="{{ date_to }}" style="max-width:160px">
+  <button class="btn sm" type="submit">套用</button>
+  <a class="btn sm ghost" href="{{ url_for('stats', term=term_value) }}">清除搜尋</a>
 </form>
-{% endif %}
 
 <div class="grid g2">
   <div class="card">
@@ -49,7 +57,7 @@
       </tbody>
     </table>
     {% else %}<div class="empty">暫無核准記錄。</div>{% endif %}
-    <div class="actions"><a class="btn ghost sm" href="{{ url_for('export_csv') }}">匯出 CSV</a></div>
+    <div class="actions"><a class="btn ghost sm" href="{{ url_for('export_csv', q=search_q, date_from=date_from, date_to=date_to, term=term_value) }}">匯出 CSV</a></div>
   </div>
 </div>
 {% endblock %}

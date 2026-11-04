@@ -29,7 +29,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '1.12.0'
+APP_VERSION = '1.13.0'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')
@@ -59,6 +59,9 @@ MAX_TYPE_NAME_LEN = 30
 # 單次批次審批上限（v1.6.0）：一筆交易別鎖太久，也防誤勾整頁
 MAX_BULK_DECIDE = 50
 
+# 列表搜尋關鍵字上限（v1.13.0）：避免超長輸入拖慢 LIKE 掃描與撐爆版面
+MAX_SEARCH_Q_LEN = 80
+
 # 閒置 session 逾時（分鐘）：超過此時間無操作即需重新登入。
 # session 是簽名 cookie，服務端無法主動逐出，只能以時間戳記在每次請求時檢驗。
 SESSION_IDLE_MINUTES = int(os.environ.get('LEAVE_SESSION_IDLE_MINUTES', '480'))
@@ -82,6 +85,71 @@ def is_hhmm(s):
 
 def parse_date(s):
     return datetime.strptime(s, '%Y-%m-%d').date()
+
+
+# --------------------------------------------------------------------------
+# 列表搜尋（E4 · v1.13.0）
+# --------------------------------------------------------------------------
+def parse_list_filters(args):
+    """正規化 `q`／`date_from`／`date_to` 三個列表篩選參數。
+
+    回傳 dict，欄位一律是字串（空字串代表不篩選）：
+      - `q`：去除前後空白、截斷至 `MAX_SEARCH_Q_LEN`；
+      - 日期：只接受 `YYYY-MM-DD`，格式錯誤視為未填；
+      - 起訖顛倒時自動對調，避免使用者因輸入順序拿到永遠空白的結果。
+
+    `args` 可以是 Flask `request.args` 或一般 dict；本函式不依賴 Flask。
+    """
+    def _date(raw):
+        try:
+            return parse_date(str(raw or '').strip()).isoformat()
+        except (ValueError, TypeError):
+            return ''
+
+    keyword = str(args.get('q') or '').strip()[:MAX_SEARCH_Q_LEN]
+    date_from = _date(args.get('date_from'))
+    date_to = _date(args.get('date_to'))
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
+    return {'q': keyword, 'date_from': date_from, 'date_to': date_to}
+
+
+def like_keyword(keyword):
+    """把使用者輸入轉成安全的 `LIKE` 樣式（`%`／`_`／`!` 皆跳脫）。
+
+    以 `ESCAPE '!'` 搭配：不跳脫的話，輸入 `%` 會撈出全部資料、
+    輸入底線會變成單字元萬用字元，看似搜尋其實是全表列舉。
+    """
+    escaped = (keyword.replace('!', '!!')
+               .replace('%', '!%')
+               .replace('_', '!_'))
+    return f'%{escaped}%'
+
+
+def search_conditions(filters, columns):
+    """產生搜尋用的 WHERE 條件與參數。
+
+    `columns` 只能是程式碼內寫死的欄位名稱（含資料表別名），不可由使用者
+    傳入；關鍵字走參數化 `LIKE ? ESCAPE '!'`，日期區間採「請假區間與查詢
+    區間有交集」語意。回傳 `(conditions, args)`。
+    """
+    conds = []
+    args = []
+    keyword = (filters or {}).get('q') or ''
+    if keyword:
+        pattern = like_keyword(keyword)
+        conds.append('(' + ' OR '.join(
+            f"COALESCE({col}, '') LIKE ? ESCAPE '!'" for col in columns) + ')')
+        args.extend([pattern] * len(columns))
+    date_from = (filters or {}).get('date_from') or ''
+    date_to = (filters or {}).get('date_to') or ''
+    if date_from:
+        conds.append('date(r.end_date) >= date(?)')
+        args.append(date_from)
+    if date_to:
+        conds.append('date(r.start_date) <= date(?)')
+        args.append(date_to)
+    return conds, args
 
 
 def calc_days(start_date, end_date, start_period, end_period):

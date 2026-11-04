@@ -5,14 +5,26 @@
 
 <div class="card">
   <div class="actions" style="margin:0 0 12px">
-    <a class="btn sm {{ 'ghost' if filter_status != '' }}" href="{{ url_for('my_requests') }}">全部</a>
-    <a class="btn sm {{ '' if filter_status == 'pending' else 'ghost' }}" href="{{ url_for('my_requests', status='pending') }}">審批中</a>
-    <a class="btn sm {{ '' if filter_status == 'approved' else 'ghost' }}" href="{{ url_for('my_requests', status='approved') }}">已核准</a>
-    <a class="btn sm {{ '' if filter_status == 'rejected' else 'ghost' }}" href="{{ url_for('my_requests', status='rejected') }}">已駁回</a>
-    <a class="btn sm {{ '' if filter_status == 'withdrawn' else 'ghost' }}" href="{{ url_for('my_requests', status='withdrawn') }}">已撤回</a>
+    <a class="btn sm {{ 'ghost' if filter_status != '' }}" href="{{ url_for('my_requests', q=search_q, date_from=date_from, date_to=date_to) }}">全部</a>
+    <a class="btn sm {{ '' if filter_status == 'pending' else 'ghost' }}" href="{{ url_for('my_requests', status='pending', q=search_q, date_from=date_from, date_to=date_to) }}">審批中</a>
+    <a class="btn sm {{ '' if filter_status == 'approved' else 'ghost' }}" href="{{ url_for('my_requests', status='approved', q=search_q, date_from=date_from, date_to=date_to) }}">已核准</a>
+    <a class="btn sm {{ '' if filter_status == 'rejected' else 'ghost' }}" href="{{ url_for('my_requests', status='rejected', q=search_q, date_from=date_from, date_to=date_to) }}">已駁回</a>
+    <a class="btn sm {{ '' if filter_status == 'withdrawn' else 'ghost' }}" href="{{ url_for('my_requests', status='withdrawn', q=search_q, date_from=date_from, date_to=date_to) }}">已撤回</a>
     <span style="flex:1"></span>
     <a class="btn" href="{{ url_for('new_request') }}">＋ 提交假單</a>
   </div>
+
+  <form method="get" class="actions" style="margin:0 0 12px;align-items:center">
+    {% if filter_status %}<input type="hidden" name="status" value="{{ filter_status }}">{% endif %}
+    <input type="search" name="q" value="{{ search_q }}" maxlength="{{ MAX_SEARCH_Q_LEN }}"
+           placeholder="搜尋事由／假別／單號" style="max-width:220px">
+    <label style="margin:0;align-self:center;font-size:13px">請假起</label>
+    <input type="date" name="date_from" value="{{ date_from }}" style="max-width:160px">
+    <label style="margin:0;align-self:center;font-size:13px">請假訖</label>
+    <input type="date" name="date_to" value="{{ date_to }}" style="max-width:160px">
+    <button class="btn sm" type="submit">搜尋</button>
+    <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status) }}">清除</a>
+  </form>
 
   {% if requests %}
   <table>
@@ -37,16 +49,16 @@
   {% if total_pages > 1 %}
     <div class="pager">
       {% if page > 1 %}
-        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, page=page-1) }}">← 上一頁</a>
+        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page-1) }}">← 上一頁</a>
       {% endif %}
       <span class="muted">第 {{ page }} / {{ total_pages }} 頁（共 {{ total }} 筆）</span>
       {% if page < total_pages %}
-        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, page=page+1) }}">下一頁 →</a>
+        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page+1) }}">下一頁 →</a>
       {% endif %}
     </div>
   {% endif %}
   {% else %}
-    <div class="empty">這個分類下還沒有假單。</div>
+    <div class="empty">沒有符合篩選條件的假單。</div>
   {% endif %}
 </div>
 {% endblock %}

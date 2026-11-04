@@ -43,7 +43,8 @@ from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
                    ACADEMIC_YEAR_START_MONTH, SESSION_IDLE_MINUTES,
                    APP_VERSION, LEAVE_STATUSES, MAX_TYPE_NAME_LEN,
-                   MAX_BULK_DECIDE,
+                   MAX_BULK_DECIDE, MAX_SEARCH_Q_LEN,
+                   parse_list_filters, search_conditions,
                    parse_date, calc_days, required_level_for,
                    academic_year_start, allowed_file, is_hhmm,
                    validate_password, temp_password, csv_safe,
@@ -604,6 +605,23 @@ def current_term():
     return q('SELECT * FROM terms ORDER BY end_date DESC LIMIT 1', one=True)
 
 
+def resolve_term_filter(raw):
+    """把 `?term=` 轉成 `(學期, 是否為全部歷史)`。
+
+    只有 `0` 代表不按學期；數字但查無此學期（例如手改網址 `term=999`）
+    一律回落到目前學期，而不是靜默退化成「全部歷史」——後者會讓統計頁
+    下拉選單看起來選了學期、數字卻混進跨學期資料（v1.13.0 修正）。
+    """
+    raw = str(raw or '')
+    if raw == '0':
+        return None, True
+    if raw.isdigit():
+        t = q('SELECT * FROM terms WHERE id=?', (int(raw),), one=True)
+        if t:
+            return t, False
+    return current_term(), False
+
+
 def term_for_date(day):
     """某一天屬於哪個學期（以請假起始日歸屬，避免跨學期假單重複計入）。"""
     iso = day.isoformat() if isinstance(day, date) else str(day)
@@ -745,7 +763,7 @@ def inject_globals():
                 max_date=(date.today() + timedelta(days=365)).isoformat(),
                 MAX_SINGLE_DAYS=MAX_SINGLE_DAYS, MAX_BACKDATE_DAYS=MAX_BACKDATE_DAYS,
                 MAX_REASON_LEN=MAX_REASON_LEN, MAX_COMMENT_LEN=MAX_COMMENT_LEN,
-                MAX_PHONE_LEN=MAX_PHONE_LEN,
+                MAX_PHONE_LEN=MAX_PHONE_LEN, MAX_SEARCH_Q_LEN=MAX_SEARCH_Q_LEN,
                 MAX_BULK_DECIDE=MAX_BULK_DECIDE)
 
 
@@ -760,6 +778,15 @@ STATUS_TONE = {
     'pending': 'amber', 'approved': 'green',
     'rejected': 'red', 'withdrawn': 'grey',
 }
+
+# E4（v1.13.0）：假單列表可搜尋的欄位。欄名由程式碼寫死，關鍵字才走參數，
+# 不讓使用者控制 SQL 片段。統計頁是「依學生彙總」，只收學生身分欄位，
+# 避免「用事由搜到學生、卻顯示該生全部假單」這種誤導性結果。
+REQUEST_SEARCH_COLUMNS = (
+    's.name', 's.username', 's.class_name', 's.department',
+    't.name', 'r.reason', 'CAST(r.id AS TEXT)',
+)
+STUDENT_SEARCH_COLUMNS = ('s.name', 's.username', 's.class_name', 's.department')
 
 
 def status_view(req):
@@ -1060,16 +1087,35 @@ def verify_email(token):
     return redirect(url_for('login'))
 
 
-def count_todo(u):
-    """待當前用戶審批的假單數量（v1.4.0：含代理人身分）。"""
+def todo_filter(u, filters=None):
+    """待辦清單的共用 WHERE（v1.13.0）：範圍隔離＋代理人＋搜尋條件。
+
+    回傳 `(where_sql, args)`；`where_sql=None` 代表這個身份沒有可審範圍。
+    計數與分頁查詢共用同一份條件，避免「列表有資料、總筆數卻算錯」。
+    """
     level, cond, args = todo_scope(u)
-    if level is None:
-        return q("SELECT COUNT(*) c FROM leave_requests WHERE status='pending'", one=True)['c']
-    if cond == '0':                       # 院系帳號沒填院系：沒有可審的範圍
+    if level is not None and cond == '0':
+        return None, []
+    conds = ["r.status='pending'"]
+    params = []
+    if level is not None:
+        conds += ['r.current_level=?', cond]
+        params += [level] + list(args)
+    extra, eargs = search_conditions(filters, REQUEST_SEARCH_COLUMNS)
+    conds += extra
+    params += eargs
+    return 'WHERE ' + ' AND '.join(conds), params
+
+
+def count_todo(u, filters=None):
+    """待當前用戶審批的假單數量（v1.4.0：含代理人身分；v1.13.0：可套搜尋）。"""
+    where, args = todo_filter(u, filters)
+    if where is None:                     # 院系帳號沒填院系：沒有可審的範圍
         return 0
-    return q('SELECT COUNT(*) c FROM leave_requests r JOIN users s ON s.id=r.student_id '
-             f"WHERE r.status='pending' AND r.current_level=? AND {cond}",
-             [level] + list(args), one=True)['c']
+    return q('SELECT COUNT(*) c FROM leave_requests r '
+             'JOIN users s ON s.id=r.student_id '
+             'JOIN leave_types t ON t.id=r.leave_type_id ' + where,
+             args, one=True)['c']
 
 
 # --------------------------------------------------------------------------
@@ -1135,26 +1181,22 @@ def dashboard():
     return render_template('dashboard.html', **ctx)
 
 
-def todo_requests(u, limit=None, offset=0):
+def todo_requests(u, limit=None, offset=0, filters=None):
     """待當前用戶審批的假單。limit/offset 供分頁使用（v1.1.0：待辦清單
     此前一次載入全部待審假單，審批人學生一多頁面就無限變長）。
 
     v1.4.0：範圍改由 todo_scope() 決定，代理人的待辦與原審批人一致。
+    v1.13.0：與 count_todo() 共用 todo_filter()，讓搜尋後的分頁總數正確。
     """
-    level, cond, args = todo_scope(u)
-    base = ('SELECT r.*, t.name type_name, s.name student_name, s.class_name '
-            'FROM leave_requests r '
-            'JOIN leave_types t ON t.id=r.leave_type_id '
-            'JOIN users s ON s.id=r.student_id ')
-    if level is None:
-        sql = base + "WHERE r.status='pending' ORDER BY r.created_at ASC"
-        params = []
-    elif cond == '0':
+    where, params = todo_filter(u, filters)
+    if where is None:
         return []
-    else:
-        sql = (base + f"WHERE r.status='pending' AND r.current_level=? AND {cond} "
-               'ORDER BY r.created_at ASC')
-        params = [level] + list(args)
+    sql = ('SELECT r.*, t.name type_name, s.name student_name, s.class_name '
+           'FROM leave_requests r '
+           'JOIN leave_types t ON t.id=r.leave_type_id '
+           'JOIN users s ON s.id=r.student_id '
+           + where + ' ORDER BY r.created_at ASC')
+    params = list(params)
     if limit:
         sql += ' LIMIT ? OFFSET ?'
         params += [int(limit), max(int(offset or 0), 0)]
@@ -1171,25 +1213,36 @@ def my_requests():
     status = request.args.get('status', '')
     if status not in LEAVE_STATUSES:      # 白名單外的一律視為不篩選
         status = ''
+    filters = parse_list_filters(request.args)
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
-    where = 'WHERE r.student_id=?'
+    conds = ['r.student_id=?']
     args = [u['id']]
     if status:
-        where += ' AND r.status=?'
+        conds.append('r.status=?')
         args.append(status)
+    extra, eargs = search_conditions(filters, REQUEST_SEARCH_COLUMNS)
+    conds += extra
+    args += eargs
+    where = 'WHERE ' + ' AND '.join(conds)
 
-    total = q('SELECT COUNT(*) c FROM leave_requests r ' + where, args, one=True)['c']
+    total = q('SELECT COUNT(*) c FROM leave_requests r '
+              'JOIN users s ON s.id=r.student_id '
+              'JOIN leave_types t ON t.id=r.leave_type_id ' + where,
+              args, one=True)['c']
     total_pages = max((total + per_page - 1) // per_page, 1)
     page = min(max(page, 1), total_pages)
 
     rows = q('SELECT r.*, t.name type_name FROM leave_requests r '
+             'JOIN users s ON s.id=r.student_id '
              'JOIN leave_types t ON t.id=r.leave_type_id '
              f'{where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?',
              args + [per_page, (page - 1) * per_page])
     return render_template('my_requests.html', requests=rows, filter_status=status,
-                           page=page, total_pages=total_pages, total=total)
+                           page=page, total_pages=total_pages, total=total,
+                           search_q=filters['q'], date_from=filters['date_from'],
+                           date_to=filters['date_to'])
 
 
 # --------------------------------------------------------------------------
@@ -1530,6 +1583,7 @@ def _apply_decision(u, req, action, comment, now):
         return True, '已駁回該假單。'
 
     # 核准
+    comment_note = f' 審批意見：{comment}' if comment else ''
     if level < req['required_level']:
         execute('UPDATE leave_requests SET current_level=?, updated_at=? WHERE id=?',
                 (level + 1, now, rid))
@@ -1537,11 +1591,17 @@ def _apply_decision(u, req, action, comment, now):
         # v1.4.0：院系審批人＋其代理人一起通知
         notify_approvers(2, req['department'], None, rid,
                          f"{req['student_name']} 的 {req['days']} 天{req['type_name']}待院系複核。")
+        # v1.13.0：C4——第一級核准也要讓學生知道進度，且審批意見不該只在
+        # 詳情頁看得到。刻意不用「已核准」字樣，避免與終態通知混淆。
+        notify(req['student_id'], rid,
+               f"你的{req['type_name']}假單已通過第{level}級審批，現轉院系複核。"
+               f'{comment_note}')
         return True, '已核准，已轉交院系複核。'
 
     execute("UPDATE leave_requests SET status='approved', updated_at=? WHERE id=?", (now, rid))
     log_action(rid, u['id'], 'approve', f'第{level}級核准，假單生效')
-    notify(req['student_id'], rid, f"你的{req['type_name']}假單已核准（{req['days']} 天）。")
+    notify(req['student_id'], rid,
+           f"你的{req['type_name']}假單已核准（{req['days']} 天）。{comment_note}")
     return True, '已核准該假單。'
 
 
@@ -1636,6 +1696,7 @@ def withdraw(rid):
 def approvals():
     u = current_user()
     scope = request.args.get('scope', 'todo')
+    filters = parse_list_filters(request.args)
     page = request.args.get('page', 1, type=int)
     per_page = 20
     total_pages = 1
@@ -1654,9 +1715,16 @@ def approvals():
         if status:
             conds.append('r.status=?')
             sargs.append(status)
+        # v1.13.0：E4 關鍵字與請假日期區間。範圍條件先留在 conds，
+        # 搜尋條件只會再收窄，不會放寬 role_scope。
+        extra, eargs = search_conditions(filters, REQUEST_SEARCH_COLUMNS)
+        conds += extra
+        sargs += eargs
         where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
         total = q('SELECT COUNT(*) c FROM leave_requests r '
-                  'JOIN users s ON s.id=r.student_id ' + where, sargs, one=True)['c']
+                  'JOIN users s ON s.id=r.student_id '
+                  'JOIN leave_types t ON t.id=r.leave_type_id ' + where,
+                  sargs, one=True)['c']
         total_pages = max((total + per_page - 1) // per_page, 1)
         page = min(max(page, 1), total_pages)
         rows = q('SELECT r.*, t.name type_name, s.name student_name, s.class_name, s.department '
@@ -1669,14 +1737,18 @@ def approvals():
         # v1.1.0：待辦清單也分頁。此前 todo 分支一次取出全部待審假單——
         # scope=all 早有分頁，唯獨預設的 todo 視圖沒有，審批人學生一多，
         # 頁面就無限變長。total 交給模板顯示「共 N 筆」。
+        # v1.13.0：todo 也吃同一組搜尋條件，且計數與列表共用 todo_filter()。
         status = ''
-        total = count_todo(u)
+        total = count_todo(u, filters)
         total_pages = max((total + per_page - 1) // per_page, 1)
         page = min(max(page, 1), total_pages)
-        rows = todo_requests(u, limit=per_page, offset=(page - 1) * per_page)
+        rows = todo_requests(u, limit=per_page, offset=(page - 1) * per_page,
+                             filters=filters)
     return render_template('approvals.html', requests=rows, scope=scope,
                            page=page, total_pages=total_pages, total=total,
-                           filter_status=status)
+                           filter_status=status,
+                           search_q=filters['q'], date_from=filters['date_from'],
+                           date_to=filters['date_to'])
 
 
 # --------------------------------------------------------------------------
@@ -1824,20 +1896,18 @@ def stats():
     # 每次檢視都留稽核軌跡，誰在何時看過全範圍統計可追溯到（GAP-ANALYSIS D3）。
     log_action(None, u['id'], 'view_pii', 'stats 統計頁（跨範圍 PII）')
     conds, args = role_scope(u)
+    filters = parse_list_filters(request.args)
     # v1.4.0：按學期切。預設看目前學期，?term=<id> 可切換；
     # ?term=0 表示不按學期（全部歷史）。
+    # v1.13.0：查無學期的 id 回落到目前學期，不再靜默顯示全部歷史。
     terms = q('SELECT * FROM terms ORDER BY start_date DESC')
-    raw_term = request.args.get('term', '')
-    term = None
-    if raw_term == '0':
-        pass
-    elif raw_term.isdigit():
-        term = q('SELECT * FROM terms WHERE id=?', (int(raw_term),), one=True)
-    else:
-        term = current_term()
+    term, no_term = resolve_term_filter(request.args.get('term', ''))
     if term:
         conds.append('date(r.start_date) BETWEEN date(?) AND date(?)')
         args += [term['start_date'], term['end_date']]
+    student_search, search_args = search_conditions(filters, STUDENT_SEARCH_COLUMNS)
+    conds += student_search
+    args += search_args
     where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
     rows = q(f'SELECT s.id, s.name, s.username, s.class_name, s.department, '
              f'COUNT(r.id) total_cnt, '
@@ -1853,13 +1923,18 @@ def stats():
     if term:
         type_conds.append('date(r.start_date) BETWEEN date(?) AND date(?)')
         type_args += [term['start_date'], term['end_date']]
+    type_search, type_search_args = search_conditions(filters, STUDENT_SEARCH_COLUMNS)
+    type_conds += type_search
+    type_args += type_search_args
     by_type = q("SELECT t.name, COUNT(r.id) cnt, COALESCE(SUM(r.days),0) days "
                 'FROM leave_requests r JOIN leave_types t ON t.id=r.leave_type_id '
                 'JOIN users s ON s.id=r.student_id '
                 f"WHERE {' AND '.join(type_conds)} GROUP BY t.id ORDER BY days DESC",
                 type_args)
     return render_template('stats.html', rows=rows, by_type=by_type,
-                           terms=terms, term=term, no_term=(raw_term == '0'))
+                           terms=terms, term=term, no_term=no_term,
+                           search_q=filters['q'], date_from=filters['date_from'],
+                           date_to=filters['date_to'])
 
 
 @app.route('/export')
@@ -1867,9 +1942,31 @@ def stats():
 @role_required('advisor', 'faculty', 'admin')
 def export_csv():
     u = current_user()
+    filters = parse_list_filters(request.args)
+    status = request.args.get('status', '')
+    if status not in LEAVE_STATUSES:
+        status = ''
     # v1.9.0：D3——匯出含事由等敏感欄位的全範圍 CSV，留稽核軌跡（GAP-ANALYSIS D3）。
-    log_action(None, u['id'], 'export', 'leave_requests CSV 匯出（含事由等 PII）')
+    # v1.13.0：稽核只記「用了哪些篩選」，不把關鍵字（可能就是個資）再抄一份進日誌。
+    used = [k for k in ('q', 'date_from', 'date_to', 'status', 'term')
+            if request.args.get(k)]
+    suffix = f'；篩選：{",".join(used)}' if used else ''
+    log_action(None, u['id'], 'export',
+               f'leave_requests CSV 匯出（含事由等 PII）{suffix}')
     conds, args = role_scope(u)
+    if status:
+        conds.append('r.status=?')
+        args.append(status)
+    # v1.13.0：列表畫面上的搜尋／日期條件可帶到 CSV；沒有帶參數時行為不變
+    # （仍匯出該角色可見的全部歷史），既有測試與維運腳本不受影響。
+    extra, eargs = search_conditions(filters, REQUEST_SEARCH_COLUMNS)
+    conds += extra
+    args += eargs
+    if 'term' in request.args:
+        term, _ = resolve_term_filter(request.args.get('term', ''))
+        if term:
+            conds.append('date(r.start_date) BETWEEN date(?) AND date(?)')
+            args += [term['start_date'], term['end_date']]
     where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
     sql = ('SELECT r.id, s.username, s.name, s.class_name, s.department, t.name type_name, '
            'r.start_date, r.end_date, r.days, r.reason, r.status, r.current_level, r.created_at '
@@ -2985,12 +3082,23 @@ def purge_expired_attachments(days=None, dry_run=False):
             age = max((now - _parse_ts(r['updated_at'])).days, 0)
         except (ValueError, TypeError):
             age = days
-        with atomic():
-            execute('UPDATE leave_requests SET attachment=? WHERE id=?',
-                    ('', r['id']))
-            log_action(r['id'], None, 'purge_attachment',
-                       f'附件逾期銷毀（{r["status"]}，留存 {age} 天，{fn}）'
-                       f'→ 備份至 {os.path.basename(backup_dir)}/')
+        try:
+            with atomic():
+                execute('UPDATE leave_requests SET attachment=? WHERE id=?',
+                        ('', r['id']))
+                log_action(r['id'], None, 'purge_attachment',
+                           f'附件逾期銷毀（{r["status"]}，留存 {age} 天，{fn}）'
+                           f'→ 備份至 {os.path.basename(backup_dir)}/')
+        except Exception:  # noqa: BLE001 — 不讓單筆故障中斷整批清理
+            # v1.13.0：檔案已先搬走，萬一 DB 交易失敗就要搬回原處。
+            # 舊版會留下「attachment 仍指向檔案、檔案卻已不在 uploads/」
+            # 的懸空連結；這裡用補償動作維持兩邊一致。
+            try:
+                shutil.move(dest, src)
+            except OSError:
+                pass
+            details.append((r['id'], fn, 'update_failed'))
+            continue
         purged += 1
         details.append((r['id'], fn, 'purged'))
     return {'scanned': len(rows), 'purged': purged, 'missing_file': missing_file,
@@ -3047,21 +3155,18 @@ def uploaded_file(filename):
     病假證明屬個人敏感資料，僅「已登入」不足以構成授權。
     """
     u = current_user()
-    req = q('SELECT r.id, r.student_id, s.advisor_id, s.department '
-            'FROM leave_requests r JOIN users s ON s.id=r.student_id '
-            'WHERE r.attachment=?', (filename,), one=True)
-    if not req:
+    # v1.13.0：同一檔名可能被多張假單引用（例如舊庫人工回填、匯入資料），
+    # 舊版只取第一筆做授權判斷——若第一筆不屬於目前使用者，合法使用者
+    # 反而被擋；反之若有任何一筆可見就該放行，因為檔案內容是同一份。
+    # 逐筆套用 can_view_request()（含代理人、曾審批過的人）而非自己重寫權限。
+    matches = q('SELECT r.id, r.student_id, r.status, r.current_level, '
+                's.advisor_id, s.department '
+                'FROM leave_requests r JOIN users s ON s.id=r.student_id '
+                'WHERE r.attachment=?', (filename,))
+    if not matches:
         flash('找不到該附件。', 'error')
         return redirect(url_for('dashboard'))
-    # v1.4.0：代理人與原審批人同權——否則代理了卻打不開病假證明，
-    # 只能盲審。
-    allowed = (
-        u['role'] == 'admin'
-        or u['id'] == req['student_id']
-        or (u['role'] == 'advisor' and req['advisor_id'] in approvable_advisor_ids(u))
-        or (u['role'] == 'faculty' and req['department'] in approvable_departments(u))
-    )
-    if not allowed:
+    if not any(can_view_request(u, req) for req in matches):
         flash('你沒有權限存取該檔案。', 'error')
         return redirect(url_for('dashboard'))
     return send_from_directory(UPLOAD_DIR, filename)

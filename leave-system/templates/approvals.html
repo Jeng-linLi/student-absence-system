@@ -5,21 +5,34 @@
 
 <div class="card">
   <div class="actions" style="margin:0 0 12px">
-    <a class="btn sm {{ '' if scope=='todo' else 'ghost' }}" href="{{ url_for('approvals', scope='todo') }}">待我審批</a>
-    <a class="btn sm {{ '' if scope=='all' else 'ghost' }}" href="{{ url_for('approvals', scope='all') }}">全部假單</a>
+    <a class="btn sm {{ '' if scope=='todo' else 'ghost' }}" href="{{ url_for('approvals', scope='todo', q=search_q, date_from=date_from, date_to=date_to) }}">待我審批</a>
+    <a class="btn sm {{ '' if scope=='all' else 'ghost' }}" href="{{ url_for('approvals', scope='all', q=search_q, date_from=date_from, date_to=date_to) }}">全部假單</a>
     <span style="flex:1"></span>
-    <a class="btn ghost sm" href="{{ url_for('export_csv') }}">匯出 CSV</a>
+    <a class="btn ghost sm" href="{{ url_for('export_csv', q=search_q, date_from=date_from, date_to=date_to, status=filter_status) }}">匯出 CSV</a>
   </div>
 
   {% if scope == 'all' %}
   <div class="actions" style="margin:0 0 12px">
-    <a class="btn sm {{ '' if filter_status=='' else 'ghost' }}" href="{{ url_for('approvals', scope='all') }}">全部狀態</a>
+    <a class="btn sm {{ '' if filter_status=='' else 'ghost' }}" href="{{ url_for('approvals', scope='all', q=search_q, date_from=date_from, date_to=date_to) }}">全部狀態</a>
     {% for st, lbl in [('pending','審批中'),('approved','已核准'),('rejected','已駁回'),('withdrawn','已撤回')] %}
       <a class="btn sm {{ '' if filter_status==st else 'ghost' }}"
-         href="{{ url_for('approvals', scope='all', status=st) }}">{{ lbl }}</a>
+         href="{{ url_for('approvals', scope='all', status=st, q=search_q, date_from=date_from, date_to=date_to) }}">{{ lbl }}</a>
     {% endfor %}
   </div>
   {% endif %}
+
+  <form method="get" class="actions" style="margin:0 0 12px;align-items:center">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    {% if scope == 'all' and filter_status %}<input type="hidden" name="status" value="{{ filter_status }}">{% endif %}
+    <input type="search" name="q" value="{{ search_q }}" maxlength="{{ MAX_SEARCH_Q_LEN }}"
+           placeholder="搜尋學生／學號／事由／假別／單號" style="max-width:260px">
+    <label style="margin:0;align-self:center;font-size:13px">請假起</label>
+    <input type="date" name="date_from" value="{{ date_from }}" style="max-width:160px">
+    <label style="margin:0;align-self:center;font-size:13px">請假訖</label>
+    <input type="date" name="date_to" value="{{ date_to }}" style="max-width:160px">
+    <button class="btn sm" type="submit">搜尋</button>
+    <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status) }}">清除</a>
+  </form>
 
   {% if requests %}
   {% if scope != 'all' %}
@@ -75,24 +88,16 @@
   {% if total_pages > 1 %}
     <div class="pager">
       {% if page > 1 %}
-        {% if scope == 'all' %}
-          <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', status=filter_status, page=page-1) }}">← 上一頁</a>
-        {% else %}
-          <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page-1) }}">← 上一頁</a>
-        {% endif %}
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page-1) }}">← 上一頁</a>
       {% endif %}
       <span class="muted">第 {{ page }} / {{ total_pages }} 頁{% if total is defined %}（共 {{ total }} 筆）{% endif %}</span>
       {% if page < total_pages %}
-        {% if scope == 'all' %}
-          <a class="btn sm ghost" href="{{ url_for('approvals', scope='all', status=filter_status, page=page+1) }}">下一頁 →</a>
-        {% else %}
-          <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, page=page+1) }}">下一頁 →</a>
-        {% endif %}
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page+1) }}">下一頁 →</a>
       {% endif %}
     </div>
   {% endif %}
   {% else %}
-    <div class="empty">沒有需要處理的假單。</div>
+    <div class="empty">沒有符合篩選條件的假單。</div>
   {% endif %}
 </div>
 {% endblock %}
