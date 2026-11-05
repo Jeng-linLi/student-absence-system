@@ -227,12 +227,14 @@
     <h3 style="margin-top:22px">6.4 De-risked — a working prototype, not a slide deck<span class="zh">6.4 降低決策風險 — 可執行原型，而非簡報</span></h3>
     <p style="font-size:13.5px;color:var(--ink-2)">
       Most enterprise proposals ask for a budget on the strength of mockups. This package ships a
-      <b>runnable prototype</b> (<code class="inl">leave-system/</code>, v1.4.0, 115 unit tests + 183 smoke checks in
-      CI) that the steering committee can <i>try before approving</i>: submit a request, walk it through two-level
+      <b>runnable prototype</b> (<code class="inl">leave-system/</code>, <b>v1.17.0</b>,
+      241 unit tests collected — 240 passed, 1 skipped locally — plus 247 smoke checks in CI)
+      that the steering committee can <i>try before approving</i>: submit a request, walk it through two-level
       approval, watch the timetable-aware affected-course preview, inspect the audit log. The prototype already
       implements CSRF protection, attachment content-sniffing, transaction-safe email delivery, scope isolation and
       paginated account admin — the design package is not aspirational, it is a specification of what already runs.
-      <span class="zh">多數企業級提案只憑介面稿就要預算。本提案附帶<b>可執行原型</b>（<code class="inl">leave-system/</code>，v1.4.0，CI 內 115 項單元測試 + 183 項冒煙檢查）——指導委員可在核准前<i>先試用</i>：提交假單、走完兩級審批、查看課表感知的受影響課程預覽、檢視稽核日誌。原型已實作 CSRF 防護、附件內容嗅探、交易安全郵件投遞、範圍隔離與帳號管理分頁——設計提案不是空想，而是對「已經在跑的系統」的規格說明。</span></p>
+      <span class="zh">多數企業級提案只憑介面稿就要預算。本提案附帶<b>可執行原型</b>（<code class="inl">leave-system/</code>，<b>v1.17.0</b>，CI 蒐集 241 項單元測試〔本機 240 通過、1 略過〕+ 247 項冒煙檢查）——指導委員可在核准前<i>先試用</i>：提交假單、走完兩級審批、查看課表感知的受影響課程預覽、檢視稽核日誌。原型已實作 CSRF 防護、附件內容嗅探、交易安全郵件投遞、範圍隔離與帳號管理分頁——設計提案不是空想，而是對「已經在跑的系統」的規格說明。</span>
+      <br><span style="font-size:12.5px;color:var(--muted)">Version and test counts are a snapshot; the authoritative current figures are in <code class="inl">CHANGELOG.md</code> and CI. For open gaps and the readiness register, see <code class="inl">SAAS-PAIN-POINTS.md</code>. <span class="zh">版本與測試數為快照，現況以 <code class="inl">CHANGELOG.md</code> 與 CI 為準；尚未關閉的缺口與就緒度登錄見 <code class="inl">SAAS-PAIN-POINTS.md</code>。</span></span></p>
     <div class="note">
       <b>Pilot safety net（試點安全網）:</b> Phase-1 pilot runs two programmes in parallel with the existing email
       process, with an explicit rollback plan. If adoption or CSAT thresholds are not met at week 14, the university
@@ -438,8 +440,8 @@
 </div>
 
 <div class="foot"><div class="in">
-  <span>SAAS Design Package v1.0 · HKUST(GZ) · Confidential — internal review only</span>
-  <span>學生請假與學業便利支援系統 · 設計提案 v1.0 · 僅供校內評審</span>
+  <span>SAAS Design Package v1.1 · HKUST(GZ) · Confidential — internal review only · pain register: SAAS-PAIN-POINTS.md</span>
+  <span>學生請假與學業便利支援系統 · 設計提案 v1.1 · 僅供校內評審 · 痛點登錄：SAAS-PAIN-POINTS.md</span>
 </div></div>
 </body>
 </html>

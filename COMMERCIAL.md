@@ -65,16 +65,18 @@ One line: turn absence handling from an administrative chore into **audit-grade 
 
 ## 4. 商業化就緒度 ｜Readiness gate
 
-原型已達 `v1.7.0`，功能面足以演示與試點；但**可對外銷售**前須關閉下列
-`GAP-ANALYSIS.md` 中的缺口（缺一項就不應籤生產合同）：
+原型版本**一律以 [`CHANGELOG.md`](CHANGELOG.md) 最新版與 git tag 為準**（此處刻意不寫版本號，
+避免每次發布都要回來改、又再次與現況脫節）；功能面足以演示與試點，但**可對外銷售**前須關閉下列
+`GAP-ANALYSIS.md` 中的缺口（缺一項就不應籤生產合同）。
+完整痛點、現況標籤與來源章節見 [`SAAS-PAIN-POINTS.md`](SAAS-PAIN-POINTS.md)：
 
 | 缺口 | 說明 | 狀態 |
 | --- | --- | --- |
 | **A2 SSO** | 校內單點登錄（Entra ID / OIDC）；企業採購的硬門檻。v1.8.0 已備妥標準 OIDC 授權碼接線通道（本地帳密保留為災難備援），尚缺**校方真實 IdP 參數與角色對映** | P0 · 半完成（通道已就緒，IdP／角色映射待校方） |
 | **A1 PostgreSQL** | SQLite 不適合多用戶生產部署 | P0 · 未做 |
 | **C1 課表真實化** | 課表須由 SIS／LMS 同步，而非手工維護。v1.7.0 已備妥逐生課表與 CSV／CLI 匯入通道，尚缺**校方的真實課表資料源對接** | P0 · 半完成（通道已就緒，資料源待校方） |
-| **D 組個資治理** | 數據分級、保存期、刪除權、稽核導出（對 FERPA／GDPR／個保法） | P1 · 未做 |
-| **SLA 與運維** | 若賣 Managed Service，需監控、備份、事件響應流程 | 未做 |
+| **D 組個資治理** | 數據分級、保存期、刪除權、稽核導出（對 FERPA／GDPR／個保法）。**D3** 大範圍 PII 稽核 ✅ v1.9.0、**D1** 留存銷毀 ✅ v1.10.0、**D2** 附件掃毒 ✅ v1.11.0；殘留 **D4 通知偏好**與**單筆詳情頁細粒度 PII 稽核**，另缺 DPIA／PIA 與資料分級文件 | P1 · 部分（原型主體已關閉，文件與殘留項待補） |
+| **SLA 與運維** | 若賣 Managed Service，需監控、備份、事件響應流程。v1.14.0 已有可驗證備份與可回退還原（`flask backup`／`verify-backup`／`restore-backup`）；仍缺監控告警、定期還原演練紀錄、事故分級 runbook 與對外 SLA | 部分 |
 
 對照：`saas/index.html` 提案的 12 周 MVP、8.5 FTE、¥1.0M 開發預算即以上線的工程範圍估算，
 與原型當前狀態是兩件事——**原型是資產，不是產品**。

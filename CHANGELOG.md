@@ -9,6 +9,83 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-11-06
+
+**文件型改版：把整個 SaaS 的痛點整理成可查核登錄表，並校準長期文件漂移。**
+前一版補齊了 AI 倫理，但專案仍缺一份「現況到底還差什麼」的總帳：提案首頁、
+月報、商業化文件、缺口分析與原型說明對版本、測試數、D 組狀態、風險分邊界、
+成本口徑各說各話。本版把這件事變成可逐項回查、可逐項關閉的登錄表，並就地修正矛盾。
+
+> **仍然不是功能上線。** 原型沒有 AI／LLM 執行路徑、模型 API 呼叫、新依賴、
+> 資料庫遷移或個資外送；所有請假結果仍由人依確定性規則決定。
+> 本版**不修改歷史報告的數字**，只加註記——改動具日期的紀錄等於竄改歷史。
+
+### Added ｜新增
+
+- **[`SAAS-PAIN-POINTS.md`](SAAS-PAIN-POINTS.md)**：痛點與就緒度登錄，內容包含
+  - **三層判讀框架**：提案主張（claim）／原型現況（prototype）／生產就緒（production），
+    並明定 `已解` 只代表「原型內關閉」，不等於可簽生產合約；
+  - **七類痛點逐條標註來源檔案與章節**：現況痛點（P1–P7，源自 `saas/index.html` §1）、
+    角色痛點（學生／審批人／管理員／教務處／DPO／校方 IT）、資料與合規（D-1～D-8）、
+    技術與架構（T-1～T-9）、商業化與交付（B-1～B-8）、AI 治理與倫理（G-1～G-7）、
+    文件矛盾（M-1～M-9）；
+  - 每條皆附**現況標籤**（已解／部分／未解／漂移）、影響與既有解法或下一步；
+  - **§7 文件矛盾校準登錄**：版本過時、D 組狀態衝突、舊測試數、月報 Phase 3 與 AI 紅線衝突、
+    `¥0.45M/yr` vs `≈ ¥0.5M/yr`、`GAP-ANALYSIS.md` 歷史註記堆疊等，逐條給出衝突兩端與處置；
+  - **§8 接下來最該處理的五件事**（C1 真實課表源、A1 PostgreSQL 對映、A2 SSO、
+    E1／E2／D4 工程前置、商業化總閘）與**明確不建議現在做的四件事**；
+  - **§9 防止再次漂移的維護規則**：版本、測試數、缺口狀態、治理邊界各自的唯一來源；
+  - **§10 依據索引**：把本文引用的每一份檔案與章節列表，便於逐項複核。
+  - 特別登錄 **T-8**：`saas/prd.html` §10 的 EW-5「Composite risk score」名稱與 GPA 走勢輸入，
+    易與 `AI-ROADMAP.md` 紅線及 `AI-ETHICS.md` §4 代理變數衝突；建議改名為可列舉門檻規則、
+    公開權重與申訴路徑，或排除 GPA 趨勢輸入。
+
+### Changed ｜調整
+
+- `COMMERCIAL.md` §4：不再寫死「原型已達 v1.7.0」，改指向 `CHANGELOG.md`；
+  D 組由「P1 · 未做」改為「部分（D1／D2／D3 已關閉，殘留 D4 與細粒度 PII 稽核、DPIA／資料分級文件）」；
+  SLA 與運維補上 v1.14.0 備份還原已落地、仍缺監控告警／還原演練／事故 runbook。
+- 根 `README.md`：版本 v1.17.0、檔案表加入 `SAAS-PAIN-POINTS.md`、新增開頭導讀
+  （區分版本編年史／現況／提案／原型／缺口）、Readiness gate 的 D 組用語統一、
+  Changelog 摘要補 v1.17.0。
+- `GAP-ANALYSIS.md`：標題 v1.17.0、頂部導讀（本文件為工程缺口權威來源、
+  較早版本註記不代表現況）、D4 段落補狀態對照、建議實施順序表改為
+  「D 組主體已關閉；殘留 D4 與細粒度 PII 稽核」。
+- `saas/index.html` §6.4：`v1.4.0, 115 unit tests + 183 smoke checks` 更新為
+  `v1.17.0, 241 collected (240 passed, 1 skipped) + 247 smoke checks`，
+  並加註「數字為快照，現況以 CHANGELOG.md 與 CI 為準」；頁腳 v1.0 → v1.1。
+- `saas/monthly-report.html`：頁首加 **Historical snapshot** 註記（保留 v1.3.0／105／183
+  歷史數字不改，標明僅代表報告區間）；§5 Phase 3 加 **Superseded** 註記，
+  明確綜合風險評分、退學風險預測、跨校對標在現行 AI 治理下不得作為實作項目；
+  頁腳 v1.0 → v1.1。
+- `saas/plan.html` §3.2：加 **Cost-precision note**，說明 `¥0.45M/yr` 與
+  `≈ ¥0.5M per year` 是同一 ¥5.0M 三年 TCO 模型的不同精度、同帶 ±20% 估算免責；
+  頁腳 v1.2 → v1.3。
+- `leave-system/README.md`：標題 v1.17.0、頂部導讀串連 `GAP-ANALYSIS.md`／
+  `SAAS-PAIN-POINTS.md`／`AI-ROADMAP.md`／`AI-ETHICS.md`／`CHANGELOG.md`；
+  第 2 點安全項目改為「v1.11.0 掃毒通道已落地、引擎本體仍須部署環境安裝」；
+  第 5 點「D 組三項全部關閉」改為「D1／D2／D3 已關閉，D4 與細粒度 PII 稽核仍開放」；
+  第 6 點補 v1.17.0 痛點登錄。
+- `leave-system/utils.py`：`APP_VERSION` 1.16.0 → 1.17.0。
+
+### Governance ｜治理邊界
+
+- **歷史報告只加註、不改數**：月報是具日期的快照，改數字會讓可追溯性失效；
+  現況文件（README、COMMERCIAL、提案首頁）才更新數字。
+- **衝突時以治理文件為準**：未來功能清單與 `AI-ROADMAP.md` 紅線、
+  `AI-ETHICS.md` 權利／代理變數衝突時，保留歷史原文並標 `Superseded`，
+  不逕行刪除，也不當作交付承諾。
+- **缺口狀態唯一來源為 `GAP-ANALYSIS.md`**：`COMMERCIAL.md` §4 與根 README 的
+  Readiness gate 只做摘要並回連；避免再次出現「未做」與「全數關閉」並存。
+- 本版不新增估算數字、不把規劃估算改寫成實測、不把 Phase 2／3 提案功能寫成已交付。
+
+### Tests ｜測試
+
+- 本版為純文件改版，**未新增、未修改任何測試案例、CLI、路由或資料庫結構**；
+  `APP_VERSION` 變更後重跑全量回歸以確認頁腳與 `/healthz` 版本斷言仍然一致。
+- pytest 全量 **240 passed、1 skipped**；`smoke_test.py` **247 項全過**；
+  `compileall`、`git diff --check`、HTML 標籤平衡、相對連結、繁簡與版本一致性檢查皆通過。
+
 ## [1.16.0] — 2026-11-05
 
 **文件型改版：補上 v1.15.0 缺少的 AI 倫理層。**
