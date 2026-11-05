@@ -13,6 +13,11 @@ leave-system/uploads/*
 # D1 銷毀備份區（已脫離活動上傳區的逾期附件副本，含個資，勿入版本控制）
 leave-system/attachments_purged/*
 !leave-system/attachments_purged/.gitkeep
+# E3 備份包與還原前副本（含資料庫與病假證明等個資，勿入版本控制）
+leave-system/backups/
+leave-system/restore-rollbacks/
+leave-system/leave_system.db-wal
+leave-system/leave_system.db-shm
 *.log
 
 # 編輯器 / 系統

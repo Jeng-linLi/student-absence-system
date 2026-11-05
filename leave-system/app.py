@@ -54,6 +54,7 @@ from calendar_import import (parse_calendar_text, apply_calendar,
                              load_preset, preset_for_today, PRESETS)
 from timetable_import import (parse_timetable_csv, apply_timetable,
                              timetable_coverage, pad_time, MAX_IMPORT_ROWS)
+from backup import create_backup, verify_backup, restore_backup, BackupError
 from sso import sso_configured, sso_settings, authorize_url, exchange_code, \
     fetch_userinfo, resolve_user
 
@@ -3378,6 +3379,58 @@ def av_scan_command(no_quarantine):
             errors += 1
             print(f'[錯誤] {n}（{detail}）')
     print(f'掃描完成：{len(names)} 個檔案，感染 {infected}，錯誤 {errors}。')
+
+
+@app.cli.command('backup')
+@click.option('--output-dir', default=None,
+              help='備份包父目錄（預設：資料庫同級的 backups/）')
+@click.option('--no-uploads', is_flag=True,
+              help='只備份 SQLite，不包含 uploads/ 附件')
+def backup_command(output_dir, no_uploads):
+    """建立可驗證的 SQLite＋附件備份包（E3 · v1.14.0）。"""
+    try:
+        result = create_backup(DB_PATH, UPLOAD_DIR, output_dir=output_dir,
+                               include_uploads=not no_uploads,
+                               app_version=APP_VERSION)
+    except (BackupError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"備份完成：{result['bundle_path']}")
+    click.echo(f"附件 {result['upload_count']} 個；清單共 {result['file_count']} 個檔案。"
+               + ('（資料庫專用）' if no_uploads else ''))
+
+
+@app.cli.command('verify-backup')
+@click.argument('bundle')
+def verify_backup_command(bundle):
+    """驗證備份包雜湊、SQLite 完整性與核心資料表，不修改資料。"""
+    try:
+        result = verify_backup(bundle)
+    except (BackupError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"驗證通過：{result['bundle_path']}")
+    click.echo(f"應用版本 {result['app_version']}；{result['file_count']} 個檔案，"
+               f"共 {result['total_bytes']} bytes。")
+
+
+@app.cli.command('restore-backup')
+@click.argument('bundle')
+@click.option('--yes', is_flag=True,
+              help='確認已停止應用，並以備份覆蓋目前資料')
+@click.option('--db-only', is_flag=True,
+              help='只還原資料庫，保留目前 uploads/ 附件')
+def restore_backup_command(bundle, yes, db_only):
+    """還原備份；必須先停止應用並明確加 --yes。"""
+    if not yes:
+        raise click.ClickException(
+            '還原會覆蓋目前資料庫；請先停止應用、驗證備份，再加 --yes。')
+    try:
+        result = restore_backup(bundle, DB_PATH, UPLOAD_DIR,
+                                restore_uploads=not db_only)
+    except (BackupError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo('還原完成。')
+    click.echo(f"還原前副本：{result['rollback_path']}")
+    click.echo('附件：' + ('已還原' if result['uploads_restored'] else '保留現有目錄'))
 
 
 def seed_calendar():

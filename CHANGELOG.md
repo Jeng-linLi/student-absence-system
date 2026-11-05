@@ -9,6 +9,52 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-11-05
+
+維運保命一刀：把 `GAP-ANALYSIS.md` 的 **E3（沒有備份／還原工具）** 從「未做」
+推進到「已就緒」。這不是直接複製一個正在寫入的 SQLite 檔，而是完整的
+「線上快照 → 雜湊驗證 → 停止服務 → 可回退還原」流程；資料庫與附件可一起備份，
+也可只備份資料庫而不動現有附件。
+
+> 還原只提供 CLI，且必須明確加 `--yes`。每次還原都保留
+> `restore-rollbacks/pre-restore-*` 還原前副本；安裝後檢查或檔案作業失敗時，
+> 會嘗試把原資料庫與附件補償回去。環境變數、SMTP 密碼、Flask secret 不進備份包。
+
+### Added ｜新增
+
+- **SQLite 在線備份**（`backup.py`）：以 Python SQLite `Connection.backup()` 建立一致快照，
+  複製可選的 `uploads/` 附件，產生 `manifest.json`（格式版本、應用版本、UTC 時間、
+  每個檔案的大小與 SHA-256）。預設輸出到資料庫同級的 `backups/leave-backup-*`。
+- **三個維運命令**：
+  - `flask backup [--output-dir DIR] [--no-uploads]`：建立完整或資料庫專用備份；
+  - `flask verify-backup <bundle>`：驗證 manifest、檔案清單、大小、SHA-256、
+    SQLite `integrity_check` 與核心資料表；
+  - `flask restore-backup <bundle> --yes [--db-only]`：停止應用後還原，並保留還原前副本。
+- **還原前副本與失敗補償**：保留原資料庫、`-wal`／`-shm` sidecar 與將被替換的附件；
+  安裝後再次檢查資料庫。還原失敗時嘗試回復原狀，且保留 pre-restore 目錄供人工介入。
+- **維運文件**：README 補上備份、驗證、還原、回退與定期還原演練流程，明確標示備份包含個資、
+  不得提交 Git，也不包含部署密鑰與環境設定。
+
+### Security & Safety ｜安全與防呆
+
+- 完整備份拒絕把輸出目錄設在附件目錄內，避免暫存備份被再次納入而遞迴複製。
+- manifest 只接受安全的 POSIX 相對路徑；拒絕絕對路徑、`..` 路徑穿越、反斜線、
+  重複項目、未列出或多餘的檔案，以及備份包中的符號連結。
+- 附件備份拒絕符號連結，避免把目錄外檔案捲入含個資的備份包。
+- 還原資料庫時清除舊 `-wal`／`-shm`，避免舊 sidecar 污染新快照。
+- **資料庫專用備份或 `--db-only` 還原不清空、不替換現有附件目錄**。
+- 高風險還原沒有 Web 路由；CLI 未加 `--yes` 會在修改任何資料前拒絕執行。
+- `.gitignore` 納入預設備份與還原前副本目錄，降低個資誤入版本控制的機會。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v24.py`（16 案）：在線快照與附件清單、資料庫專用備份、輸出目錄遞迴防護、資料庫與附件篡改、
+  非 SQLite、缺少核心資料表、路徑穿越、未列出檔案、符號連結、完整 round-trip、
+  pre-restore 副本、sidecar 清理、DB-only 附件保留、安裝後故障的資料庫＋附件回退，
+  以及 CLI backup／verify／restore `--yes` 防呆。
+- pytest 全量 **240 passed、1 skipped**（Windows 無符號連結權限時略過該案）；
+  `smoke_test.py` **247 項全過**；`compileall` 通過。
+
 ## [1.13.0] — 2026-11-04
 
 可用性與正確性一刀。把 `GAP-ANALYSIS.md` 的 **E4（清單不能搜尋、不能按日期區間
