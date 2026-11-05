@@ -63,12 +63,12 @@
     </div>
     <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
       <h4>Phase 3 · Intelligence<span class="zh">第三期 · 智能化</span></h4>
-      <p style="font-size:12.5px;color:var(--muted);margin:0 0 8px">12 weeks · optimisation
-        <span class="zh">12 週 · 優化</span></p>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 8px">12 weeks · optimisation, subject to go / no-go gates
+        <span class="zh">12 週 · 優化，逐項通過上線閘門</span></p>
       <ul class="tick" style="font-size:13px;margin:0">
-        <li>Composite risk scoring (EW-5)<span class="zh">綜合風險評分</span></li>
+        <li>Aggregate absence insights (advisory)<span class="zh">缺席趨勢匯總洞察（僅供支援與覆核）</span></li>
         <li>Document OCR &amp; authenticity assist<span class="zh">文件辨識與真偽輔助判定</span></li>
-        <li>AI reason triage &amp; auto-routing<span class="zh">事由智能分流與自動路由</span></li>
+        <li>AI reason triage (advisory; humans keep routing)<span class="zh">事由智能分流（僅建議，路由仍由人決定）</span></li>
         <li>Multi-campus deployment (HK / SZ)<span class="zh">多校區部署（香港／深圳）</span></li>
         <li>Policy simulation sandbox<span class="zh">政策模擬沙盒</span></li>
         <li>Public API for partner systems<span class="zh">對外 API 供夥伴系統</span></li>
@@ -224,6 +224,16 @@
 <!-- AI -->
 <div class="card">
   <h2>5. Future AI Features<span class="zh">未來 AI 功能</span></h2>
+  <p class="note">These are candidate capabilities, not a commitment to ship a model. The detailed governance,
+    data, evaluation and kill-switch blueprint is in
+    <a href="../AI-ROADMAP.md"><b>AI-ROADMAP.md</b></a>; the current prototype makes no AI / LLM calls.
+    <span class="zh">以下是候選能力，不代表已承諾上線模型。完整治理、資料、評估與熔斷藍圖見
+    <a href="../AI-ROADMAP.md"><b>AI-ROADMAP.md</b></a>；目前原型沒有任何 AI／LLM 呼叫。</span></p>
+  <p class="note">Boundary with the existing early-warning rules: EW-1…EW-5 in
+    <a href="prd.html"><b>§10 of the PRD</b></a> are transparent, threshold-based rules that open a human
+    follow-up task — they are <b>not</b> AI scoring. This roadmap does not add a model-derived individual
+    risk score, and no aggregate insight may be turned into a punitive, award, visa or disciplinary list.
+    <span class="zh">與既有預警規則的邊界：PRD §10 的 EW-1 至 EW-5 是透明、以門檻觸發、由人工開案跟進的規則，<b>不是</b> AI 評分。本路線不新增模型產生的個人風險分，任何匯總洞察也不得轉作懲戒、獎助、簽證或紀律名單。</span></p>
   <table>
     <thead><tr><th>Feature<span class="zh">功能</span></th><th>Value<span class="zh">價值</span></th>
       <th>Dependency<span class="zh">前置條件</span></th><th style="width:70px">Phase</th></tr></thead>
@@ -237,9 +247,9 @@
         <td>Extracts date/issuer from a certificate and flags anomalies for human review (never auto-decides)<span class="zh">擷取證明的日期與簽發機構，標記異常交人工複查（永不自動判定）</span></td>
         <td>Document Intelligence; human-in-the-loop required<span class="zh">文件智慧服務；必須保留人工覆核</span></td>
         <td><span class="tag t-info">P3</span></td></tr>
-      <tr><td><b>Predictive risk scoring</b><span class="zh">風險預測評分</span></td>
-        <td>EW-5 composite score predicts attrition/academic risk earlier than threshold rules<span class="zh">EW-5 綜合評分，較門檻規則更早預測退學／學業風險</span></td>
-        <td>≥ 2 terms of clean data; bias review by Student Affairs<span class="zh">需至少兩學期乾淨資料；由學生事務處作偏差審查</span></td>
+      <tr><td><b>Aggregate absence insight</b><span class="zh">缺席趨勢洞察</span></td>
+        <td>Explanatory, group-level signals help Registry and Student Affairs plan support; no individual adverse action<span class="zh">以可解釋的群體層級訊號協助配置輔導資源，不得對個別學生作不利處置</span></td>
+        <td>≥ 2 terms of clean data; bias review by Student Affairs; read replica<span class="zh">需至少兩學期乾淨資料、學生事務處偏差審查與唯讀副本</span></td>
         <td><span class="tag t-info">P3</span></td></tr>
       <tr><td><b>Smart make-up scheduling</b><span class="zh">補考智能排程</span></td>
         <td>Proposes make-up slots that avoid clashes with the student's and instructor's calendars<span class="zh">自動建議不與學生及教師行事曆衝突的補考時段</span></td>
@@ -250,19 +260,92 @@
         <td>Read replica + analytics layer<span class="zh">唯讀副本與分析層</span></td>
         <td><span class="tag t-info">P3</span></td></tr>
       <tr><td><b>Conversational assistant</b><span class="zh">對話式助理</span></td>
-        <td>Student asks "can I miss Thursday's lab?" and receives policy + impact in plain language<span class="zh">學生直接詢問「星期四實驗課可以請假嗎？」，即時獲得政策與影響說明</span></td>
+        <td>Student asks about a planned absence and receives approved policy text, affected-course facts and submission guidance — never a decision<span class="zh">學生查詢請假影響時，只取得核定政策、受影響課程與送件指引；不由模型裁示可否</span></td>
         <td>Retrieval over approved policy text only; no free generation of decisions<span class="zh">僅就核定政策文本檢索，決策不得由模型自由生成</span></td>
         <td><span class="tag t-grey">P4</span></td></tr>
       <tr><td><b>Anomaly detection on approvals</b><span class="zh">審批異常偵測</span></td>
-        <td>Flags inconsistent decisions across sections (e.g. same course, opposite outcomes) for programme review<span class="zh">標記不同班級間不一致的決策（同一課程卻結果相反）供項目複核</span></td>
+        <td>Flags inconsistent decisions across sections for advisory programme review; never rewrites an outcome<span class="zh">標記不同班級間不一致的決策供顧問性複核；永不改寫既有結果</span></td>
         <td>≥ 1 term of decision data<span class="zh">需至少一學期決策資料</span></td>
         <td><span class="tag t-grey">P4</span></td></tr>
     </tbody>
   </table>
   <p class="note err"><b>Governance principle（治理原則）:</b> AI may <i>assist</i> but never <i>decide</i> an absence
-    outcome. Every AI suggestion is logged with model version, input hash, and the human decision that followed;
-    students may always request human-only handling.
-    <span class="zh">AI 只能<b>輔助</b>，不得<b>決定</b>請假結果。每項 AI 建議均記錄模型版本、輸入雜湊與其後的人工決定；學生可隨時要求全程人工處理。</span></p>
+    outcome. Every AI suggestion is logged with model, prompt and policy versions, input hash, abstention state,
+    and the human decision that followed; students may always request human-only handling. A feature flag must
+    return the whole system to deterministic rules without redeployment.
+    <span class="zh">AI 只能<b>輔助</b>，不得<b>決定</b>請假結果。每項建議均記錄模型、提示詞與政策版本、輸入雜湊、拒答狀態及其後的人工決定；學生可隨時要求全程人工處理。特徵開關必須能在不重部署的情況下，讓系統回到確定性規則。</span></p>
+
+  <h3 style="margin-top:22px">5.1 From feature list to delivery gates<span class="zh">由功能清單到交付閘門</span></h3>
+  <p style="font-size:13px;color:var(--muted)">H0–H3 are capability horizons, not calendar promises. Each step
+    has an explicit exit criterion; failing a gate keeps the product at the previous horizon.
+    <span class="zh">H0–H3 是能力成熟度，不是日期承諾；每一階段都有離場條件，未過閘門就停留在前一階段。</span></p>
+  <div class="grid g3">
+    <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+      <h4>H0 · Trust foundation<span class="zh">可信地基</span></h4>
+      <ul class="tick" style="font-size:12.5px;margin:0">
+        <li>Versioned policy registry<span class="zh">版本化政策登錄</span></li>
+        <li>De-identified read-only views<span class="zh">去識別化唯讀視圖</span></li>
+        <li>Golden set + offline replay<span class="zh">固定案例集與離線重放</span></li>
+        <li>DPIA, feature flag, kill switch<span class="zh">個資影響評估、特徵開關與熔斷</span></li>
+      </ul>
+      <p style="font-size:12px;color:var(--muted);margin:8px 0 0">No model in production.
+        <span class="zh">生產環境不接模型。</span></p>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--brand-soft);border-color:#B6D4F5">
+      <h4>H1 · Deterministic help<span class="zh">規則式智慧</span></h4>
+      <ul class="tick" style="font-size:12.5px;margin:0">
+        <li>Missing-document and quota checks<span class="zh">缺件與額度提示</span></li>
+        <li>Calendar / timetable conflict hints<span class="zh">校曆與課表衝突提示</span></li>
+        <li>Approved-policy retrieval with citations<span class="zh">核定政策檢索並附條文</span></li>
+      </ul>
+      <p style="font-size:12px;color:var(--muted);margin:8px 0 0">Explainable, no LLM, no new data flow.
+        <span class="zh">可解釋、不用 LLM、不增加資料外流。</span></p>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--info-soft);border-color:#D6C9F2">
+      <h4>H2 · Bounded advisory<span class="zh">受限 AI 建議</span></h4>
+      <ul class="tick" style="font-size:12.5px;margin:0">
+        <li>Shadow mode → advisor pilot → opt-in<span class="zh">影子模式 → 審批人試點 → 學生選用</span></li>
+        <li>Schema-constrained output + abstention<span class="zh">輸出 schema 限制與拒答</span></li>
+        <li>PII minimisation + subgroup review<span class="zh">個資最小化與分群審查</span></li>
+      </ul>
+      <p style="font-size:12px;color:var(--muted);margin:8px 0 0">Advisory, logged, refusable.
+        <span class="zh">僅建議、留稽核、可拒絕。</span></p>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+      <h4>H3 · Aggregate insight<span class="zh">匯總洞察</span></h4>
+      <ul class="tick" style="font-size:12.5px;margin:0">
+        <li>Policy simulation on a read replica<span class="zh">唯讀副本上的政策模擬</span></li>
+        <li>Capacity and SLA forecasting<span class="zh">容量與 SLA 預測</span></li>
+        <li>Supportive, group-level trends only<span class="zh">僅作支持性群體趨勢</span></li>
+      </ul>
+      <p style="font-size:12px;color:var(--muted);margin:8px 0 0">No individual adverse action.
+        <span class="zh">不對個別學生作不利處置。</span></p>
+    </div>
+  </div>
+
+  <table style="margin-top:14px">
+    <thead><tr><th>Go / No-Go gate<span class="zh">上線閘門</span></th>
+      <th>Evidence required<span class="zh">應備證據</span></th>
+      <th>If it fails<span class="zh">未通過時</span></th></tr></thead>
+    <tbody>
+      <tr><td>Data &amp; policy readiness<span class="zh">資料與政策就緒</span></td>
+        <td>≥ 2 terms of clean data, versioned policy, de-identified views<span class="zh">至少兩學期乾淨資料、版本化政策、去識別化視圖</span></td>
+        <td>Stay at H0<span class="zh">停留在 H0</span></td></tr>
+      <tr><td>Evaluation &amp; fairness<span class="zh">評估與公平性</span></td>
+        <td>Golden set, offline replay, subgroup error review, human audit<span class="zh">固定案例集、離線重放、分群錯誤審查、人工抽審</span></td>
+        <td>Revert to H1<span class="zh">退回 H1</span></td></tr>
+      <tr><td>Privacy &amp; security<span class="zh">個資與安全</span></td>
+        <td>DPIA sign-off, prompt-injection red team, region / retention decision<span class="zh">個資影響評估簽核、提示詞注入紅隊、存放區域與留存核定</span></td>
+        <td>No model call<span class="zh">不呼叫模型</span></td></tr>
+      <tr><td>Reversibility<span class="zh">可回退性</span></td>
+        <td>Kill-switch drill, deterministic fallback, backup / restore rehearsal<span class="zh">熔斷演練、確定性降級、備份還原演練</span></td>
+        <td>Disable feature<span class="zh">停用功能</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note err" style="margin-top:12px"><b>Kill switch（熔斷）:</b> any automatic decision, unauthorised PII
+    flow, unverifiable citation, unlogged model version, material subgroup harm or failed fallback immediately
+    disables the AI feature and preserves the audit trail.
+    <span class="zh">只要出現自動決策、未授權個資流、無法查證的引用、未登錄模型版本、顯著分群傷害或降級失效，立即停用 AI 功能並保留稽核軌跡。</span></p>
 </div>
 
 <!-- 下一步 -->
@@ -288,8 +371,8 @@
 </div>
 
 <div class="foot"><div class="in">
-  <span>SAAS Roadmap &amp; Cost v1.0 · estimates only, ±20% · HKUST(GZ) · Confidential</span>
-  <span>路線圖與成本 v1.0 · 估算值，誤差約 ±20% · 僅供校內評審</span>
+  <span>SAAS Roadmap &amp; Cost v1.1 · estimates only, ±20% · AI gates in AI-ROADMAP.md · HKUST(GZ) · Confidential</span>
+  <span>路線圖與成本 v1.1 · 估算值，誤差約 ±20% · AI 上線閘門見 AI-ROADMAP.md · 僅供校內評審</span>
 </div></div>
 </body>
 </html>

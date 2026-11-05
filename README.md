@@ -7,7 +7,7 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v1.14.0`**（2026-11-05）· Commercial License · CI passing
+**Prototype version ｜原型版本：`v1.15.0`**（2026-11-05）· Commercial License · CI passing
 · 商業化方案見 [`COMMERCIAL.md`](COMMERCIAL.md)
 
 v0.6.0 links the leave flow to the student timetable: picking start/end dates and AM/PM
@@ -112,13 +112,17 @@ SQLite integrity and core-table checks, safe-path and symlink rejection, and a C
 guarded by `--yes`. Every restore preserves pre-restore database, WAL/SHM sidecars and attachments,
 and attempts compensation if installation or final validation fails. Database-only backup/restore
 leaves existing attachments untouched. **241 unit tests collected (240 passed, 1 skipped locally)
-+ 247 smoke checks.**
++ 247 smoke checks.** **v1.15.0** turns the previously loose "future AI features" list into a governed
+intelligence roadmap: data and policy prerequisites, H0–H3 capability gates, an advisory-only AI adapter,
+evaluation / fairness / privacy evidence, and a kill switch back to deterministic rules. No model call or
+student-data export is introduced in this version; see [`AI-ROADMAP.md`](AI-ROADMAP.md).
 
-| Folder | What it is | 說明 |
+| Path | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v1.14.0**) — student leave, two-level approval (advisor → faculty), **verifiable backup and rollback-safe restore** (SQLite online snapshots, optional attachments, SHA-256 manifest, integrity checks, `flask backup` / `verify-backup` / `restore-backup`, pre-restore copies), **per-student timetable import** (CSV with EN/中文 column aliases, idempotent replace/merge, `flask import-timetable`, coverage warning for demo-only timetables, student/advisor timetable views), **batch approve/reject** (tick rows in the todo list, one atomic transaction, per-request re-authorisation, 50-request cap), approval delegation (advisor/faculty can hand their level to a stand-in for a date range), admin advisor-reassignment, academic terms with per-term leave quotas (pending + approved both count), holiday calendar (non-teaching days skipped in affected courses), **academic-calendar file import** (terms / holiday ranges / makeup days, idempotent UPSERT), **makeup days** (weekend classes taught on another weekday's timetable still count as missed classes), built-in HKUST(GZ) 2026–27 calendar preset + `flask import-calendar` CLI, SLA escalation cron with 24h cooldown, CSRF protection, attachment access control + content sniffing, **attachment malware scanning** (config-gated via `LEAVE_AV_CMD`, ClamAV-compatible exit-code contract; uploads are scanned in a temp file before landing in `uploads/`, infected files are rejected with an `av_block` audit; `flask av-scan` re-scans existing files and quarantines hits), timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, **self-service password reset** (one-time expiring email link, hashed tokens, account-enumeration-safe, rate-limited) + **email verification on account creation** (`email_verified`, config-gated via SMTP), **config-gated OIDC SSO channel** (local password login kept as a disaster-recovery fallback), **PII read audit** (the stats page, the CSV export and the account list each write a `view_pii` / `export` audit record on every access), **attachment retention & purge** (proof files on terminal requests past the retention window are backed up then purged, the column is cleared and a `purge_attachment` audit is written), **list search & date-range filters** on every list page (`q`/`date_from`/`date_to`, parameterised `LIKE ... ESCAPE '!'`, scope-narrowing only), approval comments carried into student notifications, streamed CSV export, 241 unit tests collected + 247-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、**課表真實化（逐生課表 CSV 匯入，中英簡繁欄名別名、replace／merge 冪等、`flask import-timetable` CLI、示範資料覆蓋率警示、學生／導師／院系課表檢視）**、**批次核准／駁回（待審清單勾選、單一交易原子化、逐張重新鑑權、單次上限 50 張）**、委託審批（導師／院系可把審批權暫交代理人）、管理員改派導師、學期制請假額度（待審＋已核准都計入）、校曆假日（受影響課程跳過非上課日）、**校曆檔匯入（學期／假日區間／補課日，冪等 UPSERT）**、**補課／調課日（週末補課按被補星期幾的課表計缺課）**、內建港科大（廣州）2026–27 校曆預設＋`flask import-calendar` CLI、催辦升級 cron（24 小時冷卻）、CSRF 防護、附件權限＋內容嗅探、**附件掃毒（組態門控 `LEAVE_AV_CMD`，相容 ClamAV 退出碼；上傳檔先掃後落盤、感染拒收並留 av_block 稽核、`flask av-scan` 存量重掃＋隔離）**、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、**自助密碼重設（Email 一次性時效連結、token 只存雜湊、泛用回應防帳號枚舉、頻率限制）＋建號 Email 驗證（email_verified，SMTP 組態門控）**、**組態門控 OIDC 單一登入通道（本地帳密為災難備援）**、**PII 讀取稽核（統計頁／CSV 匯出／帳號清單每次存取皆留 view_pii／export 軌跡）**、**附件留存期與銷毀（終態假單逾保存期即先備份再銷毀、清空 attachment 欄並留 purge_attachment 稽核）**、**列表搜尋與日期區間（`/my`、`/approvals`、`/stats`、`/export` 共用 `q`／`date_from`／`date_to`，`LIKE` 參數化並跳脫 `%`／`_`，搜尋只收窄範圍）**、核准意見帶進學生通知、CSV 串流匯出 |
+| `leave-system/` | Flask + SQLite prototype (**v1.15.0**) — student leave, two-level approval (advisor → faculty), **verifiable backup and rollback-safe restore** (SQLite online snapshots, optional attachments, SHA-256 manifest, integrity checks, `flask backup` / `verify-backup` / `restore-backup`, pre-restore copies), **per-student timetable import** (CSV with EN/中文 column aliases, idempotent replace/merge, `flask import-timetable`, coverage warning for demo-only timetables, student/advisor timetable views), **batch approve/reject** (tick rows in the todo list, one atomic transaction, per-request re-authorisation, 50-request cap), approval delegation (advisor/faculty can hand their level to a stand-in for a date range), admin advisor-reassignment, academic terms with per-term leave quotas (pending + approved both count), holiday calendar (non-teaching days skipped in affected courses), **academic-calendar file import** (terms / holiday ranges / makeup days, idempotent UPSERT), **makeup days** (weekend classes taught on another weekday's timetable still count as missed classes), built-in HKUST(GZ) 2026–27 calendar preset + `flask import-calendar` CLI, SLA escalation cron with 24h cooldown, CSRF protection, attachment access control + content sniffing, **attachment malware scanning** (config-gated via `LEAVE_AV_CMD`, ClamAV-compatible exit-code contract; uploads are scanned in a temp file before landing in `uploads/`, infected files are rejected with an `av_block` audit; `flask av-scan` re-scans existing files and quarantines hits), timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, **self-service password reset** (one-time expiring email link, hashed tokens, account-enumeration-safe, rate-limited) + **email verification on account creation** (`email_verified`, config-gated via SMTP), **config-gated OIDC SSO channel** (local password login kept as a disaster-recovery fallback), **PII read audit** (the stats page, the CSV export and the account list each write a `view_pii` / `export` audit record on every access), **attachment retention & purge** (proof files on terminal requests past the retention window are backed up then purged, the column is cleared and a `purge_attachment` audit is written), **list search & date-range filters** on every list page (`q`/`date_from`/`date_to`, parameterised `LIKE ... ESCAPE '!'`, scope-narrowing only), approval comments carried into student notifications, streamed CSV export, 241 unit tests collected + 247-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、**課表真實化（逐生課表 CSV 匯入，中英簡繁欄名別名、replace／merge 冪等、`flask import-timetable` CLI、示範資料覆蓋率警示、學生／導師／院系課表檢視）**、**批次核准／駁回（待審清單勾選、單一交易原子化、逐張重新鑑權、單次上限 50 張）**、委託審批（導師／院系可把審批權暫交代理人）、管理員改派導師、學期制請假額度（待審＋已核准都計入）、校曆假日（受影響課程跳過非上課日）、**校曆檔匯入（學期／假日區間／補課日，冪等 UPSERT）**、**補課／調課日（週末補課按被補星期幾的課表計缺課）**、內建港科大（廣州）2026–27 校曆預設＋`flask import-calendar` CLI、催辦升級 cron（24 小時冷卻）、CSRF 防護、附件權限＋內容嗅探、**附件掃毒（組態門控 `LEAVE_AV_CMD`，相容 ClamAV 退出碼；上傳檔先掃後落盤、感染拒收並留 av_block 稽核、`flask av-scan` 存量重掃＋隔離）**、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、**自助密碼重設（Email 一次性時效連結、token 只存雜湊、泛用回應防帳號枚舉、頻率限制）＋建號 Email 驗證（email_verified，SMTP 組態門控）**、**組態門控 OIDC 單一登入通道（本地帳密為災難備援）**、**PII 讀取稽核（統計頁／CSV 匯出／帳號清單每次存取皆留 view_pii／export 軌跡）**、**附件留存期與銷毀（終態假單逾保存期即先備份再銷毀、清空 attachment 欄並留 purge_attachment 稽核）**、**列表搜尋與日期區間（`/my`、`/approvals`、`/stats`、`/export` 共用 `q`／`date_from`／`date_to`，`LIKE` 參數化並跳脫 `%`／`_`，搜尋只收窄範圍）**、核准意見帶進學生通知、CSV 串流匯出 |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
+| `AI-ROADMAP.md` | Governed intelligence roadmap: data foundation, H0–H3 gates, advisory-only architecture, evaluation and kill switch | 智能化治理路線：資料地基、H0–H3 閘門、僅建議架構、評估與熔斷 |
 
 ## Target users ｜目標用戶
 
@@ -185,6 +189,26 @@ See the Executive Summary's "Why Now" section for the full case.
 
 <span class="zh">完整論述見執行摘要的「為什麼是現在」區段。</span>
 
+## Future intelligence ｜智能化路線
+
+**v1.15.0 documents the route; it does not ship an AI feature.** The system already produces a structured,
+auditable leave ledger, but a model should not enter a high-stakes approval path until policy versions,
+de-identified data, evaluation evidence and a working rollback exist. The roadmap therefore starts with
+governance, not a chatbot:
+
+- **H0 · Trust foundation** — versioned policy, de-identified read-only views, golden set, DPIA, feature flag.
+- **H1 · Deterministic assistance** — missing-document, calendar, quota and workload checks without an LLM.
+- **H2 · Bounded advisory** — shadow mode → advisor pilot → opt-in, with schema-constrained output, abstention,
+  PII minimisation and full model / prompt / policy version logging.
+- **H3 · Aggregate insight** — policy simulation and supportive group-level trends on a read replica; no
+  individual adverse action.
+
+AI may assist, never decide. Any automatic decision, unauthorised PII flow or failed fallback triggers the
+kill switch and returns the whole flow to deterministic rules. Full blueprint: [`AI-ROADMAP.md`](AI-ROADMAP.md);
+buyer-facing gates: [`saas/plan.html`](saas/plan.html) §5.1.
+
+<span class="zh">**v1.15.0 只補路線文件，沒有上線 AI 功能。** 原型已有可稽核的結構化請假帳本，但在政策版本、去識別化資料、評估證據與回退演練到位前，不應讓模型進入高影響審批路徑。路線依序為：H0 可信地基、H1 規則式智慧、H2 受限 AI 建議、H3 匯總洞察；AI 只能輔助、不得決定，異常即熔斷回到確定性規則。</span>
+
 ## Quick start ｜快速開始
 
 ```bash
@@ -208,7 +232,10 @@ Demo accounts (password `Demo@2026`): student `2024001`, advisor `T001`, faculty
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — **v1.14.0** closes the backup/restore gap:
+See [`CHANGELOG.md`](CHANGELOG.md) — **v1.15.0** replaces a vague AI wish list with a governed
+intelligence roadmap: H0–H3 capability gates, advisory-only architecture, data / policy prerequisites,
+evaluation and fairness evidence, and a kill switch back to deterministic rules. It is documentation only —
+no model call, no new dependency, no student-data export. **v1.14.0** closes the backup/restore gap:
 SQLite online snapshots and optional attachments are packaged with a SHA-256 manifest,
 verified for file-list, path, database-integrity and core-table correctness, and restored
 only through an explicit `--yes` CLI flow. Pre-restore copies preserve the database, WAL/SHM

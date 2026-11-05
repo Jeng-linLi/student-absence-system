@@ -9,6 +9,65 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-11-05
+
+**文件型改版：把「未來 AI 功能」從許願清單，改成有前置條件、離場條件與熔斷機制的治理路線。**
+先前 `saas/plan.html` 只列了幾個 Phase 3／P4 的 AI 功能名稱，`assignment/` 雖有「MVP 刻意不做 AI triage」
+的判斷，卻沒有一份能讓工程、教務與資料保護負責人共同審查的藍圖。本版補上這份藍圖，並把原本容易被誤讀為
+「自動決策」的表述一併修正。
+
+> **這不是 AI 功能上線。** 原型依舊沒有 AI／LLM 執行路徑、沒有模型 API 呼叫、沒有新增第三方依賴，
+> 沒有新增資料表或遷移，也沒有把學生個資傳出本機。所有審批、額度、權限、受影響課程與稽核仍由確定性規則處理。
+
+### Added ｜新增
+
+- **[`AI-ROADMAP.md`](AI-ROADMAP.md)**：獨立的智能化治理路線，內容包含
+  - 核心判斷「**規則決定事實，AI 只提出建議，人作最終決定，稽核記錄全部過程**」與決策／建議／覆核三層架構；
+  - 七條紅線（不自動核准駁回、不放寬 `role_scope()`、不外送原始事由與附件、不自由生成政策、
+    不拿學生資料訓練、不做隱性個人評分、治理未完成不上生產）；
+  - 盤點既有結構化帳本（`leave_requests`／`approvals`／`audit_logs`／`timetable`／`terms` 等）與
+    高敏感欄位，並列出仍缺的工程前置（政策版本、去識別化唯讀視圖、golden set、唯讀副本、事件契約等）；
+  - **`AI adapter` 技術契約**：無狀態、唯讀、可降級，建議物件須記錄 `policy_version`／`model_version`／
+    `prompt_version`／`input_hash`／`output_schema_version`／`abstain`／`expires_at`，輸出只能是 allowlist 列舉值；
+  - **H0–H3 能力成熟度**：H0 可信地基 → H1 不需 LLM 的規則式智慧 → H2 shadow mode／審批人試點／學生選用 →
+    H3 唯讀副本上的匯總洞察，每階段都有明確離場條件，未過閘門就停留在前一階段；
+  - 上線前必備文件（ADR、model card、data card、DPIA、evaluation report、runbook）、監控維度、六項熔斷條件，
+    以及與 A1／E1／E2／D4 的銜接順序；
+  - 明確不做的項目（全自動審批、隱性學生風險分、以健康資料排序學生、跨校聯合訓練等）。
+
+### Changed ｜調整
+
+- `saas/plan.html`：Phase 3 改標「逐項通過上線閘門」；`Composite risk scoring`／`Predictive risk scoring`／
+  `AI reason triage & auto-routing` 改為匯總洞察與**僅建議、路由仍由人決定**；對話式助理只給核定政策、
+  受影響課程與送件指引；異常偵測明確「永不改寫既有結果」。治理原則加入 prompt／policy 版本、拒答狀態與
+  「不重部署即可回到確定性規則」的特徵開關。
+- `saas/plan.html` 新增 **§5.1 From feature list to delivery gates**：H0–H3 卡片、Go / No-Go 閘門表與熔斷說明；
+  另加一段釐清與 PRD §10 既有 **EW-1～EW-5 確定性預警規則**的邊界。頁腳版本 v1.0 → v1.1。
+- 根 `README.md`：新增 **Future intelligence** 章節與 `AI-ROADMAP.md` 檔案列，Changelog 摘要與原型版本同步；
+  表格標頭由 `Folder` 改為 `Path`（現在列的是檔案，不只是資料夾）。
+- `leave-system/README.md`：新增「未來智能化（v1.15.0 規劃，非本版功能）」章節，
+  「上生產前還要補」增加第 6 點，列出模型功能上線前必備的 A1／E1／E2／D4／H0 前置。
+- `GAP-ANALYSIS.md`：標題與盤點版本改為 v1.15.0，頂部加路線更新說明；**E 組仍剩 E1／E2**，
+  A1／E1／E2／D4 屬 H0 之前的工程前置，不是 AI 功能本身。
+- `leave-system/utils.py`：`APP_VERSION` 1.14.0 → 1.15.0（頁腳與 `/healthz` 由此帶入）。
+
+### Governance ｜治理邊界
+
+- **AI 只能輔助、不得決定請假結果**：任何自動決策、未授權個資流、無法查證的引用、未登錄模型版本、
+  顯著分群傷害或降級失效，立即停用 AI 功能並回到確定性規則，稽核軌跡保留。
+- **EW-1～EW-5 不是 AI 評分**：既有 PRD 預警規則是透明、門檻式、人工開案跟進的確定性規則；
+  本路線不新增模型推導的個人風險分，匯總洞察亦不得轉為懲戒／獎助／簽證／紀律名單。
+- 數值門檻（錯誤率、SLA、偏差容忍）由教務處、學生事務處、資訊科技處與資料保護負責人在試點前共同核定，
+  **本版不預設、也不杜撰任何效能數字**。
+- `backup.py`（v1.14.0）的可驗證快照是可重現評估資料集的地基，但不是資料治理的替代品。
+
+### Tests ｜測試
+
+- 本版為純文件改版，**未新增、未修改任何測試案例、CLI、路由或資料庫結構**；
+  `APP_VERSION` 變更後重跑全量回歸以確認頁腳與 `/healthz` 版本斷言仍然一致。
+- pytest 全量 **240 passed、1 skipped**（Windows 無符號連結權限時略過該案）；
+  `smoke_test.py` **247 項全過**；`compileall` 與 `git diff --check` 通過。
+
 ## [1.14.0] — 2026-11-05
 
 維運保命一刀：把 `GAP-ANALYSIS.md` 的 **E3（沒有備份／還原工具）** 從「未做」
