@@ -226,9 +226,12 @@
   <h2>5. Future AI Features<span class="zh">未來 AI 功能</span></h2>
   <p class="note">These are candidate capabilities, not a commitment to ship a model. The detailed governance,
     data, evaluation and kill-switch blueprint is in
-    <a href="../AI-ROADMAP.md"><b>AI-ROADMAP.md</b></a>; the current prototype makes no AI / LLM calls.
+    <a href="../AI-ROADMAP.md"><b>AI-ROADMAP.md</b></a>; the rights, fairness, accountability and ethics
+    acceptance checklist is in <a href="../AI-ETHICS.md"><b>AI-ETHICS.md</b></a>. The current prototype
+    makes no AI / LLM calls.
     <span class="zh">以下是候選能力，不代表已承諾上線模型。完整治理、資料、評估與熔斷藍圖見
-    <a href="../AI-ROADMAP.md"><b>AI-ROADMAP.md</b></a>；目前原型沒有任何 AI／LLM 呼叫。</span></p>
+    <a href="../AI-ROADMAP.md"><b>AI-ROADMAP.md</b></a>；權利、公平、問責與倫理驗收檢核表見
+    <a href="../AI-ETHICS.md"><b>AI-ETHICS.md</b></a>；目前原型沒有任何 AI／LLM 呼叫。</span></p>
   <p class="note">Boundary with the existing early-warning rules: EW-1…EW-5 in
     <a href="prd.html"><b>§10 of the PRD</b></a> are transparent, threshold-based rules that open a human
     follow-up task — they are <b>not</b> AI scoring. This roadmap does not add a model-derived individual
@@ -340,12 +343,74 @@
       <tr><td>Reversibility<span class="zh">可回退性</span></td>
         <td>Kill-switch drill, deterministic fallback, backup / restore rehearsal<span class="zh">熔斷演練、確定性降級、備份還原演練</span></td>
         <td>Disable feature<span class="zh">停用功能</span></td></tr>
+      <tr><td><b>Ethics &amp; rights</b><span class="zh">倫理與權利</span></td>
+        <td>Signed rights checklist, ethics review with student representation, restoration drill<span class="zh">權利檢核表簽核、含學生代表的倫理審查、復權演練</span></td>
+        <td><b>Ethics veto; stay at previous horizon</b><span class="zh"><b>倫理否決；停留在前一階段</b></span></td></tr>
     </tbody>
   </table>
   <p class="note err" style="margin-top:12px"><b>Kill switch（熔斷）:</b> any automatic decision, unauthorised PII
     flow, unverifiable citation, unlogged model version, material subgroup harm or failed fallback immediately
     disables the AI feature and preserves the audit trail.
     <span class="zh">只要出現自動決策、未授權個資流、無法查證的引用、未登錄模型版本、顯著分群傷害或降級失效，立即停用 AI 功能並保留稽核軌跡。</span></p>
+
+  <h3 style="margin-top:22px">5.2 AI ethics, rights &amp; accountability<span class="zh">AI 倫理、權利與問責</span></h3>
+  <p style="font-size:13px;color:var(--muted)">Compliance is not ethics. A signed DPIA means the system may
+    lawfully proceed — not that a student feels fairly treated. Three education-specific conditions make a
+    generic AI-ethics list insufficient.
+    <span class="zh">合規不等於倫理。DPIA 簽核只代表可以合法地做，不代表學生覺得被公平對待。教育場景有三個特殊性，通用 AI 倫理清單不足以因應。</span></p>
+  <div class="grid g3">
+    <div class="card" style="margin:0;box-shadow:none;background:var(--surface-2)">
+      <h4>Power asymmetry<span class="zh">權力不對等</span></h4>
+      <p style="font-size:12.5px;margin:0">A student asking their own advisor for leave cannot easily say
+        "no AI please". Opting out must be silent, reason-free, equally fast and never recorded for analytics.
+        <span class="zh">學生很難對自己的導師說「我不要 AI 參與」。拒絕必須無痕、免理由、不降速、不影響結果，且不得留下可供分析的標記。</span></p>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--brand-soft);border-color:#B6D4F5">
+      <h4>Irreversible records<span class="zh">資料不可逆</span></h4>
+      <p style="font-size:12.5px;margin:0">Medical certificates, family and religious observance cannot be
+        recalled once leaked or labelled. Raw reasons and attachments never enter a model; a label must never
+        feed back into the next decision.
+        <span class="zh">病假證明、家庭與宗教節慶一旦外流或被打上標籤就收不回來。原始事由與附件不進模型；標籤不得回饋到下一次決定。</span></p>
+    </div>
+    <div class="card" style="margin:0;box-shadow:none;background:var(--info-soft);border-color:#D6C9F2">
+      <h4>Procedure is access<span class="zh">程序即受教權</span></h4>
+      <p style="font-size:12.5px;margin:0">Leave outcomes affect attendance, assessment, make-up exams,
+        scholarships and visas — an "advisory" hint can still change a result. Appeals go to someone other
+        than the original approver.
+        <span class="zh">請假結果牽連出席、考評、補考、獎助與簽證，「僅供參考」也可能改寫結果；申訴須由非原審批人處理。</span></p>
+    </div>
+  </div>
+
+  <table style="margin-top:14px">
+    <thead><tr><th>Right<span class="zh">權利</span></th>
+      <th>Commitment<span class="zh">具體承諾</span></th>
+      <th>Never<span class="zh">明令禁止</span></th></tr></thead>
+    <tbody>
+      <tr><td>Know / 知情</td>
+        <td>Label AI involvement at the point of use, with fields and policy version<span class="zh">使用當下標示 AI 參與、所用欄位與政策版本</span></td>
+        <td>Silent enablement, vague "smart assistant" wording<span class="zh">靜默啟用、以模糊字眼帶過</span></td></tr>
+      <tr><td>Refuse / 拒絕</td>
+        <td>One-click human-only handling, no reason, no penalty<span class="zh">一鍵全程人工，免理由、不受差別對待</span></td>
+        <td>Pre-ticked consent, slower queue, opt-out flags in analytics<span class="zh">預設勾選、降速、把拒絕者納入分析</span></td></tr>
+      <tr><td>Inspect &amp; erase / 查閱與刪除</td>
+        <td>See, correct and delete suggestions without touching the official leave record<span class="zh">可查閱、更正與刪除建議，且不動正式假單</span></td>
+        <td>Storing suggestions inside the leave record<span class="zh">把建議與正式假單綁在同一張表</span></td></tr>
+      <tr><td>Explain &amp; appeal / 解釋與申訴</td>
+        <td>Approved-policy citation, layered explanation, independent review<span class="zh">核定政策引用、分層解釋、獨立複審</span></td>
+        <td>Presenting the raw prompt as an explanation<span class="zh">把提示詞原文當作解釋</span></td></tr>
+      <tr><td>Approver autonomy / 審批人自主</td>
+        <td>Ignore or hide suggestions; training on automation bias<span class="zh">可忽略或隱藏建議，並接受自動化偏見訓練</span></td>
+        <td>Scoring approvers on suggestion-adoption rate<span class="zh">以「建議採納率」考核審批人</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note err" style="margin-top:12px"><b>Ethics veto（倫理否決）:</b> an independent ethics review
+    (including student representation, no supplier conflict) can block every H0–H3 transition without
+    proposing a technical alternative; DPIA sign-off does not substitute for it. Consent is not a blanket
+    authorisation for prohibited uses. Restoration means putting the student back where they would have been —
+    the burden of proof sits with the institution, never the student. Full framework and the checkbox
+    acceptance list: <a href="../AI-ETHICS.md"><b>AI-ETHICS.md</b></a>.
+    <span class="zh">獨立的倫理審查（含學生代表、供應商無利益衝突）可否決 H0–H3 每一次升級，無須提出技術替代方案；DPIA 簽核不能取代。同意不是禁止用途的萬用授權。復權是把學生放回「若無此事件應有」的狀態，舉證責任在學校，不在學生。完整框架與可勾選驗收表見
+    <a href="../AI-ETHICS.md"><b>AI-ETHICS.md</b></a>。</span></p>
 </div>
 
 <!-- 下一步 -->
@@ -371,8 +436,8 @@
 </div>
 
 <div class="foot"><div class="in">
-  <span>SAAS Roadmap &amp; Cost v1.1 · estimates only, ±20% · AI gates in AI-ROADMAP.md · HKUST(GZ) · Confidential</span>
-  <span>路線圖與成本 v1.1 · 估算值，誤差約 ±20% · AI 上線閘門見 AI-ROADMAP.md · 僅供校內評審</span>
+  <span>SAAS Roadmap &amp; Cost v1.2 · estimates only, ±20% · AI gates in AI-ROADMAP.md · ethics in AI-ETHICS.md · HKUST(GZ) · Confidential</span>
+  <span>路線圖與成本 v1.2 · 估算值，誤差約 ±20% · 上線閘門見 AI-ROADMAP.md · 倫理框架見 AI-ETHICS.md · 僅供校內評審</span>
 </div></div>
 </body>
 </html>
