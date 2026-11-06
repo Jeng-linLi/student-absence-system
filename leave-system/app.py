@@ -8,6 +8,7 @@
 import os
 import csv
 import io
+import math
 import hmac
 import hashlib
 import urllib.error
@@ -38,6 +39,7 @@ from db import (BASE_DIR, DB_PATH, UPLOAD_DIR, get_db, close_db,  # noqa: F401
                 q, execute, execute_guard, transaction, init_db)
 from utils import (FACULTY_THRESHOLD_DAYS, ALLOWED_EXT,
                    MAX_BACKDATE_DAYS, MAX_SINGLE_DAYS, MAX_ATTACHMENT_MB,
+                   MAX_AFFECTED_DAYS,
                    MAX_REASON_LEN, MAX_COMMENT_LEN, MAX_PHONE_LEN,
                    MIN_PASSWORD_LEN, MAX_PASSWORD_LEN,
                    LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC,
@@ -168,6 +170,14 @@ def affected_courses_for(student_id, start_date, end_date,
         return []
     if s > e:
         s, e = e, s
+    # v1.18.0：GET /api/affected_courses 直接把使用者參數送到這裡，原本沒有限制
+    # 區間長度。3.6 萬天的請求會逐日建 dict、查假日表再 jsonify，單一學生就能
+    # 吃滿一個 worker。放在函式層而非路由層，讓所有呼叫點（含 CLI／未來 API）
+    # 一體適用；/new 另有 MAX_SINGLE_DAYS=90 的更嚴格限制，不受影響。
+    if (e - s).days > MAX_AFFECTED_DAYS:
+        return []
+    if start_period not in ('AM', 'PM') or end_period not in ('AM', 'PM'):
+        return []
     rows = q('SELECT weekday, start_time, end_time, course_code, kind, room, note '
              'FROM timetable WHERE student_id=? ORDER BY weekday, start_time',
              (student_id,))
@@ -1079,11 +1089,19 @@ def verify_email(token):
     if not u:
         flash('此帳號不存在。', 'error')
         return redirect(url_for('login'))
+    # v1.18.0：兌換守衛的影響列數必須檢查，與 reset_password 對齊。
+    # consume_token() 只查詢不標記，併發雙開同一連結時兩邊都會通過；
+    # 原本無條件改 users＋寫稽核，會留下第二筆「完成驗證」軌跡，
+    # 讓「一次性 token」形同虛設。log_action 也一併移進交易，守衛失敗不留痕。
     with transaction():
-        execute_guard('UPDATE password_resets SET used_at=? '
-                      'WHERE id=? AND used_at IS NULL', (_now_str(), row['id']))
-        execute('UPDATE users SET email_verified=1 WHERE id=?', (u['id'],))
-    log_action(None, u['id'], 'verify_email', f'完成 Email 驗證（{u["name"]}）')
+        ok = execute_guard('UPDATE password_resets SET used_at=? '
+                           'WHERE id=? AND used_at IS NULL', (_now_str(), row['id']))
+        if ok:
+            execute('UPDATE users SET email_verified=1 WHERE id=?', (u['id'],))
+            log_action(None, u['id'], 'verify_email', f'完成 Email 驗證（{u["name"]}）')
+    if not ok:
+        flash('驗證連結已失效（可能已被使用），請聯絡管理員重發。', 'error')
+        return redirect(url_for('login'))
     flash('Email 驗證完成，謝謝。', 'success')
     return redirect(url_for('login'))
 
@@ -1498,6 +1516,8 @@ def api_affected_courses():
     ed = request.args.get('end_date', '')
     sp = request.args.get('start_period', 'AM')
     ep = request.args.get('end_period', 'PM')
+    # v1.18.0：區間上限與時段白名單統一由 affected_courses_for() 把關
+    # （GET 不受 CSRF 保護，這裡不能假設參數來自善意的前端）。
     data = affected_courses_for(u['id'], sd, ed, sp, ep)
     return jsonify(data)
 
@@ -1546,6 +1566,15 @@ def detail(rid):
     # 管理員的改派表單需要導師清單（v1.4.0）
     advisors = (q("SELECT id, name FROM users WHERE role='advisor' AND active=1 "
                   'ORDER BY name') if u['role'] == 'admin' else [])
+    # v1.18.0：D3 細粒度 PII 稽核（GAP-ANALYSIS D3「仍待補」）。
+    # 詳情頁會露出事由、聯絡電話、附件與各級審批意見——比 /stats 的彙總數字
+    # 更敏感，卻是最後一個沒有逐筆留痕的讀取路徑。學生看自己的單不算
+    # 跨範圍讀取，只有通過 can_view_request 的非當事人才記。放在 logs 查詢
+    # 之後，避免這筆稽核自己出現在同一次請求的畫面上（下次開啟才看得到）。
+    # 稽核只記「誰、何時、看了哪一張」，不把學號／事由等個資再抄一份進
+    # audit_logs.detail（沿用 v1.13.0 對匯出稽核的同一條紀律）。
+    if u['role'] != 'student':
+        log_action(rid, u['id'], 'view_pii', f"檢視假單詳情（{u['role']}）")
     return render_template('request_detail.html', req=req, approvals=approvals,
                            logs=logs, can_approve=can_approve, affected=affected,
                            advisors=advisors)
@@ -2534,7 +2563,10 @@ def admin_set_quota():
     except ValueError:
         flash('額度必須是數字。', 'error')
         return redirect(url_for('admin_terms'))
-    if max_days < 0 or max_days > 365:
+    # v1.18.0：float('nan') 對 < 0 與 > 365 兩個比較都回 False，舊版會把 NaN
+    # 寫進 leave_quotas；quota_exceeded 的「used+days > limit」對 NaN 也恆 False，
+    # 等於這個假別的額度永久靜默失效。無限大／NaN 一律擋掉。
+    if not math.isfinite(max_days) or max_days < 0 or max_days > 365:
         flash('額度需介於 0 與 365 天之間。', 'error')
         return redirect(url_for('admin_terms'))
     if not q('SELECT 1 FROM terms WHERE id=?', (term_id,), one=True) or \
@@ -2583,25 +2615,32 @@ def admin_import_holidays():
     raw = request.form.get('lines', '')
     added = skipped = 0
     bad = []
-    for ln in raw.splitlines():
-        ln = ln.strip()
-        if not ln or ln.startswith('#'):
-            continue
-        parts = [p.strip() for p in ln.replace('\t', ',').split(',', 1)]
-        try:
-            day = parse_date(parts[0])
-        except (TypeError, ValueError):
-            bad.append(parts[0])
-            continue
-        label = parts[1] if len(parts) > 1 else ''
-        execute('INSERT INTO holidays (day, label) VALUES (?,?) '
-                'ON CONFLICT(day) DO UPDATE SET label=excluded.label',
-                (day.isoformat(), label[:60]))
-        added += 1
-    if bad:
-        skipped = len(bad)
-    log_action(None, current_user()['id'], 'add_holiday',
-               f'批次匯入 {added} 天（略過 {skipped} 行格式錯誤）')
+    # v1.18.0：格式錯誤的行照舊略過，但「略過」與「寫入失敗」要分清楚——
+    # 後者不該留下半批假日。整批＋稽核包進 atomic()，與校曆／課表匯入一致。
+    try:
+        with atomic():
+            for ln in raw.splitlines():
+                ln = ln.strip()
+                if not ln or ln.startswith('#'):
+                    continue
+                parts = [p.strip() for p in ln.replace('\t', ',').split(',', 1)]
+                try:
+                    day = parse_date(parts[0])
+                except (TypeError, ValueError):
+                    bad.append(parts[0])
+                    continue
+                label = parts[1] if len(parts) > 1 else ''
+                execute('INSERT INTO holidays (day, label) VALUES (?,?) '
+                        'ON CONFLICT(day) DO UPDATE SET label=excluded.label',
+                        (day.isoformat(), label[:60]))
+                added += 1
+            if bad:
+                skipped = len(bad)
+            log_action(None, current_user()['id'], 'add_holiday',
+                       f'批次匯入 {added} 天（略過 {skipped} 行格式錯誤）')
+    except Exception:                      # 寫入失敗不該把整頁炸掉
+        flash('匯入時發生錯誤，資料庫未變更。', 'error')
+        return redirect(url_for('admin_terms'))
     msg = f'已匯入 {added} 個校曆假日。'
     if skipped:
         msg += f'另有 {skipped} 行格式不合法已略過。'
@@ -2650,14 +2689,18 @@ def admin_import_calendar():
     if not (parsed['terms'] or parsed['holidays'] or parsed['makeups']):
         flash('沒有解析到任何項目，請檢查檔案格式。', 'error')
         return redirect(url_for('admin_terms'))
+    # v1.18.0：apply_calendar() 逐筆 execute()，在非交易下每句各自 commit；
+    # 舊版卻在例外時告訴管理員「資料庫未變更」，實際上可能已寫入一半學期／假日，
+    # 讓人以為不必重匯。與 admin_import_timetable 對齊，整批＋稽核包進 atomic()。
     try:
-        stats = apply_calendar(parsed)
+        with atomic():
+            stats = apply_calendar(parsed)
+            log_action(None, current_user()['id'], 'import_calendar',
+                       f"{source}：學期 {stats['terms']}、假日 {stats['holidays']} 天、"
+                       f"補課 {stats['makeups']} 天")
     except Exception:                      # 匯入寫入失敗不該把整頁炸掉
         flash('匯入時發生錯誤，資料庫未變更。', 'error')
         return redirect(url_for('admin_terms'))
-    log_action(None, current_user()['id'], 'import_calendar',
-               f"{source}：學期 {stats['terms']}、假日 {stats['holidays']} 天、"
-               f"補課 {stats['makeups']} 天")
     msg = (f"已匯入 {source}：{stats['terms']} 個學期、"
            f"{stats['holidays']} 個假日、{stats['makeups']} 個補課日。")
     if parsed['errors']:

@@ -13,6 +13,10 @@ ALLOWED_EXT = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
 MAX_BACKDATE_DAYS = 30     # 最多可回溯補請的天數（病假補件等情境）
 MAX_SINGLE_DAYS = 90       # 單張假單天數上限，防止日期填錯
 MAX_ATTACHMENT_MB = 8
+# v1.18.0：課表預覽 API 是匿名成本的 GET，區間必須有上限。
+# 放寬到單張假單上限的 4 倍（360 天）仍可預覽整學年，但擋掉
+# 2000-01-01～2099-12-31 這種 3.6 萬次逐日迴圈的請求。
+MAX_AFFECTED_DAYS = 360
 
 # 自由文字長度上限（防止超長內容撐爆版面／儲存）
 MAX_REASON_LEN = 500
@@ -29,7 +33,7 @@ LOGIN_WINDOW_SEC = 300
 ACADEMIC_YEAR_START_MONTH = 9
 
 # 原型版本號（模板頁腳從此帶入，避免各處硬編碼後失真）
-APP_VERSION = '1.17.0'
+APP_VERSION = '1.18.0'
 
 # 假單狀態白名單（與 schema.sql 的 CHECK 約束一致）
 LEAVE_STATUSES = ('pending', 'approved', 'rejected', 'withdrawn')

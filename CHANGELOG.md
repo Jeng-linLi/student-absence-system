@@ -9,6 +9,74 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-11-06
+
+**程式碼型改版：把殘留的「假防護」補成真的，並關閉 D3 細粒度稽核。**
+前一版（v1.17.0）把文件漂移整理成登錄表，但盤點時也暴露出一類共通問題：
+有些防護在程式碼裡「寫了」，卻因為漏掉一道檢查而從未真正生效。本版逐一補上，
+同時把 `GAP-ANALYSIS.md` D3 自己登錄、一直沒做的「單張詳情頁逐筆 PII 稽核」關閉。
+
+> **刻意不做的一件事**：`role_scope()`（統計／匯出／全部假單）與 `todo_scope()`
+> （待辦／審批／詳情）對代理人的口徑不一致——被委託的審批人能審、能看詳情，
+> 卻在 `/stats`、`/export` 看不到同一批單。看起來是 bug，但「讓代理人能匯出
+> 委託人全系學生的個資」是**個資範圍擴張**，不是純技術修正，需校方先訂政策。
+> 已登錄為 `SAAS-PAIN-POINTS.md` 的 D-9／T-10，本版不擅自放寬。
+
+### Fixed ｜修復
+
+- **課表預覽 API 沒有日期上限（DoS）**：`GET /api/affected_courses` 只驗角色就
+  把 `start_date`／`end_date` 直送 `affected_courses_for()`，後者逐日迴圈沒有上界；
+  任何學生用 `2000-01-01`～`2099-12-31` 單一 GET 就能跑 3.6 萬次迴圈並建數十萬
+  個 dict，吃滿一個 worker，而且 GET 不受 CSRF 保護。`MAX_SINGLE_DAYS`／
+  `MAX_BACKDATE_DAYS` 原本只擋 `/new` 提交，擋不到預覽。現在於函式層加
+  `MAX_AFFECTED_DAYS = 360`（仍可預覽整學年），並補 `start_period`／`end_period`
+  白名單與反向區間對調後才計天數——所有呼叫點一體適用。
+- **校曆匯入宣稱「資料庫未變更」卻已寫入一半**：`admin_import_calendar()` 呼叫
+  `apply_calendar()` 逐句 `execute()`，在非交易下每句各自 commit；一旦中途失敗，
+  學期／假日可能已部分落庫，`is_current` 卻沒設，畫面還告訴管理員「資料庫未變更」，
+  讓人以為不必重匯。現在整批寫入＋稽核包進 `atomic()`（與 `admin_import_timetable`
+  一致）；`admin_import_holidays()` 也比照辦理，格式錯誤的行仍照舊「略過」，
+  但寫入失敗不再留下半批假日。
+- **Email 驗證的一次性 token 守衛是裝飾**：`verify_email()` 丟棄了
+  `execute_guard()` 的影響列數，無條件接著改 `users` 並寫稽核。`consume_token()`
+  只查詢不標記，併發雙開同一連結時兩邊都通過查詢，會留下第二筆「完成驗證」軌跡。
+  現在守衛回 0 即視為已失效，且 `log_action` 一併移進交易，失敗不留痕
+  （與 v1.12.0 的 `reset_password()` 對齊）。
+- **額度設定接受 NaN，導致限額永久靜默失效**：`admin_set_quota()` 的
+  `max_days < 0 or > 365` 對 `float('nan')` 兩邊皆 False，NaN 會寫入 `leave_quotas`；
+  而 `quota_exceeded()` 的 `used + days > limit` 對 NaN 也恆 False，該假別從此不再攔截。
+  現在以 `math.isfinite()` 擋掉 NaN／±Inf，並補上五種輸入的參數化回歸測試。
+
+### Added ｜新增
+
+- **D3 細粒度 PII 稽核（逐張）**：`/request/<rid>` 詳情頁會露出事由、聯絡電話、
+  附件與各級審批意見，比 `/stats` 的彙總數字更敏感，卻是最後一個沒有留痕的讀取
+  路徑。現在非當事人（導師／院系／管理員）每次檢視寫一筆 `view_pii`
+  （帶 `request_id`，後台稽核頁可直接篩）；學生看自己的單不算跨範圍讀取，不記。
+  稽核明細只記「誰、何時、看了哪一張」，**不抄學號／事由／電話**——沿用
+  v1.13.0 對匯出稽核立的同一條紀律。`GAP-ANALYSIS.md` D3「仍待補」與
+  `SAAS-PAIN-POINTS.md` D-3／P2 現況隨之更新。
+
+### Changed ｜調整
+
+- `APP_VERSION` 1.17.0 → 1.18.0；根 README、leave-system/README、GAP-ANALYSIS、
+  SAAS-PAIN-POINTS、`saas/index.html` 與 `COMMERCIAL.md` §4 的版本、測試數與 D 組狀態同步
+  （統一為「D1／D2／D3 已關閉，D 組僅剩 D4 通知偏好」）。
+- **登錄表編號去重**：代理人範圍痛點改編 `D-9`（`D-8` 已被「同意萬用授權」佔用），
+  v1.18.0 的文件矛盾條目改編 `M-11`（`M-10` 已被「原型說明書自身前後說法不一致」佔用）；
+  所有交叉引用一併校正，歷史處置原文仍保留不改。
+- **版本斷言不再寫死**：既有測試的 healthz／版本檢查維持動態比對 `APP_VERSION`
+  （v1.8.1 起的慣例），本版發版不必改測試。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v25.py` 23 案：區間上限（含反向、邊界、不查庫證明）、
+  時段白名單、API 路由、兩條匯入交易的回滾、驗證 token 守衛失敗與正常流程、
+  五種非有限額度輸入、詳情頁逐筆稽核（非當事人／當事人／不抄個資／後台可見）。
+- `smoke_test.py` 新增 `[+15]` 段 9 項（真實 CSRF／session 環境）：247 → **256**。
+- 本機全量 **263 passed、1 skipped**（原 240／1），smoke **256 全過**，
+  `compileall` 與 `git diff --check` 通過。
+
 ## [1.17.0] — 2026-11-06
 
 **文件型改版：把整個 SaaS 的痛點整理成可查核登錄表，並校準長期文件漂移。**

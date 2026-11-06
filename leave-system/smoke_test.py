@@ -1144,5 +1144,79 @@ del os.environ['LEAVE_SMTP_HOST']
 del os.environ['LEAVE_SMTP_USER']
 del os.environ['LEAVE_SMTP_FROM']
 
+# -------------------------- [+15] v1.18.0：把假防護補成真的 --------------------------
+import db as _db_mod
+
+# 課表預覽 API：GET 不受 CSRF 保護，超大區間必須即時回空陣列
+login('smoke_stu', 'Smoke@New2026')
+_ac = c.get('/api/affected_courses?start_date=2000-01-01&end_date=2099-12-31')
+check('[v1.18] 超大日期區間的課表預覽即時回空陣列',
+      _ac.status_code == 200 and _ac.get_json() == [])
+_ac2 = c.get('/api/affected_courses?start_date=2026-11-02&end_date=2026-11-03'
+             '&start_period=NOPE')
+check('[v1.18] 課表預覽時段白名單生效', _ac2.get_json() == [])
+_ac3 = c.get('/api/affected_courses?start_date=2026-11-02&end_date=2026-11-03')
+check('[v1.18] 正常區間的課表預覽仍可用', isinstance(_ac3.get_json(), list))
+
+# 額度 NaN：表單路徑也必須擋（舊版會讓該假別額度永久失效）
+login('admin')
+_v25_term = db_exec("INSERT INTO terms (label, start_date, end_date, is_current) "
+                    "VALUES ('v25 冒煙學期','2099-01-01','2099-12-31',0)")
+_v25_tid = db_query("SELECT id FROM terms WHERE label='v25 冒煙學期'")[0]['id']
+_v25_lt = db_query("SELECT id FROM leave_types ORDER BY id LIMIT 1")[0]['id']
+c.post('/admin/quotas/set', data={'term_id': str(_v25_tid),
+                                  'leave_type_id': str(_v25_lt),
+                                  'max_days': 'nan'})
+check('[v1.18] NaN 額度不會寫入資料庫',
+      db_query('SELECT 1 FROM leave_quotas WHERE term_id=? AND leave_type_id=?',
+               (_v25_tid, _v25_lt)) == [])
+
+# 校曆匯入：寫入中斷時「資料庫未變更」必須為真
+_real_exec = _db_mod.execute
+_calls = {'n': 0}
+
+
+def _v25_flaky(sql, args=()):
+    _calls['n'] += 1
+    if _calls['n'] == 3:
+        raise RuntimeError('冒煙：模擬匯入寫入中斷')
+    return _real_exec(sql, args)
+
+
+_db_mod.execute = _v25_flaky
+try:
+    _ir = c.post('/admin/calendar/import', data={'calendar_text':
+                 "term 2099-01-01 2099-06-30 v25 冒煙學期甲\n"
+                 "term 2099-07-01 2099-12-31 v25 冒煙學期乙\n"
+                 "holiday 2099-12-30 冒煙假日\n"})
+finally:
+    _db_mod.execute = _real_exec
+check('[v1.18] 校曆匯入中斷後不殘留半批學期',
+      db_query("SELECT 1 FROM terms WHERE label IN ('v25 冒煙學期甲','v25 冒煙學期乙')") == [])
+check('[v1.18] 校曆匯入中斷後不殘留假日與稽核',
+      db_query('SELECT 1 FROM holidays WHERE day=?', ('2099-12-30',)) == []
+      and db_query("SELECT 1 FROM audit_logs WHERE action='import_calendar' "
+                   "AND detail LIKE '手動貼上%'") == [])
+
+# 詳情頁逐筆 PII 稽核：非當事人留痕、當事人不留痕
+_v25_rid = db_query('SELECT id FROM leave_requests ORDER BY id LIMIT 1')[0]['id']
+login('T001')
+_v25_adv = db_query("SELECT id FROM users WHERE username='T001'")[0]['id']
+_before = db_query("SELECT COUNT(*) c FROM audit_logs WHERE action='view_pii' "
+                   "AND actor_id=? AND request_id=?", (_v25_adv, _v25_rid))[0]['c']
+_dr = c.get(f'/request/{_v25_rid}')
+check('[v1.18] 導師檢視假單詳情可正常開啟', _dr.status_code == 200)
+_after = db_query("SELECT COUNT(*) c FROM audit_logs WHERE action='view_pii' "
+                  "AND actor_id=? AND request_id=?", (_v25_adv, _v25_rid))[0]['c']
+check('[v1.18] 非當事人檢視詳情逐筆留 view_pii 稽核', _after == _before + 1)
+_logs = db_query("SELECT detail FROM audit_logs WHERE action='view_pii' "
+                 "AND request_id=?", (_v25_rid,))
+check('[v1.18] 稽核明細不抄學號／事由／電話等個資',
+      all('1380000' not in (r['detail'] or '') and '校外學術競賽' not in (r['detail'] or '')
+          for r in _logs))
+
+# 收尾：清掉自建學期，避免影響本次冒煙的其他統計斷言
+db_exec('DELETE FROM terms WHERE id=?', (_v25_tid,))
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')
