@@ -19,6 +19,8 @@ leave-system/restore-rollbacks/
 leave-system/leave_system.db-wal
 leave-system/leave_system.db-shm
 *.log
+.pytest-temp*/
+.pytest-check*/
 
 # 編輯器 / 系統
 .vscode/

@@ -1,6 +1,12 @@
 # SaaS 痛點全景與就緒度登錄 — SAAS Pain Points & Readiness Register
 
-> **狀態｜Status：v1.18.0 盤點文件（2026-11-06）**
+> **狀態｜Status：v1.19.0 盤點文件（2026-11-08）**
+>
+> **v1.19.0 增量**：① **D-4 通知偏好與每日摘要已在原型關閉**，支援即時、每日或關閉一般
+> Email，站內通知與安全郵件邊界不變；正式環境仍須 SMTP、每日排程與失敗告警，摘要採至少一次
+> 投遞。② 修復巢狀交易提前寄信及寫庫失敗後的附件孤兒。③ **T-8 已校準**：EW-5 改為可枚舉的
+> 固定條件與支持性人工跟進，不再使用個人綜合風險分、隱性權重或 GPA 趨勢；EW 全組仍屬提案，
+> 原型尚未交付。D-9／T-10 代理人範圍政策繼續刻意保留。
 >
 > **v1.18.0 增量**：① **D-3 細粒度 PII 稽核已關閉**——`/request/<rid>` 對非當事人
 > 逐筆寫 `view_pii`（`GAP-ANALYSIS.md` D3）；② 補掉四處「假防護」（課表預覽區間上限、
@@ -67,7 +73,7 @@
 | --- | --- | --- | --- |
 | 學生 | 不知道進度、要重複補件、缺課影響不透明 | 部分 | 原型有狀態追蹤、通知、v1.13.0 核准意見回饋、逐生課表預覽；但**無免理由拒絕 AI 的介面、無查閱／更正／刪除自助流程、無非正式數位協助通道**（`AI-ETHICS.md` §3、`assignment/content.md`） |
 | 學生（弱勢） | 慢病、身心狀況、非母語、無穩定網路者被流程本身排除 | 未解 | `AI-ETHICS.md` §4 列為分配／尊嚴／程序傷害；需 assisted non-digital route，目前僅為承諾 |
-| 導師／院系 | 待辦積壓、決策缺乏上下文、信件轟炸 | 部分 | v1.6.0 批次、v1.4.0 委派／SLA、v1.13.0 搜尋已緩解；**D4 郵件偏好／digest 頻率控制未做**（`GAP-ANALYSIS.md` D4） |
+| 導師／院系 | 待辦積壓、決策缺乏上下文、信件轟炸 | 部分 | v1.6.0 批次、v1.4.0 委派／SLA、v1.13.0 搜尋已緩解；**v1.19.0 已交付即時／每日摘要／關閉一般 Email 偏好**，正式環境仍須 SMTP、每日排程與失敗告警（`GAP-ANALYSIS.md` D4） |
 | 審批人（AI 情境） | 建議可能變成實質決定（自動化偏見） | 漂移 | `AI-ETHICS.md` §6 禁止以採納率考核、禁止建議長得像決定；但尚未有介面可驗證，且 H2 尚未啟動 |
 | 管理員 | 課表／校曆／帳號／稽核散在多處 | 已解（原型） | 後台頁與 `flask import-timetable`／`import-calendar`／`backup`／`av-scan`／`purge-attachments` CLI 齊備 |
 | 教務處／DPO | 無法快速回答「誰看過、依據什麼、保存多久」 | 部分 | `audit_logs`＋v1.9.0 稽核＋v1.10.0 留存銷毀＋v1.14.0 可驗證備份＋**v1.18.0 單張詳情頁逐筆稽核**；**DPIA、資料分級文件、跨境評估仍缺**（`saas/data.html` §5–§6 為設計，非已交付） |
@@ -85,7 +91,7 @@
 | D-1 | 附件含病假證明等健康個資，保存期與刪除權 | 已解 | v1.10.0 `purge_expired_attachments()`、`LEAVE_ATTACHMENT_RETENTION_DAYS`、備份區與 `purge_attachment` 稽核 |
 | D-2 | 惡意附件落地風險 | 已解 | v1.11.0 `LEAVE_AV_CMD` 掃描、fail-closed、`av_block` 稽核、`flask av-scan` 存量重掃 |
 | D-3 | 大範圍 PII 讀取／匯出未留痕 | 已解（原型） | v1.9.0 已覆蓋 `/stats`／`/export`／`/admin/users`；**v1.18.0 補上單張詳情頁逐筆 `view_pii`**，且明細不抄個資（`GAP-ANALYSIS.md` D3）。仍缺 DPIA／資料分級文件 |
-| D-4 | 通知偏好與頻率控制 | 未解 | `GAP-ANALYSIS.md` D4；`user_prefs(email_enabled, digest_daily)` 仍為解法構想。**D 組目前僅剩此項** |
+| D-4 | 通知偏好與頻率控制 | 已解（原型） | v1.19.0 已交付 `user_prefs`、本人偏好表單、即時／每日／關閉一般 Email，以及可重試的 `flask send-digests`；站內通知與安全郵件邊界不變。**部署仍須 SMTP、每日排程與失敗告警；摘要採至少一次投遞**（`GAP-ANALYSIS.md` D4） |
 | D-5 | 備份包本身是高密度個資集合 | 部分 | v1.14.0 有 SHA-256 manifest、完整性驗證、pre-restore 副本、`.gitignore` 排除；**異地存放加密、保存期限、還原演練紀錄與存取稽核**未制度化 |
 | D-6 | FERPA／GDPR／PIPL 對照表是設計文件，不是合規證明 | 未解 | `saas/data.html` §6 為 mapping；DPIA／PIA、資料駐留決策、跨境評估見 `COMMERCIAL.md` §8.3、§9 第 3 項，皆未完成 |
 | D-7 | 未來 AI 輸入／輸出與備份體系的勾稽 | 未解 | `AI-ETHICS.md` §7 要求新增 AI 資料表須同步納入 `backup.py` 的備份／驗證／還原演練；目前無 AI 資料表，屬前置約束 |
@@ -107,7 +113,7 @@
 | T-5 | **E2：i18n** | 未解 | 提案為中英對照、原型介面以中文為主；`GAP-ANALYSIS.md` E2、`AI-ROADMAP.md` H0 前置 |
 | T-6 | E3 備份還原的維運邊界 | 已解（原型） | v1.14.0 SQLite 在線快照、manifest、路徑穿越／符號連結拒絕、`--yes`、pre-restore、失敗補償、DB-only 語意、遞迴備份防護；**跨主機還原與定期演練**屬維運流程，非程式缺口 |
 | T-7 | 搜尋仍為 `LIKE '%…%'` 全掃 | 部分 | v1.13.0 已參數化並以 `ESCAPE '!'` 防萬用字元濫用；`GAP-ANALYSIS.md` E4 註明資料量再上一級應改 FTS5／`pg_trgm` |
-| T-8 | **EW-5「Composite risk score」語意與 AI 紅線衝突** | 漂移 | `saas/prd.html` §10 把 EW-5 定義為加權評分（缺席率、衝突、遲交、**GPA 走勢**）；`AI-ROADMAP.md` 與 `AI-ETHICS.md` 禁止模型推導的隱性個人風險分。v1.15.0 已註明 EW-1～EW-5 是**透明門檻式確定性規則、人工開案跟進**，但 EW-5 的名稱與 GPA 走勢輸入仍易被讀成個人風險評分，且 GPA 屬 `AI-ETHICS.md` §4 點名的代理變數。**建議**：改名為可列舉的門檻規則、公開權重與可申訴路徑，或明確排除 GPA 趨勢輸入 |
+| T-8 | **EW-5「Composite risk score」語意與 AI 紅線衝突** | 已解（文件校準） | v1.19.0 已把 `saas/prd.html` §10 的 EW-5 改為 **Repeated support follow-up**：僅由 EW-1／EW-2／EW-4 任兩項各自達標觸發支持性人工跟進，不加權、不產生個人綜合風險分，也不再使用 GPA 趨勢或遲交資料。`AI-ROADMAP.md` 與提案首頁同步此邊界；EW-1～EW-5 仍屬提案設計，原型尚未交付 |
 | T-9 | 企業級 DDL 與原型 schema 無遷移對映 | 未解 | `saas/schema.sql` 是目標態；缺欄位對映、資料遷移腳本與等價性測試，A1 升級時會成為主要工作量 |
 | T-10 | 代理人範圍：`role_scope()` 與 `todo_scope()` 口徑不一致 | 部分（刻意保留） | v1.18.0 盤點：代理人待辦看得到、能審、能看詳情，`/stats`／`/export`／全部假單卻看不到同一批單（`GAP-ANALYSIS.md` D5）。**不直接修**：放寬 `role_scope()` 等於授權代理人匯出委託人全系學生個資，須先有校方政策與獨立稽核設計 |
 
@@ -137,7 +143,7 @@
 
 | ID | 痛點 | 現況 | 說明 |
 | --- | --- | --- | --- |
-| G-1 |  governance 已成形但**工程前置一項未關閉** | 未解 | H0 需要政策版本、去識別化唯讀視圖、golden set、唯讀副本、事件契約、特徵開關；A1／E1／E2／D4 是 H0 之前的工程前置（`AI-ROADMAP.md` §6） |
+| G-1 | governance 已成形但**工程前置尚未關閉** | 未解 | H0 需要政策版本、去識別化唯讀視圖、golden set、唯讀副本、事件契約、特徵開關；D4 已於 v1.19.0 在原型完成，A1／E1／E2 與其餘 H0 前置仍未完成（`AI-ROADMAP.md` §6） |
 | G-2 | 原型**沒有 AI**，H0–H3 全為規劃 | 已解（ boundary 明確） | v1.15.0／v1.16.0 皆為純文件；無模型呼叫、無新依賴、無個資外送。**風險**：外部讀者可能把兩份治理文件誤讀為功能已上線 |
 | G-3 | 月報 Phase 3 仍列個人風險分與跨校對標 | 漂移 | `saas/monthly-report.html` §5 列 `Composite risk score (GPA + absence)`、`Predictive dropout risk`、`Cross-institution benchmarking`；與 `AI-ROADMAP.md` 紅線（不做隱性個人風險分、不拿學生資料訓練）及 `AI-ETHICS.md` §7（禁止跨校聯合訓練）衝突 |
 | G-4 | 倫理審查的否決權尚無對應組織 | 未解 | `AI-ETHICS.md` §9 要求含學生代表與獨立成員、供應商迴避；目前僅為驗收標準，無具名簽核 |
@@ -166,13 +172,14 @@
 | M-10 | 原型說明書自身前後說法不一致 | `leave-system/README.md`「上生產前還要補」第 2 點寫「內容層的惡意程式仍需掃描引擎」，第 5 點卻寫 D2 已落地且「D 組三項全部關閉」；同文件第 6 點又把 D4 列為 H0 前置 | 第 2 點改為「v1.11.0 掃毒通道已落地，引擎本體仍須部署環境安裝配置」；第 5 點改為「D1／D2／D3 已關閉，D4 與細粒度 PII 稽核仍開放」，用語與 M-2 一致（**該第 5 點已於 v1.18.0 再更新為「僅剩 D4」，見 M-11**） |
 | M-11 | v1.17.0 的 D 組用語在 v1.18.0 已過時 | M-2／M-8／M-10 與 `GAP-ANALYSIS.md` D4「狀態對照（v1.17.0）」仍寫「殘留 D4 與細粒度 PII 稽核」 | **保留上表歷史處置原文**，於本文檔頭加 v1.18.0 增量註記、D-3 改標 `已解（原型）`、D-4 補「D 組目前僅剩此項」、`GAP-ANALYSIS.md` D4 狀態對照與根 `README.md` Readiness gate 改標 v1.18.0。這正是 §9「每次發布更新登錄表」規則的實作 |
 
-> **表中數字為 v1.17.0 當下的快照**；v1.18.0 現況為 264 collected（263 passed、1 skipped）＋256 smoke，見 `CHANGELOG.md`。
+> **表中數字為 v1.17.0 當下的快照**；v1.18.0 當時為 264 collected（263 passed、1 skipped）＋256 smoke；
+> v1.19.0 現況為 278 collected（277 passed、1 skipped）＋263 smoke，見 `CHANGELOG.md`。
 > **校準原則**：歷史報告只加註、不改數；現況文件（README、COMMERCIAL、提案首頁）才更新數字。
 > 這樣既消除誤讀，也不犧牲可追溯性。
 
 ---
 
-## 8. 接下來最該處理的五件事
+## 8. 接下來最該處理的事項
 
 依「不確定性高、阻塞後續、可在本機或單一文件內驗證」排序，與既有路線對齊：
 
@@ -181,8 +188,8 @@
 2. **A1 PostgreSQL**（T-1／T-9）：先做 `saas/schema.sql` ↔ 原型 schema 的欄位對映與等價性測試，
    再談遷移；目前連對映都缺，直接升級風險最高。
 3. **A2 SSO 真實 IdP**（T-2）：校方提供參數與角色對映，補 ID-token 簽章驗證與 nonce 重放防護。
-4. **E1 API／Webhook、E2 i18n、D4 通知偏好**（T-4／T-5／D-4）：三者同時是 `AI-ROADMAP.md`
-   H0 之前的工程前置；未關閉前任何 AI 升級都應維持 No-Go。
+4. **E1 API／Webhook、E2 i18n**（T-4／T-5）：兩者仍是 `AI-ROADMAP.md` H0 之前的工程前置；
+   D4 通知偏好已於 v1.19.0 在原型完成。其餘前置未關閉前，任何 AI 升級都應維持 No-Go。
 5. **商業化總閘**（B-1～B-6）：Readiness gate、定價、合約範本、敏感性區間與試點 Proof pack；
    在試點數據出現前，`saas/index.html` §8 的估算不得引用於對外報價或第三方商業論證。
 6. **D-9／T-10 代理人範圍政策**（v1.18.0 新增）：先由教務處／DPO 決定代理人是否具備

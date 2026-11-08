@@ -10,6 +10,24 @@
   {% endif %}
 </h1>
 <div class="card">
+  <h2 style="margin-top:0">Email 通知偏好</h2>
+  <form method="post" action="{{ url_for('notification_preferences') }}" class="actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="email_mode">一般通知</label>
+    <select id="email_mode" name="email_mode">
+      <option value="instant"{% if prefs.email_enabled and not prefs.digest_daily %} selected{% endif %}>即時 Email</option>
+      <option value="daily"{% if prefs.email_enabled and prefs.digest_daily %} selected{% endif %}>每日摘要（合併為一封）</option>
+      <option value="off"{% if not prefs.email_enabled %} selected{% endif %}>關閉一般通知 Email</option>
+    </select>
+    <button class="btn sm" type="submit">儲存偏好</button>
+  </form>
+  <p class="muted" style="margin-bottom:0">
+    收件地址：{{ prefs.email or '尚未登記 Email' }}。站內通知永遠保留；密碼重設與 Email 驗證等安全郵件不受此設定影響。
+    每日摘要由排程任務寄出，寄送失敗會保留至下次重試；切換為即時或關閉會取消尚未寄出的摘要（已進入投遞的郵件無法撤回）。
+    {% if not smtp_configured %}<strong>目前 SMTP 尚未配置，Email 通道停用。</strong>{% endif %}
+  </p>
+</div>
+<div class="card">
   <div class="actions" style="margin:0 0 12px">
     <a class="btn sm {{ '' if cur_filter == 'all' else 'ghost' }}" href="{{ url_for('notifications') }}">全部</a>
     <a class="btn sm {{ '' if cur_filter == 'unread' else 'ghost' }}" href="{{ url_for('notifications', filter='unread') }}">未讀{% if unread_count %}（{{ unread_count }}）{% endif %}</a>

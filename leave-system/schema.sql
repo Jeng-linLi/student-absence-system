@@ -83,9 +83,24 @@ CREATE TABLE IF NOT EXISTS notifications (
     request_id INTEGER REFERENCES leave_requests(id),
     message    TEXT    NOT NULL,
     is_read    INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    digest_pending INTEGER NOT NULL DEFAULT 0,      -- D4：等待每日摘要（0/1）
+    digest_sent_at TEXT,                            -- 摘要寄送成功時間
+    digest_claim TEXT,                              -- worker 認領 token，避免重複寄送
+    digest_claimed_at TEXT                          -- 認領時間；逾期可由其他 worker 回收
 );
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notif_digest ON notifications(
+    digest_pending, digest_sent_at, digest_claim, user_id);
+
+-- v1.19.0 · D4 通知偏好：沒有紀錄時沿用舊行為（即時 Email）。
+-- 安全郵件（密碼重設／Email 驗證）不走這組偏好，仍照常寄送。
+CREATE TABLE IF NOT EXISTS user_prefs (
+    user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    email_enabled INTEGER NOT NULL DEFAULT 1 CHECK (email_enabled IN (0, 1)),
+    digest_daily  INTEGER NOT NULL DEFAULT 0 CHECK (digest_daily IN (0, 1)),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
 
 -- 登入限流紀錄。持久化到資料庫：跨進程、重啟後仍有效
 -- （僅存進程內記憶體的話，多 worker 部署下限流形同虛設）

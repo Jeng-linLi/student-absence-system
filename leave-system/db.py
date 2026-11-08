@@ -95,6 +95,10 @@ MIGRATIONS = [
     ('timetable', 'source', "TEXT NOT NULL DEFAULT 'demo'"),
     ('users', 'external_id', 'TEXT'),   # A2 SSO（v1.8.0）：外部身分對映，本地帳號為 NULL
     ('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 0'),   # B2（v1.12.0）：Email 驗證標記
+    ('notifications', 'digest_pending', 'INTEGER NOT NULL DEFAULT 0'),  # D4（v1.19.0）
+    ('notifications', 'digest_sent_at', 'TEXT'),
+    ('notifications', 'digest_claim', 'TEXT'),
+    ('notifications', 'digest_claimed_at', 'TEXT'),
 ]
 
 # 補建資料表（v1.12.0）：MIGRATIONS 只補欄位，整表新增走這裡（冪等）。
@@ -108,6 +112,12 @@ EXTRA_TABLES = [
     expires_at TEXT    NOT NULL,
     used_at    TEXT
 )""",
+    """CREATE TABLE IF NOT EXISTS user_prefs (
+    user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    email_enabled INTEGER NOT NULL DEFAULT 1 CHECK (email_enabled IN (0, 1)),
+    digest_daily  INTEGER NOT NULL DEFAULT 0 CHECK (digest_daily IN (0, 1)),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+)""",
 ]
 
 # 補建索引（v1.7.0）：課表匯入的 merge 模式靠唯一索引做冪等 UPSERT。
@@ -117,6 +127,9 @@ EXTRA_INDEXES = [
     ('uq_tt_slot',
      'CREATE UNIQUE INDEX IF NOT EXISTS uq_tt_slot '
      'ON timetable(student_id, weekday, start_time, end_time, course_code)'),
+    ('idx_notif_digest',
+     'CREATE INDEX IF NOT EXISTS idx_notif_digest ON notifications '
+     '(digest_pending, digest_sent_at, digest_claim, user_id)'),
 ]
 
 

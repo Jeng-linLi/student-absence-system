@@ -1218,5 +1218,67 @@ check('[v1.18] 稽核明細不抄學號／事由／電話等個資',
 # 收尾：清掉自建學期，避免影響本次冒煙的其他統計斷言
 db_exec('DELETE FROM terms WHERE id=?', (_v25_tid,))
 
+# -------------------------- [+16] v1.19.0：通知偏好與每日摘要 --------------------------
+import app as _app_mod
+
+app.config['CSRF_ENABLED'] = True
+login('smoke_stu', 'Smoke@New2026')
+_v26_html = get('/notifications')
+check('[v1.19] 通知中心提供三種 Email 偏好',
+      '即時 Email' in _v26_html and '每日摘要（合併為一封）' in _v26_html
+      and '關閉一般通知 Email' in _v26_html)
+_v26_uid = db_query("SELECT id FROM users WHERE username='smoke_stu'")[0]['id']
+_v26_bad = c.post('/notifications/preferences', data={'email_mode': 'daily'})
+check('[v1.19] 偏好 POST 缺 CSRF token 會被拒且不寫入',
+      _v26_bad.status_code == 302
+      and db_query('SELECT 1 FROM user_prefs WHERE user_id=?', (_v26_uid,)) == [])
+_v26_token = _v26_html.split('name="csrf_token" value="')[1].split('"')[0]
+_v26_saved = c.post('/notifications/preferences', data={
+    'email_mode': 'daily', 'csrf_token': _v26_token})
+_v26_pref = db_query('SELECT email_enabled, digest_daily FROM user_prefs WHERE user_id=?',
+                     (_v26_uid,))
+check('[v1.19] 帶 CSRF token 可儲存本人的每日摘要偏好',
+      _v26_saved.status_code == 302 and len(_v26_pref) == 1
+      and _v26_pref[0]['email_enabled'] == 1 and _v26_pref[0]['digest_daily'] == 1)
+app.config['CSRF_ENABLED'] = False
+
+_app_mod.notify(_v26_uid, None, 'v1.19 冒煙每日摘要')
+check('[v1.19] 每日摘要模式保留站內通知並標記待送',
+      db_query('SELECT digest_pending FROM notifications WHERE user_id=? AND message=?',
+               (_v26_uid, 'v1.19 冒煙每日摘要'))[0]['digest_pending'] == 1)
+check('[v1.19] SMTP 未配置時摘要不清空待送狀態',
+      _app_mod.send_daily_digests()['status'] == 'disabled'
+      and db_query('SELECT digest_pending FROM notifications WHERE user_id=? AND message=?',
+                   (_v26_uid, 'v1.19 冒煙每日摘要'))[0]['digest_pending'] == 1)
+
+os.environ['LEAVE_SMTP_HOST'] = 'smtp.smoke.test'
+os.environ['LEAVE_SMTP_USER'] = 'noreply@smoke.test'
+os.environ['LEAVE_SMTP_FROM'] = 'noreply@smoke.test'
+_v26_mail = []
+_v26_real_send = _app_mod.send_email
+
+
+def _v26_fake_send(to_addr, subject, body):
+    _v26_mail.append((to_addr, subject, body))
+    return True
+
+
+_app_mod.send_email = _v26_fake_send
+try:
+    _v26_result = _app_mod.send_daily_digests()
+    _v26_repeat = _app_mod.send_daily_digests()
+finally:
+    _app_mod.send_email = _v26_real_send
+    for _key in ('LEAVE_SMTP_HOST', 'LEAVE_SMTP_USER', 'LEAVE_SMTP_FROM'):
+        os.environ.pop(_key, None)
+check('[v1.19] 摘要 worker 合併寄信並記錄成功',
+      _v26_result['users_sent'] == 1 and _v26_result['notifications_sent'] == 1
+      and len(_v26_mail) == 1 and 'v1.19 冒煙每日摘要' in _v26_mail[0][2])
+check('[v1.19] 成功後清除待送且重跑不重寄',
+      db_query('SELECT digest_pending, digest_sent_at, digest_claim FROM notifications '
+               'WHERE user_id=? AND message=?',
+               (_v26_uid, 'v1.19 冒煙每日摘要'))[0]['digest_pending'] == 0
+      and _v26_repeat['notifications_sent'] == 0 and len(_v26_mail) == 1)
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\nALL {PASS} SMOKE CHECKS PASSED')

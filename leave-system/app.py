@@ -242,7 +242,11 @@ def _smtp_configured():
 
 
 def send_email(to_addr, subject, body):
-    """失敗靜默：通知是「最好能有」，絕不能因郵件伺服器問題讓請假流程報錯。"""
+    """寄信失敗靜默並回傳 False，成功回傳 True。
+
+    一般通知沿用「失敗不影響請假流程」；每日摘要則用回傳值決定是否保留
+    digest_pending，避免 SMTP 故障時把尚未送達的通知標成已寄。
+    """
     try:
         msg = EmailMessage()
         msg['Subject'] = subject
@@ -261,24 +265,124 @@ def send_email(to_addr, subject, body):
             if os.environ.get('LEAVE_SMTP_USER'):
                 s.login(os.environ['LEAVE_SMTP_USER'], os.environ.get('LEAVE_SMTP_PASS', ''))
             s.send_message(msg)
+        return True
     except Exception as exc:  # noqa: BLE001 — 通知通道失敗不應影響主流程
         print(f'[通知] 郵件發送失敗（已忽略，不影響請假流程）：{exc}')
+        return False
+
+
+def _notification_prefs(user_id):
+    """讀取通知偏好；沒有設定列時沿用 v1.18.0 的即時 Email 行為。"""
+    return q('SELECT u.email, COALESCE(p.email_enabled,1) email_enabled, '
+             'COALESCE(p.digest_daily,0) digest_daily FROM users u '
+             'LEFT JOIN user_prefs p ON p.user_id=u.id WHERE u.id=?',
+             (user_id,), one=True)
 
 
 def notify(user_id, request_id, message):
-    """站內通知永遠寫入；若已設定 SMTP，再額外寄一封 Email（失敗靜默）。
+    """站內通知永遠寫入，再依本人偏好即時寄信或留待每日摘要。
 
-    Email 不在呼叫點同步寄出，而是進佇列（見 _queue_email）——
-    notify 幾乎都在交易區塊內被呼叫，同步寄信會讓 SQLite 寫入鎖
-    在整個 SMTP 連線期間被持有。
+    即時 Email 只入佇列，由最外層交易提交後寄出；每日摘要則把待送狀態
+    一起寫進本交易，回滾時兩者都消失。密碼重設／Email 驗證直接走
+    _queue_email()，不受這裡的一般通知退訂設定影響。
     """
-    if user_id:
-        execute('INSERT INTO notifications (user_id, request_id, message) VALUES (?,?,?)',
-                (user_id, request_id, message))
-        if _smtp_configured():
-            u = q('SELECT email FROM users WHERE id=?', (user_id,), one=True)
-            if u and u['email']:
-                _queue_email(u['email'], message)
+    if not user_id:
+        return
+    u = _notification_prefs(user_id)
+    wants_digest = bool(u and u['email'] and u['email_enabled'] and u['digest_daily'])
+    execute('INSERT INTO notifications '
+            '(user_id, request_id, message, digest_pending) VALUES (?,?,?,?)',
+            (user_id, request_id, message, int(wants_digest)))
+    if (_smtp_configured() and u and u['email'] and u['email_enabled']
+            and not u['digest_daily']):
+        _queue_email(u['email'], message)
+
+
+def send_daily_digests(now=None, claim_ttl_minutes=30):
+    """以每位使用者一封的方式寄出每日摘要（D4 · v1.19.0）。
+
+    待送列先以隨機 token 認領，SMTP 呼叫在資料庫交易外進行；成功才清除
+    digest_pending，失敗則釋放認領、保留下次重試。進行中的認領會讓其他
+    worker 略過，異常中止的認領逾時後可回收。SMTP 成功與資料庫標記之間
+    若行程被強制終止，採 at-least-once 語義，極端情況仍可能重複寄送。
+    """
+    now = now or datetime.now()
+    try:
+        claim_ttl_minutes = max(int(claim_ttl_minutes), 1)
+    except (TypeError, ValueError):
+        claim_ttl_minutes = 30
+    stamp = now.strftime('%Y-%m-%d %H:%M:%S')
+    stale_before = (now - timedelta(minutes=claim_ttl_minutes)).strftime('%Y-%m-%d %H:%M:%S')
+    result = {'status': 'ok', 'users_sent': 0, 'users_failed': 0,
+              'notifications_sent': 0, 'claimed': 0, 'skipped_claimed': 0,
+              'reclaimed': 0}
+    if not _smtp_configured():
+        result['status'] = 'disabled'
+        return result
+
+    with transaction():
+        # 偏好可能被直接改庫，或舊版留下待送列；worker 本身也必須執行退訂，
+        # 不能只依賴偏好表單清理。站內通知與歷史 digest_sent_at 均保留。
+        execute(
+            'UPDATE notifications SET digest_pending=0, digest_claim=NULL, '
+            'digest_claimed_at=NULL WHERE digest_pending=1 AND EXISTS ('
+            'SELECT 1 FROM user_prefs p WHERE p.user_id=notifications.user_id '
+            'AND (p.email_enabled=0 OR p.digest_daily=0))')
+        result['reclaimed'] = execute_guard(
+            'UPDATE notifications SET digest_claim=NULL, digest_claimed_at=NULL '
+            'WHERE digest_pending=1 AND digest_sent_at IS NULL AND digest_claim IS NOT NULL '
+            'AND (digest_claimed_at IS NULL OR digest_claimed_at<=?)', (stale_before,))
+    candidates = q(
+        'SELECT DISTINCT n.user_id, u.email FROM notifications n '
+        'JOIN users u ON u.id=n.user_id '
+        'JOIN user_prefs p ON p.user_id=u.id '
+        'AND p.email_enabled=1 AND p.digest_daily=1 '
+        "WHERE n.digest_pending=1 AND n.digest_sent_at IS NULL AND u.email<>'' "
+        'AND (n.digest_claim IS NULL OR n.digest_claimed_at IS NULL '
+        'OR n.digest_claimed_at<=?) ORDER BY n.user_id', (stale_before,))
+
+    for u in candidates:
+        claim = secrets.token_hex(16)
+        with transaction():
+            execute_guard(
+                'UPDATE notifications SET digest_claim=?, digest_claimed_at=? '
+                'WHERE user_id=? AND digest_pending=1 AND digest_sent_at IS NULL '
+                'AND digest_claim IS NULL', (claim, stamp, u['user_id']))
+            rows = q('SELECT id, request_id, message, created_at FROM notifications '
+                     'WHERE user_id=? AND digest_claim=? AND digest_pending=1 '
+                     'AND digest_sent_at IS NULL ORDER BY created_at, id',
+                     (u['user_id'], claim))
+        if not rows:
+            result['skipped_claimed'] += 1
+            continue
+        result['claimed'] += 1
+        lines = [f'你有 {len(rows)} 則待讀通知摘要：', '']
+        for i, row in enumerate(rows, 1):
+            ref = f'（假單 #{row["request_id"]}）' if row['request_id'] else ''
+            lines.append(f'{i}. [{row["created_at"][:16]}]{ref} {row["message"]}')
+        lines += ['', '請登入線上請假系統的通知中心查看完整內容。']
+        try:
+            delivered = send_email(
+                u['email'], f'線上請假系統每日通知摘要（{now:%Y-%m-%d}）', '\n'.join(lines))
+        except Exception as exc:  # noqa: BLE001 — 自訂郵件通道也不能卡死整批
+            print(f'[通知] 每日摘要發送例外，保留待送：{exc}')
+            delivered = False
+        with transaction():
+            if delivered:
+                execute_guard(
+                    'UPDATE notifications SET digest_pending=0, digest_sent_at=?, '
+                    'digest_claim=NULL, digest_claimed_at=NULL WHERE digest_claim=?',
+                    (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), claim))
+            else:
+                execute_guard(
+                    'UPDATE notifications SET digest_claim=NULL, digest_claimed_at=NULL '
+                    'WHERE digest_claim=?', (claim,))
+        if delivered:
+            result['users_sent'] += 1
+            result['notifications_sent'] += len(rows)
+        else:
+            result['users_failed'] += 1
+    return result
 
 
 def _queue_email(to_addr, message, subject=None):
@@ -332,7 +436,10 @@ def atomic():
         if queued:
             del queued[mark:]
         raise
-    _flush_emails()
+    # v1.19.0：巢狀 atomic() 退出時外層交易其實還沒提交；此時寄信會在
+    # 外層後續回滾時留下「資料不存在、郵件卻已送達」的假通知。
+    if not getattr(g, '_tx_depth', 0):
+        _flush_emails()
 
 
 def log_action(request_id, actor_id, action, detail=''):
@@ -1426,6 +1533,7 @@ def new_request():
             return render_template('new_request.html', types=types, form=request.form)
 
         attachment = ''
+        final_path = None
         file = request.files.get('attachment')
         has_file = bool(file and file.filename)
         # v1.2.0：必須附檔但沒附——在落盤之前就擋掉。舊版把檔案先存進
@@ -1474,32 +1582,47 @@ def new_request():
                 # fail-open：掃描器故障但策略允許放行，照常收件並留稽核軌跡
                 log_action(None, u['id'], 'av_block',
                            f"掃描器故障（策略放行，{av_detail}）：{safe_name}")
-            shutil.move(tmp_path, os.path.join(UPLOAD_DIR, fn))
+            final_path = os.path.join(UPLOAD_DIR, fn)
+            shutil.move(tmp_path, final_path)
             attachment = fn
 
-        level = required_level_for(days, ltype)
-        affected = affected_courses_for(u['id'], start_date.isoformat(),
-                                        end_date.isoformat(), sp, ep)
-        affected_json = json.dumps(affected, ensure_ascii=False)
-        # 假單＋兩級審批記錄＋稽核＋通知要麼全部寫入、要麼全部不寫——
-        # 逐句 commit 的話，中途失敗會留下「有假單沒有審批記錄」的孤兒。
-        # atomic() 另負責在提交後才寄出通知郵件（不佔著寫入鎖寄信）。
-        with atomic():
-            rid = execute(
-                'INSERT INTO leave_requests (student_id, leave_type_id, start_date, end_date, '
-                'start_period, end_period, days, reason, attachment, contact_phone, '
-                'affected_courses, status, current_level, required_level) '
-                'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                (u['id'], type_id, start_date.isoformat(), end_date.isoformat(), sp, ep,
-                 days, reason, attachment, phone, affected_json, 'pending', 1, level))
-            execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 1, 'pending'))
-            if level == 2:
-                execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)', (rid, 2, 'pending'))
+        try:
+            level = required_level_for(days, ltype)
+            affected = affected_courses_for(u['id'], start_date.isoformat(),
+                                            end_date.isoformat(), sp, ep)
+            affected_json = json.dumps(affected, ensure_ascii=False)
+            # 假單＋兩級審批記錄＋稽核＋通知要麼全部寫入、要麼全部不寫——
+            # 逐句 commit 的話，中途失敗會留下「有假單沒有審批記錄」的孤兒。
+            # atomic() 另負責在提交後才寄出通知郵件（不佔著寫入鎖寄信）。
+            with atomic():
+                rid = execute(
+                    'INSERT INTO leave_requests (student_id, leave_type_id, start_date, end_date, '
+                    'start_period, end_period, days, reason, attachment, contact_phone, '
+                    'affected_courses, status, current_level, required_level) '
+                    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    (u['id'], type_id, start_date.isoformat(), end_date.isoformat(), sp, ep,
+                     days, reason, attachment, phone, affected_json, 'pending', 1, level))
+                execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)',
+                        (rid, 1, 'pending'))
+                if level == 2:
+                    execute('INSERT INTO approvals (request_id, level, action) VALUES (?,?,?)',
+                            (rid, 2, 'pending'))
 
-            log_action(rid, u['id'], 'submit', f"提交{ltype['name']} {days}天，審批層級{level}")
-            # v1.4.0：通知該級所有實際審批人（導師＋其代理人）
-            notify_approvers(1, u['department'], u['advisor_id'], rid,
-                             f"{u['name']} 提交了 {days} 天{ltype['name']}，待你審批。")
+                log_action(rid, u['id'], 'submit', f"提交{ltype['name']} {days}天，審批層級{level}")
+                # v1.4.0：通知該級所有實際審批人（導師＋其代理人）
+                notify_approvers(1, u['department'], u['advisor_id'], rid,
+                                 f"{u['name']} 提交了 {days} 天{ltype['name']}，待你審批。")
+        except Exception:
+            # v1.19.0：附件比 DB 交易早落盤；若後續計算或寫庫失敗，必須補償刪除
+            # 本次請求唯一的正式附件，避免敏感證明成為無資料列可追蹤的孤兒。
+            if final_path:
+                try:
+                    os.remove(final_path)
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    print(f'[附件] 交易回滾後補償刪除失敗，需人工清理 {final_path}：{exc}')
+            raise
         flash('假單已提交，等待導師審批。', 'success')
         return redirect(url_for('detail', rid=rid))
 
@@ -1885,9 +2008,37 @@ def notifications():
              'LEFT JOIN leave_requests r ON r.id=n.request_id '
              f'{where} ORDER BY n.created_at DESC, n.id DESC LIMIT ? OFFSET ?',
              tuple(args) + (per_page, (page - 1) * per_page))
+    prefs = _notification_prefs(u['id'])
     return render_template('notifications.html', items=rows, page=page,
                            total_pages=total_pages, total=total,
-                           cur_filter=cur_filter)
+                           cur_filter=cur_filter, prefs=prefs,
+                           smtp_configured=_smtp_configured())
+
+
+@app.route('/notifications/preferences', methods=['POST'])
+@login_required
+def notification_preferences():
+    """修改本人一般通知 Email 偏好；安全郵件不在此退訂範圍。"""
+    u = current_user()
+    mode = request.form.get('email_mode', '')
+    if mode not in ('off', 'instant', 'daily'):
+        flash('通知偏好格式不正確，請重新選擇。', 'error')
+        return redirect(url_for('notifications'))
+    with transaction():
+        execute('INSERT INTO user_prefs (user_id, email_enabled, digest_daily, updated_at) '
+                'VALUES (?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET '
+                'email_enabled=excluded.email_enabled, digest_daily=excluded.digest_daily, '
+                'updated_at=excluded.updated_at',
+                (u['id'], int(mode != 'off'), int(mode == 'daily'),
+                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        if mode != 'daily':
+            # 離開每日摘要模式即取消未寄摘要，避免退訂後舊佇列仍寄信；
+            # 已進入 SMTP 投遞中的單封摘要無法撤回，站內通知不受影響。
+            execute('UPDATE notifications SET digest_pending=0, digest_claim=NULL, '
+                    'digest_claimed_at=NULL WHERE user_id=? AND digest_pending=1',
+                    (u['id'],))
+    flash('通知偏好已更新；站內通知與密碼重設／Email 驗證信不受影響。', 'success')
+    return redirect(url_for('notifications'))
 
 
 @app.route('/notifications/read', methods=['POST'])
@@ -3360,6 +3511,22 @@ def import_timetable_command(path, merge):
               + '、'.join(stats['unknown'][:10]))
     for e in parsed['errors']:
         print(f"  第 {e['line']} 行略過：{e['msg']}（{e['raw']}）")
+
+
+@app.cli.command('send-digests')
+@click.option('--claim-ttl', default=30, type=click.IntRange(min=1),
+              help='異常中止的摘要認領幾分鐘後可回收（預設 30）')
+def send_digests_command(claim_ttl):
+    """寄出所有待送每日摘要：`flask send-digests`（建議每日排程一次）。"""
+    result = send_daily_digests(claim_ttl_minutes=claim_ttl)
+    if result['status'] == 'disabled':
+        click.echo('SMTP 尚未配置，每日摘要保留待送，本次未寄出。')
+        return
+    click.echo(f"每日摘要完成：成功 {result['users_sent']} 人／"
+               f"{result['notifications_sent']} 則，失敗 {result['users_failed']} 人；"
+               f"回收逾期認領 {result['reclaimed']} 則。")
+    if result['users_failed']:
+        raise click.ClickException('部分摘要寄送失敗，待送通知已保留，請於下次排程重試。')
 
 
 @app.cli.command('purge-attachments')
