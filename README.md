@@ -7,11 +7,11 @@ One problem, three artefacts: a **runnable prototype**, an **enterprise design p
 
 一個問題，三份產出：可執行的原型、企業級設計提案包，以及促成這一切的個人創意作業。
 
-**Prototype version ｜原型版本：`v1.19.0`**（2026-11-08）· Commercial License · CI passing
+**Prototype version ｜原型版本：`v1.19.1`**（2026-11-09）· Commercial License · CI passing
 · 商業化方案見 [`COMMERCIAL.md`](COMMERCIAL.md)
 · 完整痛點與就緒度登錄見 [`SAAS-PAIN-POINTS.md`](SAAS-PAIN-POINTS.md)
 
-> **導讀｜How to read this project**：下一段是完整版本編年史（v0.6.0 → v1.19.0），屬**歷史紀錄**；
+> **導讀｜How to read this project**：下一段是完整版本編年史（v0.6.0 → v1.19.1），屬**歷史紀錄**；
 > **當前現況**以 [`CHANGELOG.md`](CHANGELOG.md) 最新版、CI 結果與
 > [`SAAS-PAIN-POINTS.md`](SAAS-PAIN-POINTS.md) 為準。提案（`saas/`）描述的是**目標藍圖**，
 > 原型（`leave-system/`）描述的是**已實作能力**，`GAP-ANALYSIS.md` 描述的是**尚未關閉的缺口**，
@@ -155,10 +155,14 @@ Email until the outermost transaction commits, compensates for a newly stored at
 transaction fails, and replaces EW-5's opaque personal risk score and GPA input with transparent fixed
 conditions for supportive human follow-up. 278 unit tests collected (277 passed, 1 skipped locally)
 + 263 smoke checks. Production still needs SMTP, scheduling, delivery alerts and the other readiness gates.
+**v1.19.1** fixes Host header poisoning in password-reset and Email-verification messages: token links
+now always use a fixed, validated `LEAVE_BASE_URL` HTTP(S) origin instead of the request's `Host`.
+The configuration rejects non-HTTP schemes, missing hosts, credentials, paths, queries, fragments and
+invalid ports. Adds 14 regression tests for malicious Host headers and invalid or ambiguous origins.
 
 | Path | What it is | 說明 |
 |---|---|---|
-| `leave-system/` | Flask + SQLite prototype (**v1.19.0**) — student leave, two-level approval (advisor → faculty), **verifiable backup and rollback-safe restore** (SQLite online snapshots, optional attachments, SHA-256 manifest, integrity checks, `flask backup` / `verify-backup` / `restore-backup`, pre-restore copies), **per-student timetable import** (CSV with EN/中文 column aliases, idempotent replace/merge, `flask import-timetable`, coverage warning for demo-only timetables, student/advisor timetable views), **batch approve/reject** (tick rows in the todo list, one atomic transaction, per-request re-authorisation, 50-request cap), approval delegation (advisor/faculty can hand their level to a stand-in for a date range), admin advisor-reassignment, academic terms with per-term leave quotas (pending + approved both count), holiday calendar (non-teaching days skipped in affected courses), **academic-calendar file import** (terms / holiday ranges / makeup days, idempotent UPSERT), **makeup days** (weekend classes taught on another weekday's timetable still count as missed classes), built-in HKUST(GZ) 2026–27 calendar preset + `flask import-calendar` CLI, SLA escalation cron with 24h cooldown, CSRF protection, attachment access control + content sniffing, **attachment malware scanning** (config-gated via `LEAVE_AV_CMD`, ClamAV-compatible exit-code contract; uploads are scanned in a temp file before landing in `uploads/`, infected files are rejected with an `av_block` audit; `flask av-scan` re-scans existing files and quarantines hits), timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, **self-service password reset** (one-time expiring email link, hashed tokens, account-enumeration-safe, rate-limited) + **email verification on account creation** (`email_verified`, config-gated via SMTP), **config-gated OIDC SSO channel** (local password login kept as a disaster-recovery fallback), **PII read audit** (the stats page, the CSV export and the account list each write a `view_pii` / `export` audit record on every access), **attachment retention & purge** (proof files on terminal requests past the retention window are backed up then purged, the column is cleared and a `purge_attachment` audit is written), **list search & date-range filters** on every list page (`q`/`date_from`/`date_to`, parameterised `LIKE ... ESCAPE '!'`, scope-narrowing only), approval comments carried into student notifications, streamed CSV export, **v1.18.0 hardening** (bounded affected-course preview, transactional calendar/holiday imports, one-time verification-token guard, finite-only quotas, per-request detail `view_pii` audit), 264 unit tests collected (263 passed, 1 skipped) + 256-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、**課表真實化（逐生課表 CSV 匯入，中英簡繁欄名別名、replace／merge 冪等、`flask import-timetable` CLI、示範資料覆蓋率警示、學生／導師／院系課表檢視）**、**批次核准／駁回（待審清單勾選、單一交易原子化、逐張重新鑑權、單次上限 50 張）**、委託審批（導師／院系可把審批權暫交代理人）、管理員改派導師、學期制請假額度（待審＋已核准都計入）、校曆假日（受影響課程跳過非上課日）、**校曆檔匯入（學期／假日區間／補課日，冪等 UPSERT）**、**補課／調課日（週末補課按被補星期幾的課表計缺課）**、內建港科大（廣州）2026–27 校曆預設＋`flask import-calendar` CLI、催辦升級 cron（24 小時冷卻）、CSRF 防護、附件權限＋內容嗅探、**附件掃毒（組態門控 `LEAVE_AV_CMD`，相容 ClamAV 退出碼；上傳檔先掃後落盤、感染拒收並留 av_block 稽核、`flask av-scan` 存量重掃＋隔離）**、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、**自助密碼重設（Email 一次性時效連結、token 只存雜湊、泛用回應防帳號枚舉、頻率限制）＋建號 Email 驗證（email_verified，SMTP 組態門控）**、**組態門控 OIDC 單一登入通道（本地帳密為災難備援）**、**PII 讀取稽核（統計頁／CSV 匯出／帳號清單每次存取皆留 view_pii／export 軌跡）**、**附件留存期與銷毀（終態假單逾保存期即先備份再銷毀、清空 attachment 欄並留 purge_attachment 稽核）**、**列表搜尋與日期區間（`/my`、`/approvals`、`/stats`、`/export` 共用 `q`／`date_from`／`date_to`，`LIKE` 參數化並跳脫 `%`／`_`，搜尋只收窄範圍）**、核准意見帶進學生通知、CSV 串流匯出、**v1.18.0 把假防護補成真的（課表預覽區間上限、校曆／假日匯入交易化、Email 驗證一次性守衛、額度拒收 NaN）＋單張詳情頁逐筆 `view_pii` 稽核** |
+| `leave-system/` | Flask + SQLite prototype (**v1.19.1**) — student leave, two-level approval (advisor → faculty), **verifiable backup and rollback-safe restore** (SQLite online snapshots, optional attachments, SHA-256 manifest, integrity checks, `flask backup` / `verify-backup` / `restore-backup`, pre-restore copies), **per-student timetable import** (CSV with EN/中文 column aliases, idempotent replace/merge, `flask import-timetable`, coverage warning for demo-only timetables, student/advisor timetable views), **batch approve/reject** (tick rows in the todo list, one atomic transaction, per-request re-authorisation, 50-request cap), approval delegation (advisor/faculty can hand their level to a stand-in for a date range), admin advisor-reassignment, academic terms with per-term leave quotas (pending + approved both count), holiday calendar (non-teaching days skipped in affected courses), **academic-calendar file import** (terms / holiday ranges / makeup days, idempotent UPSERT), **makeup days** (weekend classes taught on another weekday's timetable still count as missed classes), built-in HKUST(GZ) 2026–27 calendar preset + `flask import-calendar` CLI, SLA escalation cron with 24h cooldown, CSRF protection, attachment access control + content sniffing, **attachment malware scanning** (config-gated via `LEAVE_AV_CMD`, ClamAV-compatible exit-code contract; uploads are scanned in a temp file before landing in `uploads/`, infected files are rejected with an `av_block` audit; `flask av-scan` re-scans existing files and quarantines hits), timetable-based affected-course preview, DB-persisted login throttle (IP+account and account-only keys), session invalidation on password change, common-weak-password blocklist, paginated notifications with per-item read, atomic approval transactions with concurrency guards, scope isolation on approvals/detail/dashboard, admin audit-log page, leave-type administration, transaction-safe deferred email delivery, status-filtered all-requests view, paginated account admin, **self-service password reset** (one-time expiring email link, hashed tokens, account-enumeration-safe, rate-limited) + **email verification on account creation** (`email_verified`, config-gated via SMTP), **config-gated OIDC SSO channel** (local password login kept as a disaster-recovery fallback), **PII read audit** (the stats page, the CSV export and the account list each write a `view_pii` / `export` audit record on every access), **attachment retention & purge** (proof files on terminal requests past the retention window are backed up then purged, the column is cleared and a `purge_attachment` audit is written), **list search & date-range filters** on every list page (`q`/`date_from`/`date_to`, parameterised `LIKE ... ESCAPE '!'`, scope-narrowing only), approval comments carried into student notifications, streamed CSV export, **v1.18.0 hardening** (bounded affected-course preview, transactional calendar/holiday imports, one-time verification-token guard, finite-only quotas, per-request detail `view_pii` audit), 264 unit tests collected (263 passed, 1 skipped) + 256-check smoke suite. Runs at `http://127.0.0.1:5055` | 可執行原型：學生請假、兩級審批、**課表真實化（逐生課表 CSV 匯入，中英簡繁欄名別名、replace／merge 冪等、`flask import-timetable` CLI、示範資料覆蓋率警示、學生／導師／院系課表檢視）**、**批次核准／駁回（待審清單勾選、單一交易原子化、逐張重新鑑權、單次上限 50 張）**、委託審批（導師／院系可把審批權暫交代理人）、管理員改派導師、學期制請假額度（待審＋已核准都計入）、校曆假日（受影響課程跳過非上課日）、**校曆檔匯入（學期／假日區間／補課日，冪等 UPSERT）**、**補課／調課日（週末補課按被補星期幾的課表計缺課）**、內建港科大（廣州）2026–27 校曆預設＋`flask import-calendar` CLI、催辦升級 cron（24 小時冷卻）、CSRF 防護、附件權限＋內容嗅探、**附件掃毒（組態門控 `LEAVE_AV_CMD`，相容 ClamAV 退出碼；上傳檔先掃後落盤、感染拒收並留 av_block 稽核、`flask av-scan` 存量重掃＋隔離）**、課表受影響課程、限流持久化、改密碼登出所有 session、弱密碼擋鎖、通知分頁＋單則已讀、審批交易原子化與併發守衛、範圍隔離（審批／詳情／儀表板）、後台稽核日誌、交易提交後才寄通知郵件、全部假單狀態篩選、帳號管理分頁、**自助密碼重設（Email 一次性時效連結、token 只存雜湊、泛用回應防帳號枚舉、頻率限制）＋建號 Email 驗證（email_verified，SMTP 組態門控）**、**組態門控 OIDC 單一登入通道（本地帳密為災難備援）**、**PII 讀取稽核（統計頁／CSV 匯出／帳號清單每次存取皆留 view_pii／export 軌跡）**、**附件留存期與銷毀（終態假單逾保存期即先備份再銷毀、清空 attachment 欄並留 purge_attachment 稽核）**、**列表搜尋與日期區間（`/my`、`/approvals`、`/stats`、`/export` 共用 `q`／`date_from`／`date_to`，`LIKE` 參數化並跳脫 `%`／`_`，搜尋只收窄範圍）**、核准意見帶進學生通知、CSV 串流匯出、**v1.18.0 把假防護補成真的（課表預覽區間上限、校曆／假日匯入交易化、Email 驗證一次性守衛、額度拒收 NaN）＋單張詳情頁逐筆 `view_pii` 稽核** |
 | `saas/` | Enterprise design package for HKUST(GZ): PRD, architecture & API, data & security, UI design, roadmap & cost, plus full PostgreSQL DDL | 企業級設計提案包（6 頁中英對照）＋完整資料庫 DDL |
 | `assignment/` | Individual Ideation assignment (≈1,030 words) + 10-slide deck + 3 figures | 個人創意作業：Word 正文、簡報、流程圖 |
 | `AI-ROADMAP.md` | Governed intelligence roadmap: data foundation, H0–H3 gates, advisory-only architecture, evaluation and kill switch | 智能化治理路線：資料地基、H0–H3 閘門、僅建議架構、評估與熔斷 |
@@ -193,14 +197,14 @@ PIPL obligations.
   calendar & timetable imports, audit-log review.
 
 **One prototype, two audiences:** the steering committee gets a clickable, testable flow before any
-budget approval; the vendor/engineering team gets a hardened, test-covered codebase (278 unit tests
-collected: 277 passed, 1 skipped locally; plus 263 smoke checks) to grow into production.
+budget approval; the vendor/engineering team gets a hardened, test-covered codebase (292 unit tests
+collected: 291 passed, 1 skipped locally; plus 263 smoke checks) to grow into production.
 
 <span class="zh">**賣給誰（決策者）：** 教務處與學生事務部——流程所有者，今天在裁決轉發郵件、追討證明文件、扛著個人資料保護法風險，SAAS 給他們結構化帳本、稽核軌跡與留存控制；資訊系統部門——要校內 IdP 的 OIDC 單一登入、小運維 footprint（試點 Flask＋SQLite，生產環境 DDL 已備）、cron 友善的維護端點，且不外流任何第三方資料。</span>
 
 <span class="zh">**誰每天在用（終端用戶）：** 學生——上傳證明提交假單、按真實課表看到受影響課程、追蹤進度、收站內通知；導師——第一級審批（可批次、可委託），只看得到自己的學生；院系——長假與高風險假單的升級審批層，有額度可見性與催辦升級 cron；系統管理員——帳號、改派、假單類型、校曆與課表匯入、稽核日誌覆核。</span>
 
-<span class="zh">**一份原型，兩類受眾：** 指導委員會在核准預算前就能點按試用完整流程；工程團隊拿到的是有 278 項單元測試（本機 277 通過、1 略過）＋263 項冒煙測試覆蓋的硬化代碼庫，可直接長成生產系統。</span>
+<span class="zh">**一份原型，兩類受眾：** 指導委員會在核准預算前就能點按試用完整流程；工程團隊拿到的是有 292 項單元測試（本機 291 通過、1 略過）＋263 項冒煙測試覆蓋的硬化代碼庫，可直接長成生產系統。</span>
 
 ## Why adopt ｜為什麼採用（for universities）
 
@@ -283,13 +287,14 @@ Demo accounts (password `Demo@2026`): student `2024001`, advisor `T001`, faculty
 
 ## Changelog ｜更新日誌
 
-See [`CHANGELOG.md`](CHANGELOG.md) — **v1.19.0** closes D4 in the prototype with per-user
+See [`CHANGELOG.md`](CHANGELOG.md) — **v1.19.1** fixes Host header poisoning in password-reset
+and Email-verification messages: token links now always use a fixed, validated `LEAVE_BASE_URL`
+HTTP(S) origin instead of the request's `Host`. Adds 14 regression tests for malicious Host
+headers and invalid or ambiguous origins. **v1.19.0** closed D4 in the prototype with per-user
 instant, daily-digest or off preferences for ordinary notification Email, plus a retryable
-`flask send-digests` worker with stale-claim recovery and at-least-once delivery. Opting out
-cancels unsent digests and the worker rechecks current preferences. It also fixes nested-transaction
-Email flushing and attachment compensation after database failure, and replaces EW-5's personal
-risk score and GPA input with transparent supportive follow-up conditions. Adds 14 regression
-tests and 7 smoke checks. **v1.18.0** turned four written-but-inert protections into real ones
+`flask send-digests` worker with stale-claim recovery and at-least-once delivery. It also fixed
+nested-transaction Email flushing and attachment compensation after database failure.
+**v1.18.0** turned four written-but-inert protections into real ones
 (bounded affected-course preview, transactional calendar/holiday imports, a working one-time
 Email-verification token guard, finite-only leave quotas) and closed D3's fine-grained PII audit.
 The agent-scope inconsistency between approval and export remains a policy decision, not silently

@@ -9,6 +9,33 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.19.1] — 2026-11-09
+
+**安全修復：安全郵件的令牌連結不再信任請求 Host。**
+
+### Security ｜安全
+
+- **Host header poisoning**：舊版 `_external_base_url()` 在請求週期內優先採用
+  `request.url_root`。攻擊者可用偽造 `Host` 發起忘記密碼請求，或影響管理端建號流程，
+  讓重設密碼／Email 驗證信包含指向攻擊者網域的一次性令牌連結。現在兩類郵件都只使用
+  固定的 `LEAVE_BASE_URL`，完全不讀取請求 `Host`。
+- `LEAVE_BASE_URL` 在啟動時校驗並正規化：只接受 HTTP(S) origin，可含埠號；拒絕其他
+  scheme、缺主機、帳密、路徑、查詢、片段、空白與無效埠號。正式部署必須設定為使用者
+  實際存取系統的固定對外網址，例如 `https://leave.school.example`。
+
+### Changed ｜調整
+
+- `APP_VERSION` 1.19.0 → 1.19.1；根 README、原型 README、缺口分析、痛點登錄與
+  提案首頁同步現況。歷史版本段落與測試快照不改寫。
+- 本版無資料庫結構、路由、依賴或通知偏好行為變更。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v27.py` 14 案：合法 origin 正規化、十類無效／歧義組態、
+  惡意 Host 下的重設密碼信與建號驗證信仍使用固定網域。
+- 本機全量 **291 passed、1 skipped**（292 collected），smoke **263 全過**；
+  `compileall` 與 `git diff --check` 通過。
+
 ## [1.19.0] — 2026-11-08
 
 **程式碼型改版：完成 D4 通知偏好與每日摘要，並補上交易郵件及附件落盤的兩個可靠性缺口。**

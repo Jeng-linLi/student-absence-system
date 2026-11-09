@@ -1058,9 +1058,29 @@ def change_password():
 # 只存 SHA-256 雜湊；同一帳號申請頻率有限制；成功重設即視為 Email 已驗證
 # （能收到信就證明信箱在用）。SMTP 未配置時通道自動關閉，行為與舊版一致。
 # --------------------------------------------------------------------------
+def _validated_base_url(value):
+    """回傳可供安全郵件使用的固定 HTTP(S) origin，拒絕其他 URL 結構。"""
+    root = value.strip().rstrip('/')
+    try:
+        parsed = urlsplit(root)
+        # 觸發埠號解析；無效或非數字埠會在這裡拋出 ValueError。
+        parsed.port
+    except ValueError as exc:
+        raise ValueError('LEAVE_BASE_URL 必須是合法的 HTTP(S) 網址。') from exc
+    if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+            or parsed.path or parsed.query or parsed.fragment
+            or parsed.username is not None or parsed.password is not None
+            or any(ch.isspace() for ch in root)):
+        raise ValueError(
+            'LEAVE_BASE_URL 只能包含 HTTP(S) scheme、主機與可選埠號，'
+            '不可含路徑、查詢、片段或帳密。')
+    return root
+
+
 RESET_TOKEN_MINUTES = int(os.environ.get('LEAVE_RESET_TOKEN_MINUTES', '30'))
 RESET_MAX_PER_HOUR = int(os.environ.get('LEAVE_RESET_MAX_PER_HOUR', '5'))
-RESET_BASE_URL = os.environ.get('LEAVE_BASE_URL', 'http://localhost:5000').rstrip('/')
+RESET_BASE_URL = _validated_base_url(
+    os.environ.get('LEAVE_BASE_URL', 'http://localhost:5000'))
 
 
 def _hash_token(token):
@@ -1105,11 +1125,7 @@ def _reset_rate_limited(user_id):
 
 
 def _external_base_url():
-    """組絕對連結用的基底網址：請求週期內以 Host 為準，否則用 LEAVE_BASE_URL。"""
-    if has_request_context():
-        root = request.url_root.rstrip('/')
-        if root.startswith(('http://', 'https://')):
-            return root
+    """安全郵件只信任固定組態，絕不以可偽造的請求 Host 產生令牌連結。"""
     return RESET_BASE_URL
 
 
