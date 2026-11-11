@@ -9,6 +9,29 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.19.2] — 2026-11-09
+
+**安全修復：密碼重設的一次性 token 在併發兌換失敗時不再回報成功。**
+
+### Fixed ｜修復
+
+- `reset_password()` 現在檢查 `execute_guard()` 的影響列數。若另一請求已先兌換同一
+  token，後到請求會收到「連結已失效」並導回重新申請頁；不再錯誤顯示「密碼已重設」。
+  守衛失敗時不修改密碼、不更新 session 作廢時間或 Email 驗證狀態，也不寫成功稽核。
+- 正常重設流程、密碼強度與舊密碼檢查、token 時效及重放防護均維持不變。
+
+### Changed ｜調整
+
+- `APP_VERSION` 1.19.1 → 1.19.2；根 README、原型 README、缺口分析、痛點登錄與
+  提案首頁同步現況。本版無資料庫結構、路由、依賴或組態變更。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v28.py` 1 案，模擬兌換守衛影響 0 列，驗證失敗回應及所有相關資料
+  均不變；該測試在修復前可穩定重現錯誤成功訊息。
+- 本機全量 **292 passed、1 skipped**（293 collected），smoke **263 全過**；
+  `compileall` 與 `git diff --check` 通過。
+
 ## [1.19.1] — 2026-11-09
 
 **安全修復：安全郵件的令牌連結不再信任請求 Host。**

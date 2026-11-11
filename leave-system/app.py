@@ -1196,6 +1196,10 @@ def reset_password(token):
                             'email_verified=1 WHERE id=?',
                             (generate_password_hash(new), _now_str(), u['id']))
                     log_action(None, u['id'], 'reset_password', '自助重設密碼（郵件連結）')
+            # v1.19.2：守衛影響 0 列代表另一請求已先兌換，不能回報重設成功。
+            if not ok:
+                flash('重設連結已失效（可能已被使用），請重新申請。', 'error')
+                return redirect(url_for('forgot_password'))
             flash('密碼已重設，請用新密碼登入。', 'success')
             return redirect(url_for('login'))
     return render_template('reset_password.html', token=token)

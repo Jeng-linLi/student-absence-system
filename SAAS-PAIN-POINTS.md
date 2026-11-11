@@ -1,6 +1,9 @@
 # SaaS 痛點全景與就緒度登錄 — SAAS Pain Points & Readiness Register
 
-> **狀態｜Status：v1.19.1 盤點文件（2026-11-09）**
+> **狀態｜Status：v1.19.2 盤點文件（2026-11-09）**
+>
+> **v1.19.2 增量**：修復密碼重設 token 的併發兌換回應——守衛影響 0 列時明確回報連結
+> 已失效，不再假裝成功，也不留下密碼或稽核副作用。原型缺口與生產就緒判斷不變。
 >
 > **v1.19.1 增量**：修復安全郵件的 Host header poisoning——重設密碼與 Email 驗證連結
 > 不再由請求 `Host` 生成，只接受固定、經格式校驗的 `LEAVE_BASE_URL` HTTP(S) origin。

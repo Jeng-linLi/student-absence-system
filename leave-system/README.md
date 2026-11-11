@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v1.19.1）
+# 線上請假系統（原型 v1.19.2）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -211,7 +211,7 @@ worker 按使用者認領待送通知，在資料庫交易外合併寄信；失�
 | SQL | 全部參數化查詢 |
 | CSV 匯出 | 自由文字若以 `= + - @` 開頭會加 `'` 前綴，防止 Excel／Sheets 公式注入 |
 | 帳號枚舉 | 帳號不存在時也跑一次固定 dummy hash 比對，拉平與「密碼錯誤」的回應時間差 |
-| 自助密碼重設 | `/forgot` 對已登記與未登記的 Email 一律回同一句泛用訊息（不洩漏帳號是否存在）；重設信含一次性時效連結（`LEAVE_RESET_TOKEN_MINUTES` 預設 30 分鐘），DB 只存 token 的 SHA-256 雜湊；兌換守衛 `used_at IS NULL` 與寫入新密碼同交易（併發雙開只有一方成功）；同一帳號一小時內申請上限 `LEAVE_RESET_MAX_PER_HOUR`（預設 5，防郵件轟炸）；重設成功即視為 Email 已驗證並刷新 `pwd_changed_at` 使所有舊 session 立即失效（v1.12.0，對應 GAP-ANALYSIS B1） |
+| 自助密碼重設 | `/forgot` 對已登記與未登記的 Email 一律回同一句泛用訊息（不洩漏帳號是否存在）；重設信含一次性時效連結（`LEAVE_RESET_TOKEN_MINUTES` 預設 30 分鐘），DB 只存 token 的 SHA-256 雜湊；兌換守衛 `used_at IS NULL` 與寫入新密碼同交易（併發雙開只有一方成功，守衛影響 0 列的後到請求會看到連結失效而非重設成功，v1.19.2）；同一帳號一小時內申請上限 `LEAVE_RESET_MAX_PER_HOUR`（預設 5，防郵件轟炸）；重設成功即視為 Email 已驗證並刷新 `pwd_changed_at` 使所有舊 session 立即失效（v1.12.0，對應 GAP-ANALYSIS B1） |
 | Email 驗證 | `users.email_verified` 欄位（預設 0，舊庫自動遷移）；管理端新增含 Email 的帳號且 SMTP 已配置時自動寄驗證信，`/verify/<token>` 一次性連結兌換後轉 1 並留稽核——確保重設信不會發進死信箱（v1.12.0，對應 GAP-ANALYSIS B2） |
 | 郵件絕對連結 | 重設密碼與 Email 驗證連結只使用固定、經校驗的 `LEAVE_BASE_URL`，不從請求 `Host` 生成，避免 Host header poisoning 將一次性令牌導向攻擊者網域（v1.19.1） |
 | 個資讀取稽核 | 三條跨範圍 PII 讀取路徑——統計頁（`/stats`）、CSV 匯出（`/export`）、帳號清單（`/admin/users`）——每次存取皆寫入 `view_pii`／`export` 稽核軌跡，誰看過／匯出過全範圍個資皆可追溯（v1.9.0，對應 GAP-ANALYSIS D3） |
@@ -257,7 +257,7 @@ leave-system/
   schema.sql          資料庫結構
   data/               內建校曆檔（hkustgz-2026-27.txt）、課表範例（timetable-sample.csv）
   smoke_test.py       全鏈路冒煙測試（263 項）
-  tests/              單元測試（pytest，292 項；本機 291 通過、1 略過）
+  tests/              單元測試（pytest，293 項；本機 292 通過、1 略過）
   start.bat           一鍵啟動（預設含 LEAVE_DEBUG=1 自動重載）
   templates/          Jinja2 頁面模板
   static/css/         樣式
