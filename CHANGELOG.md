@@ -9,6 +9,38 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.20.0] — 2026-11-10
+
+**安全與正確性修復：共享附件的完整生命週期，以及 Email 異動後的驗證狀態與安全連結。**
+
+### Fixed ｜修復
+
+- **共享附件留存清理**：`purge_expired_attachments()` 改按檔名處理全部假單引用。若仍有未到期
+  引用，只解除到期假單的附件欄位並保留實體檔案；全部引用均到期時才移動一次檔案。任一同組
+  資料庫更新失敗都會回滾並嘗試把檔案移回原位。`dry_run` 以 `would_detach_shared`／
+  `would_purge` 區分兩種結果，CLI 另回報「共享保留僅清欄」數量。
+- **存量病毒掃描**：`flask av-scan` 隔離共享感染檔後，會清空所有引用假單的附件欄位，並逐張
+  寫入 `av_block` 稽核，不再只處理第一張。資料庫更新失敗時命令明確失敗，並嘗試把隔離檔
+  恢復到 `uploads/`；若補償也失敗，會提示人工處理，不靜默留下懸空引用。
+- **Email 異動生命週期**：管理員真正修改或清空 Email 時，在同一交易內重設
+  `email_verified=0`、作廢該帳號所有未使用的 `verify`／`reset` token 並寫稽核。新地址非空且
+  SMTP 已配置時，交易提交後寄出新的驗證信；舊驗證及重設連結立即失效。僅調整大小寫或首尾
+  空白不觸發重設，清空 Email 則不寄信。
+
+### Changed ｜調整
+
+- 建號與修改 Email 共用 `_queue_verification_email()`，避免兩條路徑的郵件內容與 token 簽發
+  邏輯漂移。
+- `APP_VERSION` 1.19.2 → 1.20.0；根 README、原型 README、缺口分析、痛點登錄與提案首頁
+  同步現況。本版無資料庫結構、路由、依賴或權限範圍變更；D5／D-9／T-10 政策待決事項不變。
+
+### Tests ｜測試
+
+- 新增 `tests/test_v29.py` 9 案：共享附件保留／全到期／dry-run／失敗補償、共享感染檔全引用
+  清理與恢復、Email 修改後舊 token 作廢及新地址驗證、僅大小寫調整、清空 Email。
+- 相關回歸 **44 passed**；本機全量 **301 passed、1 skipped**（302 collected），
+  smoke **263 全過**；`compileall` 與 `git diff --check` 通過。
+
 ## [1.19.2] — 2026-11-09
 
 **安全修復：密碼重設的一次性 token 在併發兌換失敗時不再回報成功。**

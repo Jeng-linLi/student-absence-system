@@ -1129,6 +1129,21 @@ def _external_base_url():
     return RESET_BASE_URL
 
 
+def _queue_verification_email(user):
+    """寄目前 Email 的驗證連結；呼叫端須先讓舊 token 失效。"""
+    if not _smtp_configured() or not user['email']:
+        return False
+    raw = issue_token(user['id'], 'verify')
+    if not raw:
+        return False
+    link = f"{_external_base_url()}{url_for('verify_email', token=raw)}"
+    body = (f"{user['name']} 您好，\n\n"
+            f"您的帳號 {user['username']} 請開啟以下連結完成 Email 驗證：\n"
+            f"{link}\n\n— 線上請假系統")
+    _queue_email(user['email'], body, subject='驗證 Email · 線上請假系統')
+    return True
+
+
 def _queue_reset_email(user, minutes=None):
     """寄重設連結（進佇列，交易外寄出）。回傳是否真的寄了。"""
     if not _smtp_configured() or not user['email']:
@@ -2320,15 +2335,10 @@ def admin_add_user():
     log_action(None, current_user()['id'], 'add_user', f'新增帳號 {username}（{role}）')
     # B2（v1.12.0）：填了 Email 且 SMTP 已配置時寄驗證信（最好能有，失敗靜默）。
     # 未驗證標記 email_verified=0；使用者開信點連結後轉 1。
-    new_user = q('SELECT id, name, email FROM users WHERE username=?', (username,), one=True)
-    if new_user and new_user['email'] and _smtp_configured():
-        raw = issue_token(new_user['id'], 'verify')
-        if raw:
-            link = f"{_external_base_url()}{url_for('verify_email', token=raw)}"
-            body = (f"{new_user['name']} 您好，\n\n"
-                    f'您的帳號 {username} 已建立。請開啟以下連結完成 Email 驗證：\n'
-                    f'{link}\n\n— 線上請假系統')
-            _queue_email(new_user['email'], body, subject='驗證 Email · 線上請假系統')
+    new_user = q('SELECT id, username, name, email FROM users WHERE username=?',
+                 (username,), one=True)
+    if new_user:
+        _queue_verification_email(new_user)
     # 明文密碼不進 flash：flash 存放在 session cookie 裡，而 cookie 只是簽名並非加密，
     # 任何拿到 cookie 的人都能讀出密碼，且它會一直待到下次請求被消費。
     # 改為僅在本次回應中呈現一次，任何地方都不留持久痕跡。
@@ -2405,8 +2415,9 @@ def admin_reset_password(uid):
 @login_required
 @role_required('admin')
 def admin_edit_user(uid):
-    """調整姓名、院系、班級與導師歸屬（導師異動時最常需要）。"""
-    target = q('SELECT id, role FROM users WHERE id=?', (uid,), one=True)
+    """調整帳號資料；Email 真正異動時重新驗證並作廢舊安全連結。"""
+    target = q('SELECT id, role, username, name, email, email_verified '
+               'FROM users WHERE id=?', (uid,), one=True)
     if not target:
         flash('找不到該帳號。', 'error')
         return redirect(url_for('admin_users'))
@@ -2427,14 +2438,31 @@ def admin_edit_user(uid):
     if target['role'] in ('student', 'faculty') and not department:
         flash('學生與院系帳號必須填寫所屬院系（審批範圍依院系匹配）。', 'error')
         return redirect(url_for('admin_users'))
-    execute('UPDATE users SET name=?, department=?, class_name=?, email=?, advisor_id=? '
-            'WHERE id=?',
-            (name, department,
-             request.form.get('class_name', '').strip(),
-             email,
-             advisor_id, uid))
-    log_action(None, current_user()['id'], 'edit_user', f'修改帳號 #{uid} 資料')
-    flash('帳號資料已更新。', 'success')
+    # 大小寫與首尾空白不構成新信箱；避免只是整理格式就讓使用者重新驗證。
+    email_changed = email.casefold() != (target['email'] or '').strip().casefold()
+    with atomic():
+        execute('UPDATE users SET name=?, department=?, class_name=?, email=?, '
+                'advisor_id=?, email_verified=? WHERE id=?',
+                (name, department, request.form.get('class_name', '').strip(),
+                 email, advisor_id,
+                 0 if email_changed else target['email_verified'], uid))
+        if email_changed:
+            # 舊信箱持有的 verify/reset 連結不能繼續驗證新地址或重設密碼。
+            execute("UPDATE password_resets SET used_at=? WHERE user_id=? "
+                    "AND purpose IN ('verify','reset') AND used_at IS NULL",
+                    (_now_str(), uid))
+        detail = f'修改帳號 #{uid} 資料'
+        if email_changed:
+            detail += '（Email 已異動，舊驗證／重設連結已作廢）'
+        log_action(None, current_user()['id'], 'edit_user', detail)
+    if email_changed and email:
+        updated = q('SELECT id, username, name, email FROM users WHERE id=?',
+                    (uid,), one=True)
+        _queue_verification_email(updated)
+    if email_changed:
+        flash('帳號資料已更新；Email 驗證狀態已重設，舊安全連結已作廢。', 'success')
+    else:
+        flash('帳號資料已更新。', 'success')
     return redirect(url_for('admin_users'))
 
 
@@ -3242,7 +3270,11 @@ def purge_expired_attachments(days=None, dry_run=False):
       days     留存天數；預設取 LEAVE_ATTACHMENT_RETENTION_DAYS（內建 365）。
       dry_run  僅模擬，不實際執行。
 
-    回傳 dict：scanned / purged / missing_file / dry_run / retention_days / details。
+    同一個檔名可能由多張假單引用：仍有未到期引用時，只解除本次逾期假單的
+    關聯並保留實體檔；全部引用均逾期時才搬移一次檔案，避免有效假單懸空。
+
+    回傳 dict：scanned / purged / detached_shared / missing_file / dry_run /
+    retention_days / details。
 
     設計說明：病假證明屬健康個資，PIPL 要求留存最小化——假單一旦進入終態，
     證明檔就沒有繼續躺在活動上傳區的理由；超過留存期即銷毀，降低外洩面。
@@ -3266,57 +3298,89 @@ def purge_expired_attachments(days=None, dry_run=False):
              "AND r.updated_at <= ? "
              "ORDER BY r.updated_at ASC", (cutoff,))
 
-    purged = missing_file = 0
-    details = []
+    groups = {}
     for r in rows:
-        fn = r['attachment']
+        groups.setdefault(r['attachment'], []).append(r)
+
+    purged = detached_shared = missing_file = 0
+    details = []
+    for fn, expired in groups.items():
         src = os.path.join(UPLOAD_DIR, fn)
+        expired_ids = {r['id'] for r in expired}
+        refs = q('SELECT id FROM leave_requests WHERE attachment=? ORDER BY id', (fn,))
+        retained = [r['id'] for r in refs if r['id'] not in expired_ids]
+
         if not os.path.exists(src):
-            # 檔案已不在上傳區（可能曾手動清除）——仍切斷連結並留稽核。
+            # 檔案已不在上傳區（可能曾手動清除）——仍切斷逾期連結並留稽核。
             if not dry_run:
-                with atomic():
-                    execute('UPDATE leave_requests SET attachment=? WHERE id=?',
-                            ('', r['id']))
-                    log_action(r['id'], None, 'purge_attachment',
-                               f'附件逾期（{r["status"]}，{fn}）檔案已不存在，'
-                               f'僅清空 attachment 欄')
-            missing_file += 1
-            details.append((r['id'], fn, 'missing'))
+                try:
+                    with atomic():
+                        for r in expired:
+                            execute('UPDATE leave_requests SET attachment=? WHERE id=?',
+                                    ('', r['id']))
+                            log_action(r['id'], None, 'purge_attachment',
+                                       f'附件逾期（{r["status"]}，{fn}）檔案已不存在，'
+                                       f'僅清空 attachment 欄')
+                except Exception:  # noqa: BLE001 — 單一檔名失敗不阻斷整批
+                    details.extend((r['id'], fn, 'update_failed') for r in expired)
+                    continue
+            missing_file += len(expired)
+            details.extend((r['id'], fn, 'missing') for r in expired)
             continue
+
         if dry_run:
-            details.append((r['id'], fn, 'would_purge'))
+            state = 'would_detach_shared' if retained else 'would_purge'
+            details.extend((r['id'], fn, state) for r in expired)
             continue
+
+        if retained:
+            # 有效假單仍需要同一份實體檔；只解除已到期假單的引用。
+            try:
+                with atomic():
+                    for r in expired:
+                        execute('UPDATE leave_requests SET attachment=? WHERE id=?',
+                                ('', r['id']))
+                        log_action(r['id'], None, 'purge_attachment',
+                                   f'附件逾期（{r["status"]}，{fn}），但仍有 '
+                                   f'{len(retained)} 筆未到期引用；保留檔案，僅清空本筆欄位')
+            except Exception:  # noqa: BLE001 — 單一檔名失敗不阻斷整批
+                details.extend((r['id'], fn, 'update_failed') for r in expired)
+                continue
+            detached_shared += len(expired)
+            details.extend((r['id'], fn, 'detached_shared') for r in expired)
+            continue
+
         dest = os.path.join(backup_dir, fn)
         try:
             shutil.move(src, dest)
         except OSError:
-            # 備份區寫入失敗：不放棄整批，個別標記後繼續，並在稽核中註明。
-            details.append((r['id'], fn, 'backup_failed'))
+            # 備份區寫入失敗：不放棄整批，個別標記後繼續。
+            details.extend((r['id'], fn, 'backup_failed') for r in expired)
             continue
         try:
-            age = max((now - _parse_ts(r['updated_at'])).days, 0)
-        except (ValueError, TypeError):
-            age = days
-        try:
             with atomic():
-                execute('UPDATE leave_requests SET attachment=? WHERE id=?',
-                        ('', r['id']))
-                log_action(r['id'], None, 'purge_attachment',
-                           f'附件逾期銷毀（{r["status"]}，留存 {age} 天，{fn}）'
-                           f'→ 備份至 {os.path.basename(backup_dir)}/')
+                for r in expired:
+                    try:
+                        age = max((now - _parse_ts(r['updated_at'])).days, 0)
+                    except (ValueError, TypeError):
+                        age = days
+                    execute('UPDATE leave_requests SET attachment=? WHERE id=?',
+                            ('', r['id']))
+                    log_action(r['id'], None, 'purge_attachment',
+                               f'附件逾期銷毀（{r["status"]}，留存 {age} 天，{fn}）'
+                               f'→ 備份至 {os.path.basename(backup_dir)}/')
         except Exception:  # noqa: BLE001 — 不讓單筆故障中斷整批清理
-            # v1.13.0：檔案已先搬走，萬一 DB 交易失敗就要搬回原處。
-            # 舊版會留下「attachment 仍指向檔案、檔案卻已不在 uploads/」
-            # 的懸空連結；這裡用補償動作維持兩邊一致。
+            # 檔案只搬移一次；同檔任一資料庫寫入失敗，整組回滾並搬回。
             try:
                 shutil.move(dest, src)
             except OSError:
                 pass
-            details.append((r['id'], fn, 'update_failed'))
+            details.extend((r['id'], fn, 'update_failed') for r in expired)
             continue
-        purged += 1
-        details.append((r['id'], fn, 'purged'))
-    return {'scanned': len(rows), 'purged': purged, 'missing_file': missing_file,
+        purged += len(expired)
+        details.extend((r['id'], fn, 'purged') for r in expired)
+    return {'scanned': len(rows), 'purged': purged,
+            'detached_shared': detached_shared, 'missing_file': missing_file,
             'dry_run': dry_run, 'retention_days': days, 'details': details}
 
 
@@ -3561,6 +3625,7 @@ def purge_attachments_command(days, dry_run):
     """
     result = purge_expired_attachments(days=days, dry_run=dry_run)
     print(f"掃描 {result['scanned']} 筆、已銷毀 {result['purged']} 筆、"
+          f"共享保留僅清欄 {result['detached_shared']} 筆、"
           f"檔案遺失僅清欄 {result['missing_file']} 筆"
           + ("（dry-run，未實際執行）" if result['dry_run'] else ""))
     for rid, fn, status in result['details']:
@@ -3574,8 +3639,9 @@ def av_scan_command(no_quarantine):
     """重掃 uploads/ 下既有附件（D2 · v1.11.0）：flask av-scan [--no-quarantine]
 
     上傳時已逐檔掃毒，本命令供定期重掃存量（病毒庫更新後補掃）。
-    感染檔隔離到 uploads/quarantine/ 並清空對應假單的 attachment 欄，
-    孤兒檔（無 DB 紀錄）隔離後留稽核軌跡。
+    感染檔隔離到 uploads/quarantine/ 並清空所有對應假單的 attachment 欄，
+    孤兒檔（無 DB 紀錄）隔離後留稽核軌跡。若資料庫更新失敗，會把檔案搬回
+    原處並中止命令，避免假單繼續指向已不在上傳區的檔案。
     """
     if not av_configured():
         print('LEAVE_AV_CMD 未配置，掃毒通道關閉。')
@@ -3594,17 +3660,34 @@ def av_scan_command(no_quarantine):
             if no_quarantine:
                 continue
             os.makedirs(quarantine, exist_ok=True)
-            shutil.move(os.path.join(UPLOAD_DIR, n), os.path.join(quarantine, n))
-            row = q('SELECT id FROM leave_requests WHERE attachment=?', (n,), one=True)
-            with atomic():
-                if row:
-                    execute('UPDATE leave_requests SET attachment=? WHERE id=?',
-                            ('', row['id']))
-                    log_action(row['id'], None, 'av_block',
-                               f'存量附件重掃感染，已隔離：{n}（{detail}）')
-                else:
-                    log_action(None, None, 'av_block',
-                               f'孤兒檔案重掃感染，已隔離：{n}（{detail}）')
+            src = os.path.join(UPLOAD_DIR, n)
+            dest = os.path.join(quarantine, n)
+            rows = q('SELECT id FROM leave_requests WHERE attachment=? ORDER BY id', (n,))
+            try:
+                shutil.move(src, dest)
+            except OSError as exc:
+                raise click.ClickException(f'感染檔隔離失敗：{n}（{exc}）') from exc
+            try:
+                with atomic():
+                    if rows:
+                        # 同檔名可有多筆引用，必須全部解除，不能只清第一筆。
+                        execute('UPDATE leave_requests SET attachment=? WHERE attachment=?',
+                                ('', n))
+                        for row in rows:
+                            log_action(row['id'], None, 'av_block',
+                                       f'存量附件重掃感染，已隔離：{n}（{detail}）')
+                    else:
+                        log_action(None, None, 'av_block',
+                                   f'孤兒檔案重掃感染，已隔離：{n}（{detail}）')
+            except Exception as exc:  # noqa: BLE001 — 檔案與資料庫必須一起成功
+                try:
+                    shutil.move(dest, src)
+                    restored = True
+                except OSError:
+                    restored = False
+                message = f'感染檔資料庫更新失敗：{n}'
+                message += '，檔案已搬回原處。' if restored else '，且檔案搬回失敗，請人工處理。'
+                raise click.ClickException(message) from exc
         else:
             errors += 1
             print(f'[錯誤] {n}（{detail}）')

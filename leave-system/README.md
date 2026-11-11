@@ -1,4 +1,4 @@
-# 線上請假系統（原型 v1.19.2）
+# 線上請假系統（原型 v1.20.0）
 
 學生線上提交假單 → 導師審批 → （必要時）院系複核 → 核准生效。Flask + SQLite，開箱即跑。
 
@@ -212,13 +212,13 @@ worker 按使用者認領待送通知，在資料庫交易外合併寄信；失�
 | CSV 匯出 | 自由文字若以 `= + - @` 開頭會加 `'` 前綴，防止 Excel／Sheets 公式注入 |
 | 帳號枚舉 | 帳號不存在時也跑一次固定 dummy hash 比對，拉平與「密碼錯誤」的回應時間差 |
 | 自助密碼重設 | `/forgot` 對已登記與未登記的 Email 一律回同一句泛用訊息（不洩漏帳號是否存在）；重設信含一次性時效連結（`LEAVE_RESET_TOKEN_MINUTES` 預設 30 分鐘），DB 只存 token 的 SHA-256 雜湊；兌換守衛 `used_at IS NULL` 與寫入新密碼同交易（併發雙開只有一方成功，守衛影響 0 列的後到請求會看到連結失效而非重設成功，v1.19.2）；同一帳號一小時內申請上限 `LEAVE_RESET_MAX_PER_HOUR`（預設 5，防郵件轟炸）；重設成功即視為 Email 已驗證並刷新 `pwd_changed_at` 使所有舊 session 立即失效（v1.12.0，對應 GAP-ANALYSIS B1） |
-| Email 驗證 | `users.email_verified` 欄位（預設 0，舊庫自動遷移）；管理端新增含 Email 的帳號且 SMTP 已配置時自動寄驗證信，`/verify/<token>` 一次性連結兌換後轉 1 並留稽核——確保重設信不會發進死信箱（v1.12.0，對應 GAP-ANALYSIS B2） |
+| Email 驗證 | `users.email_verified` 欄位（預設 0，舊庫自動遷移）；管理端新增含 Email 的帳號且 SMTP 已配置時自動寄驗證信，`/verify/<token>` 一次性連結兌換後轉 1 並留稽核——確保重設信不會發進死信箱（v1.12.0，對應 GAP-ANALYSIS B2）。管理員真正修改或清空 Email 時，會重設驗證狀態並作廢全部未使用的驗證／重設 token；新地址非空且 SMTP 已配置時，於交易提交後寄出新驗證信。僅調整大小寫或首尾空白不觸發重設（v1.20.0） |
 | 郵件絕對連結 | 重設密碼與 Email 驗證連結只使用固定、經校驗的 `LEAVE_BASE_URL`，不從請求 `Host` 生成，避免 Host header poisoning 將一次性令牌導向攻擊者網域（v1.19.1） |
 | 個資讀取稽核 | 三條跨範圍 PII 讀取路徑——統計頁（`/stats`）、CSV 匯出（`/export`）、帳號清單（`/admin/users`）——每次存取皆寫入 `view_pii`／`export` 稽核軌跡，誰看過／匯出過全範圍個資皆可追溯（v1.9.0，對應 GAP-ANALYSIS D3） |
 | 單張詳情頁 PII 稽核 | `/request/<rid>` 會露出事由、聯絡電話、附件與各級審批意見；非當事人（導師／院系／管理員）每次檢視寫一筆帶 `request_id` 的 `view_pii`，學生看自己的單不記；稽核明細只記「誰、何時、看了哪一張」，**不抄學號／事由／電話**（v1.18.0，關閉 GAP-ANALYSIS D3 細粒度稽核） |
 | 輸入與匯入邊界 | `MAX_AFFECTED_DAYS = 360` 擋掉課表預覽 API 的超大日期區間（原本單一 GET 可跑 3.6 萬次逐日迴圈）並白名單檢查時段；校曆檔與假日批次匯入整批包進 `atomic()`，失敗不再留下半批資料卻回報「資料庫未變更」；額度設定以 `math.isfinite()` 拒收 NaN／±Inf（原本會讓限額永久靜默失效）；Email 驗證改用 `execute_guard()` 的影響列數判定一次性 token，失敗不改 `users`、不留稽核（v1.18.0） |
-| 附件留存期與銷毀 | 終態假單（approved／rejected／withdrawn）的證明附件超過 `LEAVE_ATTACHMENT_RETENTION_DAYS`（內建 365）後，由 `purge_expired_attachments()` 先備份至 `attachments_purged/` 再銷毀、清空 `attachment` 欄並寫一筆 `purge_attachment` 稽核（可由 `/admin/cron/purge-attachments` 或 `flask purge-attachments` 觸發，支援 `dry_run`），落實 PIPL 留存最小化（v1.10.0，對應 GAP-ANALYSIS D1） |
-| 附件掃毒 | 上傳證明文件先落系統臨時檔過掃毒引擎（`scan_file_for_malware()`，相容 ClamAV 退出碼：0=乾淨／1=感染），乾淨才移入 `uploads/`——感染檔自始不進附件區、不寫假單、寫 `av_block` 稽核。組態門控：設 `LEAVE_AV_CMD`（如 `clamdscan --no-summary {file}`）即啟用，未配置則通道關閉照常運行；掃描器故障依 `LEAVE_AV_FAIL_POLICY`（預設 `reject` fail-closed）處理，逾時 `LEAVE_AV_TIMEOUT`（30 秒）。存量重掃 `flask av-scan`：感染檔隔離到 `uploads/quarantine/`、清空對應假單欄位並留稽核（v1.11.0，對應 GAP-ANALYSIS D2） |
+| 附件留存期與銷毀 | 終態假單（approved／rejected／withdrawn）的證明附件超過 `LEAVE_ATTACHMENT_RETENTION_DAYS`（內建 365）後，由 `purge_expired_attachments()` 先備份至 `attachments_purged/` 再銷毀、清空 `attachment` 欄並寫一筆 `purge_attachment` 稽核（可由 `/admin/cron/purge-attachments` 或 `flask purge-attachments` 觸發，支援 `dry_run`），落實 PIPL 留存最小化（v1.10.0，對應 GAP-ANALYSIS D1）。同一檔案被多張假單引用時按檔名分組：仍有未到期引用就只解除到期假單的引用並保留實體檔；全部引用到期才移動一次，資料庫失敗會回滾並恢復檔案（v1.20.0） |
+| 附件掃毒 | 上傳證明文件先落系統臨時檔過掃毒引擎（`scan_file_for_malware()`，相容 ClamAV 退出碼：0=乾淨／1=感染），乾淨才移入 `uploads/`——感染檔自始不進附件區、不寫假單、寫 `av_block` 稽核。組態門控：設 `LEAVE_AV_CMD`（如 `clamdscan --no-summary {file}`）即啟用，未配置則通道關閉照常運行；掃描器故障依 `LEAVE_AV_FAIL_POLICY`（預設 `reject` fail-closed）處理，逾時 `LEAVE_AV_TIMEOUT`（30 秒）。存量重掃 `flask av-scan`：感染檔隔離到 `uploads/quarantine/`、清空全部引用假單的欄位並逐張留稽核；資料庫更新失敗時會嘗試恢復原檔並以非零狀態中止，避免留下指向已隔離檔案的引用（v1.11.0，對應 GAP-ANALYSIS D2；共享引用與失敗補償於 v1.20.0 補強） |
 | 備份與還原 | SQLite 在線快照＋可選附件；manifest 記錄大小與 SHA-256，並檢查 SQLite 完整性、核心資料表、檔案清單、路徑與符號連結。還原只走 CLI、須停止應用並加 `--yes`；保留 pre-restore 副本，失敗嘗試補償原狀。DB-only 不動現有附件（v1.14.0，對應 GAP-ANALYSIS E3） |
 | 後台防呆 | 管理員不可停用自己、不可停用最後一位在職管理員；新增帳號強制角色白名單、帳號格式、Email 格式與導師歸屬校驗 |
 | 角色下限 | 「待我審批／全部假單」僅審批人與管理員可進入（v1.0.0 前學生可翻全系統待審假單）；儀表板彙總數字同樣依角色收斂範圍 |
@@ -257,7 +257,7 @@ leave-system/
   schema.sql          資料庫結構
   data/               內建校曆檔（hkustgz-2026-27.txt）、課表範例（timetable-sample.csv）
   smoke_test.py       全鏈路冒煙測試（263 項）
-  tests/              單元測試（pytest，293 項；本機 292 通過、1 略過）
+  tests/              單元測試（pytest，302 項；本機 301 通過、1 略過）
   start.bat           一鍵啟動（預設含 LEAVE_DEBUG=1 自動重載）
   templates/          Jinja2 頁面模板
   static/css/         樣式
@@ -270,7 +270,7 @@ leave-system/
 ## 測試
 
 ```bash
-python -m pytest tests/ -v   # 292 項單元測試（本機 291 通過、1 略過；calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化 / v1.8.0 單一登入 SSO / v1.9.0 PII 讀取稽核 / v1.10.0 附件留存期與銷毀 / v1.11.0 附件掃毒通道 / v1.12.0 自助密碼重設與 Email 驗證 / v1.13.0 列表搜尋與核准意見通知 / v1.14.0 備份驗證與可回退還原 / v1.18.0 假防護補強與單張詳情頁稽核 / v1.19.0 通知偏好、每日摘要與交易可靠性 / v1.19.1 安全郵件固定網域與 Host 偽造防護）
+python -m pytest tests/ -v   # 302 項單元測試（本機 301 通過、1 略過；calc_days / 審批層級 / 學年 / 副檔名 / 密碼策略 / CSV 安全 / 認證加固 / 健壯性 / 範圍隔離 / v1.0.0 / v1.1.0 / v1.2.0 / v1.4.0 / v1.5.0 校曆檔 / v1.6.0 批次審批 / v1.7.0 課表真實化 / v1.8.0 單一登入 SSO / v1.9.0 PII 讀取稽核 / v1.10.0 附件留存期與銷毀 / v1.11.0 附件掃毒通道 / v1.12.0 自助密碼重設與 Email 驗證 / v1.13.0 列表搜尋與核准意見通知 / v1.14.0 備份驗證與可回退還原 / v1.18.0 假防護補強與單張詳情頁稽核 / v1.19.0 通知偏好、每日摘要與交易可靠性 / v1.19.1 安全郵件固定網域與 Host 偽造防護 / v1.19.2 密碼重設併發兌換 / v1.20.0 共享附件清理、存量隔離與 Email 生命週期）
 python smoke_test.py         # 263 項全鏈路冒煙：兩級審批、撤回、CSRF、附件權限與內容嗅探、分頁、受影響課程、密碼策略、CSV 注入、統計範圍、healthz、session 失效、限流持久化、後台防呆、弱密碼擋鎖、通知分頁、快取標頭、一次性密碼、範圍隔離、假別管理、儀表板範圍、角色下限、撤回通知、稽核日誌、待辦分頁、重複審批守衛、撤回院系通知、單則已讀、電話格式、referrer 防護、SMTP 逾時、院系必填、交易內不寄信、狀態篩選、帳號分頁、CSV 串流、孤兒附件預檢、批次審批（越權／已結案略過、單次上限、模板勾選）、課表真實化（逐生課表、CSV 匯入與冪等、時間補零、覆蓋率、單筆增刪、課表檢視權限）、單一登入 SSO（預設關閉不顯示按鈕、/login/sso 導回登入、開啟後跳轉 IdP、/callback 身分對映並建立 session、自助密碼重設（忘記密碼頁、寄重設信、一次性連結、重放被擋、重設後視為已驗證、未知 Email 泛用回應、無效驗證連結））、v1.18.0 假防護補強（超大區間課表預覽、校曆／假日匯入回滾、Email 驗證一次性守衛、NaN 額度擋鎖、詳情頁逐筆 `view_pii` 且明細不抄個資）、v1.19.0 通知偏好與每日摘要（CSRF、待送狀態、合併寄送與冪等）
 ```
 
