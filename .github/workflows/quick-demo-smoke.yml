@@ -1,0 +1,30 @@
+name: Quick Demo Smoke
+
+on:
+  push:
+    branches: [demo/quick-bilingual-role-cards]
+    tags: ['demo-quick-bilingual-v*']
+  pull_request:
+    branches: [demo/quick-bilingual-role-cards]
+  workflow_dispatch:
+
+jobs:
+  quick-demo:
+    name: Bilingual role-card demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r leave-system/requirements.txt
+
+      - name: Compile app
+        run: python -m py_compile leave-system/app.py
+
+      - name: Run quick demo regression tests
+        run: python -m pytest -q leave-system/tests/test_quick_demo.py
