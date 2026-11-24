@@ -1,47 +1,47 @@
 {% extends "base.html" %}
-{% block title %}我的假單 · 線上請假系統{% endblock %}
+{% block title %}{{ bj("My requests","我的假單") }}{% endblock %}
 {% block content %}
-<h1>我的假單</h1>
+<h1>{{ bj("My requests","我的假單") }}</h1>
 
 <div class="card">
   <div class="actions" style="margin:0 0 12px">
-    <a class="btn sm {{ 'ghost' if filter_status != '' }}" href="{{ url_for('my_requests', q=search_q, date_from=date_from, date_to=date_to) }}">全部</a>
-    <a class="btn sm {{ '' if filter_status == 'pending' else 'ghost' }}" href="{{ url_for('my_requests', status='pending', q=search_q, date_from=date_from, date_to=date_to) }}">審批中</a>
-    <a class="btn sm {{ '' if filter_status == 'approved' else 'ghost' }}" href="{{ url_for('my_requests', status='approved', q=search_q, date_from=date_from, date_to=date_to) }}">已核准</a>
-    <a class="btn sm {{ '' if filter_status == 'rejected' else 'ghost' }}" href="{{ url_for('my_requests', status='rejected', q=search_q, date_from=date_from, date_to=date_to) }}">已駁回</a>
-    <a class="btn sm {{ '' if filter_status == 'withdrawn' else 'ghost' }}" href="{{ url_for('my_requests', status='withdrawn', q=search_q, date_from=date_from, date_to=date_to) }}">已撤回</a>
+    <a class="btn sm {{ 'ghost' if filter_status != '' }}" href="{{ url_for('my_requests', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi("All","全部") }}</a>
+    <a class="btn sm {{ '' if filter_status == 'pending' else 'ghost' }}" href="{{ url_for('my_requests', status='pending', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi("Pending","審批中") }}</a>
+    <a class="btn sm {{ '' if filter_status == 'approved' else 'ghost' }}" href="{{ url_for('my_requests', status='approved', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi("Approved","已核准") }}</a>
+    <a class="btn sm {{ '' if filter_status == 'rejected' else 'ghost' }}" href="{{ url_for('my_requests', status='rejected', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi("Rejected","已駁回") }}</a>
+    <a class="btn sm {{ '' if filter_status == 'withdrawn' else 'ghost' }}" href="{{ url_for('my_requests', status='withdrawn', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi("Withdrawn","已撤回") }}</a>
     <span style="flex:1"></span>
-    <a class="btn" href="{{ url_for('new_request') }}">＋ 提交假單</a>
+    <a class="btn" href="{{ url_for('new_request') }}">＋ {{ bj("Submit request","提交假單") }}</a>
   </div>
 
   <form method="get" class="actions" style="margin:0 0 12px;align-items:center">
     {% if filter_status %}<input type="hidden" name="status" value="{{ filter_status }}">{% endif %}
     <input type="search" name="q" value="{{ search_q }}" maxlength="{{ MAX_SEARCH_Q_LEN }}"
-           placeholder="搜尋事由／假別／單號" style="max-width:220px">
-    <label style="margin:0;align-self:center;font-size:13px">請假起</label>
+           placeholder="{{ bj('Search reason / type / request no.','搜尋事由／假別／單號') }}" style="max-width:220px">
+    <label style="margin:0;align-self:center;font-size:13px">{{ bi("From","請假起") }}</label>
     <input type="date" name="date_from" value="{{ date_from }}" style="max-width:160px">
-    <label style="margin:0;align-self:center;font-size:13px">請假訖</label>
+    <label style="margin:0;align-self:center;font-size:13px">{{ bi("To","請假訖") }}</label>
     <input type="date" name="date_to" value="{{ date_to }}" style="max-width:160px">
-    <button class="btn sm" type="submit">搜尋</button>
-    <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status) }}">清除</a>
+    <button class="btn sm" type="submit">{{ bi("Search","搜尋") }}</button>
+    <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status) }}">{{ bi("Clear","清除") }}</a>
   </form>
 
   {% if requests %}
   <table>
-    <thead><tr><th>#</th><th>假別</th><th>起訖</th><th class="tnum">天數</th>
-      <th>狀態</th><th class="tnum">提交時間</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>{{ bi("Leave type","假別") }}</th><th>{{ bi("Dates","起訖") }}</th><th class="tnum">{{ bi("Days","天數") }}</th>
+      <th>{{ bi("Status","狀態") }}</th><th class="tnum">{{ bi("Submitted","提交時間") }}</th><th></th></tr></thead>
     <tbody>
     {% for r in requests %}
       <tr>
         <td class="mono">{{ r.id }}</td>
         <td>{{ r.type_name }}</td>
         <td class="tnum">{{ r.start_date }}
-          {{ '上午' if r.start_period=='AM' else '下午' }} →
-          {{ r.end_date }} {{ '上午' if r.end_period=='AM' else '下午' }}</td>
+          {{ bi('AM','上午') if r.start_period=='AM' else bi('PM','下午') }} →
+          {{ r.end_date }} {{ bi('AM','上午') if r.end_period=='AM' else bi('PM','下午') }}</td>
         <td class="tnum">{{ r.days }}</td>
         <td><span class="tag {{ STATUS_TONE[r.status] }}">{{ status_view(r) }}</span></td>
         <td class="tnum muted">{{ r.created_at }}</td>
-        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">查看</a></td>
+        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}>{{ bi("View","查看") }}</a></td>
       </tr>
     {% endfor %}
     </tbody>
@@ -49,16 +49,16 @@
   {% if total_pages > 1 %}
     <div class="pager">
       {% if page > 1 %}
-        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page-1) }}">← 上一頁</a>
+        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page-1) }}">{{ bi("Previous","上一頁") }} ←</a>
       {% endif %}
-      <span class="muted">第 {{ page }} / {{ total_pages }} 頁（共 {{ total }} 筆）</span>
+      <span class="muted">{{ bi("Page","第") }} {{ page }} / {{ total_pages }} ({{ total }} {{ bi("records","筆") }})</span>
       {% if page < total_pages %}
-        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page+1) }}">下一頁 →</a>
+        <a class="btn sm ghost" href="{{ url_for('my_requests', status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page+1) }}">{{ bi("Next","下一頁") }} →</a>
       {% endif %}
     </div>
   {% endif %}
   {% else %}
-    <div class="empty">沒有符合篩選條件的假單。</div>
+    <div class="empty">{{ bi("No requests match the filters.","沒有符合篩選條件的假單。") }}</div>
   {% endif %}
 </div>
 {% endblock %}

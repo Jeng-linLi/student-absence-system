@@ -3,8 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}線上請假系統{% endblock %}</title>
+<title>{% block title %}{{ bj("Leave Management System","線上請假系統") }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .bi-en { display:block; color:#1A2230; font-size:1em; line-height:1.25; }
+  .bi-zh { display:block; color:#667085; font-size:.82em; line-height:1.35; }
+  .bi-inline .bi-en, .bi-inline .bi-zh { display:inline; }
+  .bi-inline .bi-zh { font-size:.9em; }
+</style>
 </head>
 <body>
 <script>
@@ -16,33 +22,32 @@
   <div class="brand">
     <span class="logo">假</span>
     <div>
-      <strong>線上請假系統</strong>
-      <small>Leave Management System</small>
+      <strong>{{ bj("Leave Management System","線上請假系統") }}</strong>
     </div>
   </div>
 
   <nav class="nav">
-    <a href="{{ url_for('dashboard') }}">儀表板</a>
+    <a href="{{ url_for('dashboard') }}">{{ bj("Dashboard","儀表板") }}</a>
     {% if current_user.role == 'student' %}
-      <a href="{{ url_for('new_request') }}">提交假單</a>
-      <a href="{{ url_for('my_requests') }}">我的假單</a>
-      <a href="{{ url_for('timetable') }}">我的課表</a>
+      <a href="{{ url_for('new_request') }}">{{ bj("Submit request","提交假單") }}</a>
+      <a href="{{ url_for('my_requests') }}">{{ bj("My requests","我的假單") }}</a>
+      <a href="{{ url_for('timetable') }}">{{ bi("My timetable","我的課表") }}</a>
     {% else %}
-      <a href="{{ url_for('approvals') }}">待我審批
+      <a href="{{ url_for('approvals') }}">{{ bi("My approvals","待我審批") }}
         {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}</a>
-      <a href="{{ url_for('approvals', scope='all') }}">全部假單</a>
-      <a href="{{ url_for('stats') }}">統計</a>
-      <a href="{{ url_for('timetable') }}">學生課表</a>
+      <a href="{{ url_for('approvals', scope='all') }}">{{ bi("All requests","全部假單") }}</a>
+      <a href="{{ url_for('stats') }}">{{ bi("Statistics","統計") }}</a>
+      <a href="{{ url_for('timetable') }}">{{ bi("Student timetable","學生課表") }}</a>
     {% endif %}
     {% if current_user.role == 'admin' %}
-      <a href="{{ url_for('admin_users') }}">帳號管理</a>
-      <a href="{{ url_for('admin_delegations') }}">委託審批</a>
-      <a href="{{ url_for('admin_types') }}">假別管理</a>
-      <a href="{{ url_for('admin_terms') }}">學期與校曆</a>
-      <a href="{{ url_for('admin_timetable') }}">課表管理</a>
-      <a href="{{ url_for('admin_logs') }}">稽核日誌</a>
+      <a href="{{ url_for('admin_users') }}">{{ bi("Accounts","帳號管理") }}</a>
+      <a href="{{ url_for('admin_delegations') }}">{{ bi("Delegations","委託審批") }}</a>
+      <a href="{{ url_for('admin_types') }}">{{ bi("Leave types","假別管理") }}</a>
+      <a href="{{ url_for('admin_terms') }}">{{ bi("Terms & calendar","學期與校曆") }}</a>
+      <a href="{{ url_for('admin_timetable') }}">{{ bi("Timetable","課表管理") }}</a>
+      <a href="{{ url_for('admin_logs') }}">{{ bi("Audit log","稽核日誌") }}</a>
     {% endif %}
-    <a href="{{ url_for('notifications') }}">通知
+    <a href="{{ url_for('notifications') }}">{{ bi("Notifications","通知") }}
       {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}</a>
   </nav>
 
@@ -53,8 +58,8 @@
       <small>{{ {'student':'學生','advisor':'導師','faculty':'院系','admin':'管理員'}[current_user.role] }}
         {% if current_user.department %}· {{ current_user.department }}{% endif %}</small>
     </div>
-    <a class="logout" href="{{ url_for('change_password') }}">修改密碼</a>
-    <a class="logout" href="{{ url_for('logout') }}">登出</a>
+    <a class="logout" href="{{ url_for('change_password') }}">{{ bi("Password","修改密碼") }}</a>
+    <a class="logout" href="{{ url_for('logout') }}">{{ bi("Logout","登出") }}</a>
   </div>
 </header>
 {% endif %}
@@ -68,7 +73,7 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer class="foot">線上請假系統 · 原型 v{{ app_version }} · 僅供校內演示</footer>
+<footer class="foot">{{ bj("Leave Management System","線上請假系統") }} · v{{ app_version }} · {{ bi("Campus demo only","僅供校內演示") }}</footer>
 
 <script>
 function toggleTheme(){

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}假單 #{{ req.id }} · 線上請假系統{% endblock %}
+{% block title %}{{ bj("Request","假單") }} #{{ req.id }}{% endblock %}
 {% block content %}
 <h1>假單 #{{ req.id }}
   <span class="tag {{ STATUS_TONE[req.status] }}" style="font-size:14px">{{ status_view(req) }}</span>
@@ -7,35 +7,35 @@
 
 <div class="grid g2">
   <div class="card">
-    <h3>申請資料</h3>
+    <h3>{{ bi("Request details","申請資料") }}</h3>
     <table>
-      <tr><th style="width:38%">申請人</th><td>{{ req.student_name }}
+      <tr><th style="width:38%">{{ bi("Applicant","申請人") }}</th><td>{{ req.student_name }}
         <div class="muted">{{ req.student_no }} · {{ req.class_name }} · {{ req.department }}</div></td></tr>
-      <tr><th>假別</th><td>{{ req.type_name }}</td></tr>
-      <tr><th>起訖</th><td class="tnum">{{ req.start_date }}
-        {{ '上午' if req.start_period=='AM' else '下午' }} →
-        {{ req.end_date }} {{ '上午' if req.end_period=='AM' else '下午' }}</td></tr>
-      <tr><th>天數</th><td class="tnum"><strong>{{ req.days }}</strong> 天</td></tr>
-      <tr><th>事由</th><td>{{ req.reason }}</td></tr>
-      <tr><th>聯絡電話</th><td>{{ req.contact_phone or '—' }}</td></tr>
-      <tr><th>證明文件</th><td>
+      <tr><th>{{ bi("Leave type","假別") }}</th><td>{{ req.type_name }}</td></tr>
+      <tr><th>{{ bi("Dates","起訖") }}</th><td class="tnum">{{ req.start_date }}
+        {{ bi('AM','上午') if req.start_period=='AM' else bi('PM','下午') }} →
+        {{ req.end_date }} {{ bi('AM','上午') if req.end_period=='AM' else bi('PM','下午') }}</td></tr>
+      <tr><th>{{ bi("Days","天數") }}</th><td class="tnum"><strong>{{ req.days }}</strong> {{ bi("days","天") }}</td></tr>
+      <tr><th>{{ bi("Reason","事由") }}</th><td>{{ req.reason }}</td></tr>
+      <tr><th>{{ bi("Contact phone","聯絡電話") }}</th><td>{{ req.contact_phone or '—' }}</td></tr>
+      <tr><th>{{ bi("Attachment","證明文件") }}</th><td>
         {% if req.attachment %}
-          <a href="{{ url_for('uploaded_file', filename=req.attachment) }}" target="_blank">查看附件</a>
+          <a href="{{ url_for('uploaded_file', filename=req.attachment) }}" target="_blank">{{ bi("View file","查看附件") }}</a>
         {% else %}—{% endif %}</td></tr>
-      <tr><th>提交時間</th><td class="tnum muted">{{ req.created_at }}</td></tr>
-      <tr><th>導師</th><td>{{ req.advisor_name or '（未指派）' }}</td></tr>
+      <tr><th>{{ bi("Submitted","提交時間") }}</th><td class="tnum muted">{{ req.created_at }}</td></tr>
+      <tr><th>{{ bi("Advisor","導師") }}</th><td>{{ req.advisor_name or bi("(unassigned)","（未指派）") }}</td></tr>
     </table>
   </div>
 
   <div class="card">
-    <h3>審批進度</h3>
+    <h3>{{ bi("Approval progress","審批進度") }}</h3>
     <ul class="timeline">
       {% for a in approvals %}
         {% set cls = 'done' if a.action=='approve' else ('rejected' if a.action=='reject' else ('active' if req.current_level == a.level and req.status=='pending' else '')) %}
         <li class="{{ cls }}">
-          <strong>{{ '導師審批' if a.level==1 else '院系複核' }}</strong>
+          <strong>{{ bi('Advisor approval','導師審批') if a.level==1 else bi('Faculty review','院系複核') }}</strong>
           <span class="tag {{ 'green' if a.action=='approve' else ('red' if a.action=='reject' else 'amber') }}">
-            {{ '核准' if a.action=='approve' else ('駁回' if a.action=='reject' else '待處理') }}</span>
+            {{ bi('Approved','核准') if a.action=='approve' else (bi('Rejected','駁回') if a.action=='reject' else bi('Pending','待處理')) }}</span>
           <div class="muted">
             {{ a.approver_name or '—' }}
             {% if a.acted_at %}· {{ a.acted_at }}{% endif %}
@@ -49,10 +49,10 @@
 
 {% if affected %}
 <div class="card">
-  <h3>受影響課程（依課表推算）</h3>
+  <h3>{{ bi("Affected courses","受影響課程") }} · {{ bi("from timetable","依課表推算") }}</h3>
   {% for r in affected %}
     <div style="margin-bottom:10px">
-      <strong>{{ r.date }}（{{ r.weekday_label }} · {{ '上午' if r.period=='AM' else ('下午' if r.period=='PM' else '全天') }}）</strong>
+      <strong>{{ r.date }}（{{ r.weekday_label }} · {{ bi('AM','上午') if r.period=='AM' else (bi('PM','下午') if r.period=='PM' else bi('Full day','全天')) }}）</strong>
       <ul style="margin:4px 0 0;padding-left:18px">
         {% for c in r.courses %}
           <li>{{ c.course_code }} · {{ c.kind }} · {{ c.start_time }}–{{ c.end_time }}{% if c.note %}（{{ c.note }}）{% endif %}</li>
@@ -65,15 +65,15 @@
 
 {% if can_approve %}
 <div class="card">
-  <h3>審批操作</h3>
+  <h3>{{ bi("Approval action","審批操作") }}</h3>
   <form method="post" action="{{ url_for('decide', rid=req.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>審批意見（駁回時必填，{{ MAX_COMMENT_LEN }} 字內）</label>
-    <textarea name="comment" maxlength="{{ MAX_COMMENT_LEN }}" placeholder="請填寫意見"></textarea>
+    <label>{{ bi("Approval comment","審批意見") }} ({{ bi("required to reject","駁回時必填") }}, {{ MAX_COMMENT_LEN }})</label>
+    <textarea name="comment" maxlength="{{ MAX_COMMENT_LEN }}" placeholder="{{ bj('Enter a comment','請填寫意見') }}"></textarea>
     <div class="actions">
-      <button class="btn ok" type="submit" name="action" value="approve">核准</button>
-      <button class="btn danger" type="submit" name="action" value="reject">駁回</button>
-      <a class="btn ghost" href="{{ url_for('approvals') }}">稍後處理</a>
+      <button class="btn ok" type="submit" name="action" value="approve">{{ bi("Approve","核准") }}</button>
+      <button class="btn danger" type="submit" name="action" value="reject">{{ bi("Reject","駁回") }}</button>
+      <a class="btn ghost" href="{{ url_for('approvals') }}">{{ bi("Later","稍後處理") }}</a>
     </div>
   </form>
 </div>
@@ -81,12 +81,12 @@
 
 {% if current_user.role == 'student' and req.student_id == current_user.id and req.status == 'pending' %}
 <div class="card">
-  <h3>撤回</h3>
+  <h3>{{ bi("Withdraw","撤回") }}</h3>
   <form method="post" action="{{ url_for('withdraw', rid=req.id) }}"
-        onsubmit="return confirm('確定撤回這張假單？');">
+        onsubmit="return confirm({{ bj('Withdraw this request?','確定撤回這張假單？')|tojson }});">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="actions" style="margin:0">
-      <button class="btn danger" type="submit">撤回假單</button>
+      <button class="btn danger" type="submit">{{ bi("Withdraw request","撤回假單") }}</button>
     </div>
   </form>
 </div>
@@ -94,7 +94,7 @@
 
 {% if current_user.role == 'admin' %}
 <div class="card">
-  <h3>改派導師（教務處）</h3>
+  <h3>{{ bi("Reassign advisor","改派導師") }} ({{ bi("Registry","教務處") }})</h3>
   <p class="muted" style="margin:0 0 10px;font-size:12px">
     改派會調整該生的導師歸屬——之後所有假單的待辦、通知與範圍隔離都按新導師走。
   </p>
@@ -103,25 +103,25 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row" style="grid-template-columns:1fr auto;align-items:end">
       <div>
-        <label>新導師（留空＝解除歸屬）</label>
+        <label>{{ bi("New advisor","新導師") }} ({{ bi("blank = unassign","留空＝解除歸屬") }})</label>
         <select name="advisor_id">
-          <option value="">（不指派）</option>
+          <option value="">{{ bi("(unassigned)","（不指派）") }}</option>
           {% for a in advisors %}
             <option value="{{ a.id }}" {{ 'selected' if req.advisor_id == a.id }}>{{ a.name }}</option>
           {% endfor %}
         </select>
       </div>
-      <div><button class="btn" type="submit">改派</button></div>
+      <div><button class="btn" type="submit">{{ bi("Reassign","改派") }}</button></div>
     </div>
   </form>
 </div>
 {% endif %}
 
 <div class="card">
-  <h3>操作日誌</h3>
+  <h3>{{ bi("Audit log","操作日誌") }}</h3>
   {% if logs %}
   <table>
-    <thead><tr><th class="tnum">時間</th><th>操作人</th><th>動作</th><th>說明</th></tr></thead>
+    <thead><tr><th class="tnum">{{ bi("Time","時間") }}</th><th>{{ bi("Actor","操作人") }}</th><th>{{ bi("Action","動作") }}</th><th>{{ bi("Detail","說明") }}</th></tr></thead>
     <tbody>
     {% for l in logs %}
       <tr><td class="tnum muted">{{ l.created_at }}</td><td>{{ l.actor_name or '—' }}</td>
@@ -129,6 +129,6 @@
     {% endfor %}
     </tbody>
   </table>
-  {% else %}<div class="empty">暫無日誌。</div>{% endif %}
+  {% else %}<div class="empty">{{ bi("No log entries.","暫無日誌。") }}</div>{% endif %}
 </div>
 {% endblock %}

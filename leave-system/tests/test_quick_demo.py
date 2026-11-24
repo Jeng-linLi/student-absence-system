@@ -96,3 +96,29 @@ def test_password_login_still_available_in_quick_mode(monkeypatch):
     text = resp.get_data(as_text=True)
     assert "Account Login / 帳號登入" in text
     assert 'name="password"' in text
+
+
+def test_demo_pages_are_bilingual(monkeypatch):
+    monkeypatch.setattr(app_module, "DEMO_QUICK_LOGIN", True)
+    monkeypatch.setattr(app_module, "DEMO_BILINGUAL", True)
+
+    client = _client()
+    client.post("/login/demo-role", data={"role": "student"})
+    text = client.get("/").get_data(as_text=True)
+    assert "Hello" in text and "你好" in text
+    assert "Submit request" in text and "提交假單" in text
+    assert "Approval rules" in text and "審批規則" in text
+
+    text = client.get("/new").get_data(as_text=True)
+    assert "Submit a leave request" in text and "提交假單" in text
+    assert "Affected courses" in text and "受影響課程" in text
+
+    text = client.get("/my").get_data(as_text=True)
+    assert "My requests" in text and "我的假單" in text
+    assert "Approved" in text and "已核准" in text
+
+    client2 = _client()
+    client2.post("/login/demo-role", data={"role": "advisor"})
+    text = client2.get("/approvals").get_data(as_text=True)
+    assert "My approvals" in text and "待我審批" in text
+    assert "Approve" in text and "核准" in text

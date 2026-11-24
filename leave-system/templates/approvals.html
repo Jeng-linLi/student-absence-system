@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}審批 · 線上請假系統{% endblock %}
+{% block title %}{{ bj("Approvals","審批") }}{% endblock %}
 {% block content %}
-<h1>{{ '全部假單' if scope == 'all' else '待我審批' }}</h1>
+<h1>{{ bi('All requests','全部假單') if scope == 'all' else bi('My approvals','待我審批') }}</h1>
 
 <div class="card">
   <div class="actions" style="margin:0 0 12px">
-    <a class="btn sm {{ '' if scope=='todo' else 'ghost' }}" href="{{ url_for('approvals', scope='todo', q=search_q, date_from=date_from, date_to=date_to) }}">待我審批</a>
-    <a class="btn sm {{ '' if scope=='all' else 'ghost' }}" href="{{ url_for('approvals', scope='all', q=search_q, date_from=date_from, date_to=date_to) }}">全部假單</a>
+    <a class="btn sm {{ '' if scope=='todo' else 'ghost' }}" href="{{ url_for('approvals', scope='todo', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi('My approvals','待我審批') }}</a>
+    <a class="btn sm {{ '' if scope=='all' else 'ghost' }}" href="{{ url_for('approvals', scope='all', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi('All requests','全部假單') }}</a>
     <span style="flex:1"></span>
-    <a class="btn ghost sm" href="{{ url_for('export_csv', q=search_q, date_from=date_from, date_to=date_to, status=filter_status) }}">匯出 CSV</a>
+    <a class="btn ghost sm" href="{{ url_for('export_csv', q=search_q, date_from=date_from, date_to=date_to, status=filter_status) }}">{{ bi('Export CSV','匯出 CSV') }}</a>
   </div>
 
   {% if scope == 'all' %}
   <div class="actions" style="margin:0 0 12px">
-    <a class="btn sm {{ '' if filter_status=='' else 'ghost' }}" href="{{ url_for('approvals', scope='all', q=search_q, date_from=date_from, date_to=date_to) }}">全部狀態</a>
-    {% for st, lbl in [('pending','審批中'),('approved','已核准'),('rejected','已駁回'),('withdrawn','已撤回')] %}
+    <a class="btn sm {{ '' if filter_status=='' else 'ghost' }}" href="{{ url_for('approvals', scope='all', q=search_q, date_from=date_from, date_to=date_to) }}">{{ bi('All statuses','全部狀態') }}</a>
+    {% for st, lbl in [('pending',bi('Pending','審批中')),('approved',bi('Approved','已核准')),('rejected',bi('Rejected','已駁回')),('withdrawn',bi('Withdrawn','已撤回'))] %}
       <a class="btn sm {{ '' if filter_status==st else 'ghost' }}"
          href="{{ url_for('approvals', scope='all', status=st, q=search_q, date_from=date_from, date_to=date_to) }}">{{ lbl }}</a>
     {% endfor %}
@@ -25,13 +25,13 @@
     <input type="hidden" name="scope" value="{{ scope }}">
     {% if scope == 'all' and filter_status %}<input type="hidden" name="status" value="{{ filter_status }}">{% endif %}
     <input type="search" name="q" value="{{ search_q }}" maxlength="{{ MAX_SEARCH_Q_LEN }}"
-           placeholder="搜尋學生／學號／事由／假別／單號" style="max-width:260px">
-    <label style="margin:0;align-self:center;font-size:13px">請假起</label>
+           placeholder="{{ bj('Search student / ID / reason / type / request no.','搜尋學生／學號／事由／假別／單號') }}" style="max-width:260px">
+    <label style="margin:0;align-self:center;font-size:13px">{{ bi("From","請假起") }}</label>
     <input type="date" name="date_from" value="{{ date_from }}" style="max-width:160px">
-    <label style="margin:0;align-self:center;font-size:13px">請假訖</label>
+    <label style="margin:0;align-self:center;font-size:13px">{{ bi("To","請假訖") }}</label>
     <input type="date" name="date_to" value="{{ date_to }}" style="max-width:160px">
-    <button class="btn sm" type="submit">搜尋</button>
-    <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status) }}">清除</a>
+    <button class="btn sm" type="submit">{{ bi("Search","搜尋") }}</button>
+    <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status) }}">{{ bi("Clear","清除") }}</a>
   </form>
 
   {% if requests %}
@@ -43,9 +43,9 @@
   {% endif %}
   <table>
     <thead><tr>
-      {% if scope != 'all' %}<th style="width:2.2rem"><input type="checkbox" id="bulk-all" style="width:auto" title="全選本頁"></th>{% endif %}
-      <th>#</th><th>學生</th><th>假別</th><th>起訖</th>
-      <th class="tnum">天數</th><th>狀態</th><th class="tnum">提交</th><th></th></tr></thead>
+      {% if scope != 'all' %}<th style="width:2.2rem"><input type="checkbox" id="bulk-all" style="width:auto" title="{{ bj('Select all on this page','全選本頁') }}"></th>{% endif %}
+      <th>#</th><th>{{ bi("Student","學生") }}</th><th>{{ bi("Leave type","假別") }}</th><th>{{ bi("Dates","起訖") }}</th>
+      <th class="tnum">{{ bi("Days","天數") }}</th><th>{{ bi("Status","狀態") }}</th><th class="tnum">{{ bi("Submitted","提交") }}</th><th></th></tr></thead>
     <tbody>
     {% for r in requests %}
       <tr>
@@ -57,20 +57,20 @@
         <td class="tnum">{{ r.days }}</td>
         <td><span class="tag {{ STATUS_TONE[r.status] }}">{{ status_view(r) }}</span></td>
         <td class="tnum muted">{{ r.created_at[:16] }}</td>
-        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">審批</a></td>
+        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">{{ bi("Review","審批") }}</a></td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
   {% if scope != 'all' %}
   <div class="actions" style="margin:12px 0 0;flex-wrap:wrap;gap:8px">
-    <span class="muted">批次處理勾選的假單（單次上限 {{ MAX_BULK_DECIDE }} 張）：</span>
+    <span class="muted">{{ bi("Bulk action for selected requests","批次處理勾選的假單") }} ({{ bi("limit","上限") }} {{ MAX_BULK_DECIDE }}):</span>
     <select name="action">
-      <option value="approve">核准</option>
-      <option value="reject">駁回</option>
+      <option value="approve">{{ bi("Approve","核准") }}</option>
+      <option value="reject">{{ bi("Reject","駁回") }}</option>
     </select>
-    <input name="comment" maxlength="{{ MAX_COMMENT_LEN }}" placeholder="審批意見（駁回必填）">
-    <button class="btn sm ok" type="submit">送出批次</button>
+    <input name="comment" maxlength="{{ MAX_COMMENT_LEN }}" placeholder="{{ bj('Approval comment (required to reject)','審批意見（駁回必填）') }}">
+    <button class="btn sm ok" type="submit">{{ bi("Submit bulk action","送出批次") }}</button>
   </div>
   </form>
   <script>
@@ -88,16 +88,16 @@
   {% if total_pages > 1 %}
     <div class="pager">
       {% if page > 1 %}
-        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page-1) }}">← 上一頁</a>
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page-1) }}">{{ bi("Previous","上一頁") }} ←</a>
       {% endif %}
-      <span class="muted">第 {{ page }} / {{ total_pages }} 頁{% if total is defined %}（共 {{ total }} 筆）{% endif %}</span>
+      <span class="muted">{{ bi("Page ","第 ") }}{{ page }} / {{ total_pages }}{% if total is defined %}{{ bi(" 頁（共 "," 頁（共 ") }}{{ total }}{{ bi(" 筆）"," 筆）") }}{% endif %}</span>
       {% if page < total_pages %}
-        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page+1) }}">下一頁 →</a>
+        <a class="btn sm ghost" href="{{ url_for('approvals', scope=scope, status=filter_status, q=search_q, date_from=date_from, date_to=date_to, page=page+1) }}">{{ bi("Next","下一頁") }} →</a>
       {% endif %}
     </div>
   {% endif %}
   {% else %}
-    <div class="empty">沒有符合篩選條件的假單。</div>
+    <div class="empty">{{ bi("No requests match the filters.","沒有符合篩選條件的假單。") }}</div>
   {% endif %}
 </div>
 {% endblock %}

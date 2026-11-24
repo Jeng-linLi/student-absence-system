@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}提交假單 · 線上請假系統{% endblock %}
+{% block title %}{{ bj("Submit request","提交假單") }}{% endblock %}
 {% block content %}
-<h1>提交假單</h1>
+<h1>{{ bi("Submit a leave request","提交假單") }}</h1>
 
 <div class="card">
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row">
       <div>
-        <label>假別 *</label>
+        <label>{{ bi("Leave type","假別") }} *</label>
         <select name="leave_type_id" id="lt" required>
           {% for t in types %}
             <option value="{{ t.id }}" data-att="{{ t.requires_attachment }}"
@@ -17,59 +17,59 @@
         </select>
       </div>
       <div>
-        <label>聯絡電話（{{ MAX_PHONE_LEN }} 字內）</label>
-        <input name="contact_phone" maxlength="{{ MAX_PHONE_LEN }}" value="{{ form.get('contact_phone','') }}" placeholder="請假期間可聯繫的手機">
+        <label>{{ bi("Contact phone","聯絡電話") }} ({{ MAX_PHONE_LEN }})</label>
+        <input name="contact_phone" maxlength="{{ MAX_PHONE_LEN }}" value="{{ form.get('contact_phone','') }}" placeholder="{{ bj("Mobile reachable during leave","請假期間可聯繫的手機") }}">
       </div>
     </div>
 
     <div class="row" style="grid-template-columns:1fr 1fr 1fr 1fr">
-      <div><label>開始日期 *</label><input type="date" name="start_date" required
+      <div><label>{{ bi("Start date","開始日期") }} *</label><input type="date" name="start_date" required
         min="{{ min_date }}" max="{{ max_date }}"
         value="{{ form.get('start_date','') }}"></div>
-      <div><label>開始時段</label>
+      <div><label>{{ bi("Start period","開始時段") }}</label>
         <select name="start_period">
-          <option value="AM">上午（全日計）</option>
-          <option value="PM">下午（半日計）</option>
+          <option value="AM">{{ bi("AM (full day)","上午（全日計）") }}</option>
+          <option value="PM">{{ bi("PM (half day)","下午（半日計）") }}</option>
         </select></div>
-      <div><label>結束日期 *</label><input type="date" name="end_date" required
+      <div><label>{{ bi("End date","結束日期") }} *</label><input type="date" name="end_date" required
         min="{{ min_date }}" max="{{ max_date }}"
         value="{{ form.get('end_date','') }}"></div>
-      <div><label>結束時段</label>
+      <div><label>{{ bi("End period","結束時段") }}</label>
         <select name="end_period">
-          <option value="PM">下午（全日計）</option>
-          <option value="AM">上午（半日計）</option>
+          <option value="PM">{{ bi("PM (full day)","下午（全日計）") }}</option>
+          <option value="AM">{{ bi("AM (half day)","上午（半日計）") }}</option>
         </select></div>
     </div>
 
-    <label>請假事由 *（{{ MAX_REASON_LEN }} 字內）</label>
-    <textarea name="reason" maxlength="{{ MAX_REASON_LEN }}" placeholder="請簡述原因">{{ form.get('reason','') }}</textarea>
+    <label>{{ bi("Reason","請假事由") }} * ({{ MAX_REASON_LEN }})</label>
+    <textarea name="reason" maxlength="{{ MAX_REASON_LEN }}" placeholder="{{ bj("Briefly describe the reason","請簡述原因") }}">{{ form.get('reason','') }}</textarea>
 
-    <label>證明文件（病假必傳；PDF / 圖片 / Word，≤8MB）</label>
+    <label>{{ bi("Supporting document","證明文件") }} ({{ bi("required for sick leave","病假必傳") }}; PDF / image / Word, ≤8MB)</label>
     <input type="file" name="attachment">
 
     <div class="actions">
-      <button class="btn" type="submit">提交</button>
-      <a class="btn ghost" href="{{ url_for('my_requests') }}">取消</a>
+      <button class="btn" type="submit">{{ bi("Submit","提交") }}</button>
+      <a class="btn ghost" href="{{ url_for('my_requests') }}">{{ bi("Cancel","取消") }}</a>
     </div>
   </form>
 </div>
 
 <div class="card">
-  <h3>提示</h3>
+  <h3>{{ bi("Notes","提示") }}</h3>
   <p class="muted" style="margin:0" id="hint">
-    請假超過 {{ FACULTY_THRESHOLD_DAYS }} 天會自動送院系複核。
+    {{ bi("Leave over %s days is sent for faculty review."|format(FACULTY_THRESHOLD_DAYS),"請假超過 %s 天會自動送院系複核。"|format(FACULTY_THRESHOLD_DAYS)) }}
   </p>
   <ul class="muted" style="margin:8px 0 0; padding-left:18px">
-    <li>單張假單最多 {{ MAX_SINGLE_DAYS }} 天。</li>
-    <li>最多可回溯補請 {{ MAX_BACKDATE_DAYS }} 天內的假。</li>
-    <li>同一區間不可重複請假（已駁回／已撤回的假單不佔用區間）。</li>
+    <li>{{ bi("Maximum %s days per request."|format(MAX_SINGLE_DAYS),"單張假單最多 %s 天。"|format(MAX_SINGLE_DAYS)) }}</li>
+    <li>{{ bi("Backdated leave up to %s days."|format(MAX_BACKDATE_DAYS),"最多可回溯補請 %s 天內的假。"|format(MAX_BACKDATE_DAYS)) }}</li>
+    <li>{{ bi("No duplicate leave in the same period; rejected or withdrawn requests do not occupy it.","同一區間不可重複請假（已駁回／已撤回不佔用區間）。") }}</li>
     <li id="days-preview"></li>
   </ul>
 </div>
 
 <div class="card" id="courses-card" style="display:none">
-  <h3>受影響課程（依你的課表推算）</h3>
-  <p class="muted" style="margin:0 0 8px" id="courses-empty">選擇起訖日期與時段後，這裡會列出請假期間你會錯過的課。</p>
+  <h3>{{ bi("Affected courses","受影響課程") }} · {{ bi("from your timetable","依課表推算") }}</h3>
+  <p class="muted" style="margin:0 0 8px" id="courses-empty">{{ bj("Choose dates and periods to preview affected courses.","選擇起訖日期與時段後，這裡會列出受影響課程。") }}</p>
   <div id="courses-list"></div>
 </div>
 
@@ -81,7 +81,7 @@ function calcDays(){
   var out = document.getElementById('days-preview');
   if(!sd || !ed){ out.textContent = ''; return; }
   var s = new Date(sd + 'T00:00:00'), e = new Date(ed + 'T00:00:00');
-  if(e < s){ out.textContent = '結束日期早於開始日期。'; return; }
+  if(e < s){ out.textContent = {{ bj('End date is before start date.','結束日期早於開始日期。')|tojson }}; return; }
   var sp = document.querySelector('[name=start_period]').value;
   var ep = document.querySelector('[name=end_period]').value;
   var days;
@@ -90,8 +90,8 @@ function calcDays(){
     var full = Math.round((e - s) / 86400000) - 1;
     days = Math.max(full, 0) + (sp === 'PM' ? 0.5 : 1.0) + (ep === 'AM' ? 0.5 : 1.0);
   }
-  var msg = '預計請假 ' + days + ' 天';
-  msg += days > {{ FACULTY_THRESHOLD_DAYS }} ? '（> {{ FACULTY_THRESHOLD_DAYS }} 天，需院系複核）。' : '。';
+  var msg = {{ bj('Estimated leave','預計請假')|tojson }} + ' ' + days + ' ' + {{ bj('days','天')|tojson }};
+  msg += days > {{ FACULTY_THRESHOLD_DAYS }} ? {{ bj(' (> %s days, faculty review required).'|format(FACULTY_THRESHOLD_DAYS),'（> %s 天，需院系複核）。'|format(FACULTY_THRESHOLD_DAYS))|tojson }} : '.';
   out.textContent = msg;
 }
 ['start_date','end_date','start_period','end_period'].forEach(function(n){
@@ -103,9 +103,9 @@ document.getElementById('lt').addEventListener('change', function(){
   var o = this.options[this.selectedIndex];
   var hint = document.getElementById('hint');
   var msg = [];
-  if (o.dataset.att === '1') msg.push('此假別必須上傳證明文件。');
-  if (o.dataset.nf === '1') msg.push('此假別無論天數都需院系複核。');
-  else msg.push('請假超過 {{ FACULTY_THRESHOLD_DAYS }} 天會自動送院系複核。');
+  if (o.dataset.att === '1') msg.push({{ bj('This leave type requires a supporting document.','此假別必須上傳證明文件。')|tojson }});
+  if (o.dataset.nf === '1') msg.push({{ bj('This leave type always requires faculty review.','此假別無論天數都需院系複核。')|tojson }});
+  else msg.push({{ bj('Leave over %s days is sent for faculty review.'|format(FACULTY_THRESHOLD_DAYS),'請假超過 %s 天會自動送院系複核。'|format(FACULTY_THRESHOLD_DAYS))|tojson }});
   hint.innerHTML = msg.join('<br>');
 });
 
@@ -126,14 +126,14 @@ function loadCourses(){
     if(!rows.length){
       card.style.display='block'; list.innerHTML='';
       empty.style.display='block';
-      empty.textContent='這段期間沒有排課（週末或無課日）。';
+      empty.textContent={{ bj('No classes in this period (weekend or no-class day).','這段期間沒有排課（週末或無課日）。')|tojson }};
       return;
     }
     empty.style.display='none';
-    var wl = ['週一','週二','週三','週四','週五','週六','週日'];
+    var wl = {{ [bj('Mon','週一'),bj('Tue','週二'),bj('Wed','週三'),bj('Thu','週四'),bj('Fri','週五'),bj('Sat','週六'),bj('Sun','週日')]|tojson }};
     var html = '';
     rows.forEach(function(r){
-      var periodTxt = r.period==='AM' ? '上午' : (r.period==='PM' ? '下午' : '全天');
+      var periodTxt = r.period==='AM' ? {{ bj('AM','上午')|tojson }} : (r.period==='PM' ? {{ bj('PM','下午')|tojson }} : {{ bj('Full day','全天')|tojson }});
       html += '<div style="margin-bottom:10px"><strong>' + r.date + '（' +
               (r.weekday_label || wl[r.weekday]) + ' · ' + periodTxt + '）</strong><ul style="margin:4px 0 0;padding-left:18px">';
       r.courses.forEach(function(c){

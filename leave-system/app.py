@@ -27,6 +27,7 @@ from urllib.parse import urlsplit
 from flask import (Flask, render_template, request, redirect, url_for, session,
                    flash, jsonify, send_from_directory, Response, abort,
                    make_response, g, has_request_context, stream_with_context)
+from markupsafe import Markup, escape
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -67,6 +68,7 @@ app.config['CSRF_ENABLED'] = True
 
 # Demo-only quick role-card login. Default OFF; enable only with LEAVE_DEMO_QUICK=1.
 DEMO_QUICK_LOGIN = os.environ.get('LEAVE_DEMO_QUICK', '0') == '1'
+DEMO_BILINGUAL = DEMO_QUICK_LOGIN or os.environ.get('LEAVE_DEMO_BILINGUAL', '0') == '1'
 DEMO_ROLE_ACCOUNTS = {
     'student': ('2024001', '學生 · 李政霖', '/'),
     'advisor': ('T001', '導師 · 陳導師', '/approvals'),
@@ -887,6 +889,7 @@ def inject_globals():
                 now=datetime.now(), FACULTY_THRESHOLD_DAYS=FACULTY_THRESHOLD_DAYS,
                 sso_enabled=sso_configured(),
                 demo_quick_login=DEMO_QUICK_LOGIN,
+                demo_bilingual=DEMO_BILINGUAL,
                 demo_roles=DEMO_ROLE_ACCOUNTS,
                 min_date=(date.today() - timedelta(days=MAX_BACKDATE_DAYS)).isoformat(),
                 max_date=(date.today() + timedelta(days=365)).isoformat(),
@@ -925,9 +928,48 @@ def status_view(req):
     return STATUS_LABEL.get(req['status'], req['status'])
 
 
-app.jinja_env.globals.update(status_view=status_view,
+STATUS_EN = {
+    'pending': 'Pending', 'approved': 'Approved',
+    'rejected': 'Rejected', 'withdrawn': 'Withdrawn',
+}
+
+
+def bi(en, zh):
+    """Bilingual label for demo mode; original Chinese only in normal mode."""
+    if not DEMO_BILINGUAL:
+        return zh
+    return Markup(
+        '<span class="bi-en">{en}</span><span class="bi-zh">{zh}</span>'
+    ).format(en=escape(en), zh=escape(zh))
+
+
+def bj(en, zh):
+    """Plain-text bilingual string for JavaScript/JSON contexts."""
+    return zh if not DEMO_BILINGUAL else f"{en} / {zh}"
+
+
+def bilingual_status(req):
+    """Status label used by demo templates; falls back to status_view()."""
+    if not DEMO_BILINGUAL:
+        return status_view(req)
+    if req['status'] == 'pending':
+        level = 'Faculty' if req['current_level'] == 2 else 'Advisor'
+        return Markup(
+            '<span class="bi-en">Pending · {level}</span>'
+            '<span class="bi-zh">待{zh}審批</span>'
+        ).format(level=escape(level), zh='院系' if req['current_level'] == 2 else '導師')
+    return bi(STATUS_EN.get(req['status'], req['status']),
+              STATUS_LABEL.get(req['status'], req['status']))
+
+
+app.jinja_env.globals.update(status_view=bilingual_status,
+                             original_status_view=status_view,
                              STATUS_TONE=STATUS_TONE,
                              STATUS_LABEL=STATUS_LABEL,
+                             STATUS_EN=STATUS_EN,
+                             bi=bi,
+                             bj=bj,
+                             demo_bilingual=DEMO_BILINGUAL,
                              csrf_token=csrf_token)
 
 

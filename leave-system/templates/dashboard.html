@@ -1,27 +1,27 @@
 {% extends "base.html" %}
-{% block title %}儀表板 · 線上請假系統{% endblock %}
+{% block title %}{{ bj("Dashboard","儀表板") }}{% endblock %}
 {% block content %}
 
 {% if current_user.role == 'student' %}
-  <h1>你好，{{ current_user.name }}</h1>
+  <h1>{{ bi("Hello","你好") }}, {{ current_user.name }}</h1>
   <div class="grid g4" style="margin-bottom:18px">
-    <div class="stat"><div class="n">{{ pending_mine }}</div><div class="l">審批中的假單</div></div>
+    <div class="stat"><div class="n">{{ pending_mine }}</div><div class="l">{{ bi("Requests pending","審批中的假單") }}</div></div>
     <div class="stat"><div class="n">{{ term_days }}</div>
-      <div class="l">{{ term.label if term else '本學期' }}已核准</div></div>
+      <div class="l">{{ term.label if term else bi("This term","本學期") }} · {{ bi("Approved","已核准") }}</div></div>
     <div class="stat"><div class="n">{{ year_leave_days }}</div>
-      <div class="l">本學年已核准（{{ year_start }} 起）</div></div>
-    <div class="stat"><div class="n">{{ current_user.class_name or '—' }}</div><div class="l">班級</div></div>
+      <div class="l">{{ bi("Approved this academic year","本學年已核准") }} ({{ year_start }})</div></div>
+    <div class="stat"><div class="n">{{ current_user.class_name or '—' }}</div><div class="l">{{ bi("Class","班級") }}</div></div>
   </div>
   <div class="actions" style="margin-bottom:18px">
-    <a class="btn" href="{{ url_for('new_request') }}">＋ 提交假單</a>
-    <a class="btn ghost" href="{{ url_for('my_requests') }}">查看我的假單</a>
+    <a class="btn" href="{{ url_for('new_request') }}">＋ {{ bj("Submit request","提交假單") }}</a>
+    <a class="btn ghost" href="{{ url_for('my_requests') }}">{{ bi("View my requests","查看我的假單") }}</a>
   </div>
 
   {% if quotas %}
   <div class="card">
-    <h3>{{ term.label }} · 假別額度</h3>
+    <h3>{{ term.label }} · {{ bi("Leave quota","假別額度") }}</h3>
     <table>
-      <thead><tr><th>假別</th><th class="tnum">已用／上限</th><th class="tnum">剩餘</th></tr></thead>
+      <thead><tr><th>{{ bi("Leave type","假別") }}</th><th class="tnum">{{ bi("Used / limit","已用／上限") }}</th><th class="tnum">{{ bi("Left","剩餘") }}</th></tr></thead>
       <tbody>
       {% for q in quotas %}
         <tr>
@@ -30,40 +30,40 @@
           <td class="tnum">
             {% set left = q.max_days - q.used %}
             {% if left > 0 %}{{ '%g'|format(left) }}
-            {% else %}<span class="tag red">已用盡</span>{% endif %}
+            {% else %}<span class="tag red">{{ bi("Exhausted","已用盡") }}</span>{% endif %}
           </td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
     <p class="muted" style="margin:10px 0 0;font-size:12px">
-      待審與已核准的假單都計入額度。
+      {{ bi("Pending and approved requests both count toward the quota.","待審與已核准的假單都計入額度。") }}
     </p>
   </div>
   {% endif %}
 {% else %}
-  <h1>你好，{{ current_user.name }}</h1>
+  <h1>{{ bi("Hello","你好") }}, {{ current_user.name }}</h1>
   <div class="grid g4" style="margin-bottom:18px">
-    <div class="stat"><div class="n">{{ todo }}</div><div class="l">待我審批</div></div>
-    <div class="stat"><div class="n">{{ stats.pending }}</div><div class="l">{{ scope_label }}審批中</div></div>
-    <div class="stat"><div class="n">{{ stats.approved }}</div><div class="l">已核准</div></div>
-    <div class="stat"><div class="n">{{ stats.rejected }}</div><div class="l">已駁回</div></div>
+    <div class="stat"><div class="n">{{ todo }}</div><div class="l">{{ bi("My approvals","待我審批") }}</div></div>
+    <div class="stat"><div class="n">{{ stats.pending }}</div><div class="l">{{ scope_label }}{{ bi("Pending","審批中") }}</div></div>
+    <div class="stat"><div class="n">{{ stats.approved }}</div><div class="l">{{ bi("Approved","已核准") }}</div></div>
+    <div class="stat"><div class="n">{{ stats.rejected }}</div><div class="l">{{ bi("Rejected","已駁回") }}</div></div>
   </div>
   <div class="actions" style="margin-bottom:18px">
-    <a class="btn" href="{{ url_for('approvals') }}">去審批</a>
-    <a class="btn ghost" href="{{ url_for('stats') }}">統計報表</a>
-    <a class="btn ghost" href="{{ url_for('export_csv') }}">匯出 CSV</a>
+    <a class="btn" href="{{ url_for('approvals') }}">{{ bi("Go to approvals","去審批") }}</a>
+    <a class="btn ghost" href="{{ url_for('stats') }}">{{ bi("Statistics","統計報表") }}</a>
+    <a class="btn ghost" href="{{ url_for('export_csv') }}">{{ bi("Export CSV","匯出 CSV") }}</a>
   </div>
 {% endif %}
 
 <div class="card">
-  <h3>{% if current_user.role == 'student' %}最近提交的假單{% else %}待處理的假單{% endif %}</h3>
+  <h3>{% if current_user.role == 'student' %}{{ bi("Recent requests","最近提交的假單") }}{% else %}{{ bi("Requests to process","待處理的假單") }}{% endif %}</h3>
   {% if recent %}
   <table>
     <thead><tr>
       <th>#</th>
-      {% if current_user.role != 'student' %}<th>學生</th>{% endif %}
-      <th>假別</th><th>起訖</th><th class="tnum">天數</th><th>狀態</th><th></th>
+      {% if current_user.role != 'student' %}<th>{{ bi("Student","學生") }}</th>{% endif %}
+      <th>{{ bi("Leave type","假別") }}</th><th>{{ bi("Dates","起訖") }}</th><th class="tnum">{{ bi("Days","天數") }}</th><th>{{ bi("Status","狀態") }}</th><th></th>
     </tr></thead>
     <tbody>
     {% for r in recent %}
@@ -76,22 +76,22 @@
         <td class="tnum">{{ r.start_date }} → {{ r.end_date }}</td>
         <td class="tnum">{{ r.days }}</td>
         <td><span class="tag {{ STATUS_TONE[r.status] }}">{{ status_view(r) }}</span></td>
-        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">查看</a></td>
+        <td><a class="btn sm ghost" href="{{ url_for('detail', rid=r.id) }}">{{ bi("View","查看") }}</a></td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
   {% else %}
-    <div class="empty">目前沒有記錄。</div>
+    <div class="empty">{{ bi("No records yet.","目前沒有記錄。") }}</div>
   {% endif %}
 </div>
 
 <div class="card">
-  <h3>審批規則</h3>
+  <h3>{{ bi("Approval rules","審批規則") }}</h3>
   <p class="muted" style="margin:0">
-    · 請假 ≤ {{ FACULTY_THRESHOLD_DAYS }} 天：導師核准即生效。<br>
-    · 請假 &gt; {{ FACULTY_THRESHOLD_DAYS }} 天，或假別標記為「需院系審批」（如公假、喪假）：導師核准後自動轉院系複核。<br>
-    · 病假必須上傳證明文件。
+    · {{ bi("Leave ≤ %s days: advisor approval is final."|format(FACULTY_THRESHOLD_DAYS),"請假 ≤ %s 天：導師核准即生效。"|format(FACULTY_THRESHOLD_DAYS)) }}<br>
+    · {{ bi("Leave > %s days, or faculty-flagged types: advisor approval then faculty review."|format(FACULTY_THRESHOLD_DAYS),"請假 > %s 天，或需院系審批：導師核准後轉院系複核。"|format(FACULTY_THRESHOLD_DAYS)) }}<br>
+    · {{ bi("Sick leave requires a supporting document.","病假必須上傳證明文件。") }}
   </p>
 </div>
 {% endblock %}
