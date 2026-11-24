@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick Demo Login / 快速演示登入 · Leave Management System</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .quick-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:18px; }
+  .role-card { display:block; width:100%; padding:18px 16px; border:1px solid var(--border, #D6DCE5); border-radius:12px; background:#fff; color:inherit; text-align:left; text-decoration:none; transition:transform .12s, box-shadow .12s, border-color .12s; }
+  .role-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(30,79,168,.14); border-color:#1E4FA8; }
+  .role-card .en { display:block; font-size:17px; font-weight:700; color:#1E4FA8; margin-bottom:2px; }
+  .role-card .zh { display:block; font-size:14px; font-weight:700; color:#315D8A; margin-bottom:5px; }
+  .role-card small { display:block; color:#667085; line-height:1.5; }
+  .role-badge { display:inline-block; width:36px; height:36px; border-radius:50%; background:#E8EFF8; color:#1E4FA8; font-weight:700; text-align:center; line-height:36px; margin-bottom:10px; }
+  .bilingual { margin:0 0 6px; }
+  .bilingual .en-line { display:block; color:#1A2230; }
+  .bilingual .zh-line { display:block; color:#4A5568; font-size:13px; margin-top:2px; }
+  .quick-note { margin:14px 0 0; color:#667085; font-size:13px; line-height:1.6; }
+  .quick-foot { margin-top:18px; text-align:right; font-size:13px; }
+  @media (max-width:640px){ .quick-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<script>
+  (function(){ var t = localStorage.getItem('theme'); if(t) document.documentElement.dataset.theme = t; })();
+</script>
+<div class="container">
+  <div class="login-wrap">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}<div class="flashes">
+        {% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}
+      </div>{% endif %}
+    {% endwith %}
+    <div class="brand">
+      <span class="logo">假</span>
+      <div>
+        <strong>Leave Management System</strong>
+        <small>線上請假系統 · Quick Demo / 快速演示</small>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Quick Demo Login</h3>
+      <p class="bilingual muted">
+        <span class="en-line">Click a role card to enter. No username or password required.</span>
+        <span class="zh-line">點選角色卡即可進入，不需輸入帳號或密碼。</span>
+      </p>
+      <div class="quick-grid">
+        {% for key, item in demo_roles.items() %}
+        {% if key == 'student' %}{% set en='Student' %}{% elif key == 'advisor' %}{% set en='Advisor' %}{% elif key == 'faculty' %}{% set en='Faculty' %}{% else %}{% set en='Admin' %}{% endif %}
+        <form method="post" action="{{ url_for('demo_role_login') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="role" value="{{ key }}">
+          <button class="role-card" type="submit">
+            <span class="role-badge">{{ item[1][0] }}</span>
+            <span class="en">{{ en }}</span>
+            <span class="zh">{{ item[1] }}</span>
+            <small>Account {{ item[0] }} · One-click login<br>帳號 {{ item[0] }} · 一鍵登入</small>
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+      <p class="quick-note">
+        Enabled only by <span class="mono">LEAVE_DEMO_QUICK=1</span>; password login is still available.<br>
+        此模式僅由 <span class="mono">LEAVE_DEMO_QUICK=1</span> 啟用，正式帳密登入仍保留。
+      </p>
+      <p class="quick-foot"><a href="{{ url_for('password_login') }}">Password login / 使用帳號密碼登入</a></p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

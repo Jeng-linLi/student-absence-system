@@ -30,3 +30,7 @@ Thumbs.db
 
 # Agent 工作資料
 .workbuddy-ai/
+
+# 本機測試用 session cookies（勿入版本控制）
+*-cookies.txt
+q-*.txt

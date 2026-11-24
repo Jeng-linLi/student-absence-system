@@ -65,6 +65,15 @@ app.secret_key = os.environ.get('LEAVE_SECRET', 'dev-only-change-me-in-productio
 app.config['MAX_CONTENT_LENGTH'] = MAX_ATTACHMENT_MB * 1024 * 1024
 app.config['CSRF_ENABLED'] = True
 
+# Demo-only quick role-card login. Default OFF; enable only with LEAVE_DEMO_QUICK=1.
+DEMO_QUICK_LOGIN = os.environ.get('LEAVE_DEMO_QUICK', '0') == '1'
+DEMO_ROLE_ACCOUNTS = {
+    'student': ('2024001', '學生 · 李政霖', '/'),
+    'advisor': ('T001', '導師 · 陳導師', '/approvals'),
+    'faculty': ('F001', '院系 · 王院辦', '/approvals'),
+    'admin': ('admin', '管理員 · 系統管理員', '/admin/users'),
+}
+
 # Session cookie 強化：HttpOnly 阻擋 JS 讀取、SameSite=Lax 阻擋跨站送出
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -877,6 +886,8 @@ def inject_globals():
     return dict(current_user=u, unread_count=unread, app_version=APP_VERSION,
                 now=datetime.now(), FACULTY_THRESHOLD_DAYS=FACULTY_THRESHOLD_DAYS,
                 sso_enabled=sso_configured(),
+                demo_quick_login=DEMO_QUICK_LOGIN,
+                demo_roles=DEMO_ROLE_ACCOUNTS,
                 min_date=(date.today() - timedelta(days=MAX_BACKDATE_DAYS)).isoformat(),
                 max_date=(date.today() + timedelta(days=365)).isoformat(),
                 MAX_SINGLE_DAYS=MAX_SINGLE_DAYS, MAX_BACKDATE_DAYS=MAX_BACKDATE_DAYS,
@@ -941,7 +952,9 @@ def _establish_session(user):
 
 
 @app.route('/login', methods=['GET', 'POST'])
-def login():
+def login(classic=False):
+    if DEMO_QUICK_LOGIN and request.method == 'GET' and not classic:
+        return render_template('quick_login.html')
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -969,7 +982,36 @@ def login():
         login_failed(key)
         login_failed(user_key)
         flash('帳號或密碼錯誤。', 'error')
+    return render_template('login.html' if classic or not DEMO_QUICK_LOGIN else 'quick_login.html')
+
+
+@app.route('/login/password', methods=['GET', 'POST'])
+def password_login():
+    """正式帳密登入；快速角色卡模式仍保留此入口作為備援。"""
+    if not DEMO_QUICK_LOGIN:
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        return login(classic=True)
     return render_template('login.html')
+
+
+@app.route('/login/demo-role', methods=['POST'])
+def demo_role_login():
+    """僅在 LEAVE_DEMO_QUICK=1 時啟用：點角色卡直接建立示範 session。"""
+    if not DEMO_QUICK_LOGIN:
+        abort(404)
+    role = request.form.get('role', '')
+    item = DEMO_ROLE_ACCOUNTS.get(role)
+    if not item:
+        flash('演示角色不存在。', 'error')
+        return redirect(url_for('login'))
+    user = q('SELECT * FROM users WHERE username=? AND active=1', (item[0],), one=True)
+    if not user:
+        flash('演示帳號不存在，請重新初始化示範資料。', 'error')
+        return redirect(url_for('login'))
+    _establish_session(user)
+    log_action(None, user['id'], 'demo_role_login', f'quick role={role}')
+    return redirect(item[2])
 
 
 # 單一登入（SSO / OIDC，A2·v1.8.0）：身分中介層插在 login() 之前。

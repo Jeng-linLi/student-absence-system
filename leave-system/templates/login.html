@@ -3,8 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>登入 · 線上請假系統</title>
+<title>Login / 登入 · Leave Management System</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .bilingual { margin:0 0 6px; }
+  .bilingual .en-line { display:block; color:#1A2230; }
+  .bilingual .zh-line { display:block; color:#4A5568; font-size:13px; margin-top:2px; }
+  label .en-label { font-weight:600; }
+  label .zh-label { color:#667085; font-size:12px; }
+</style>
 </head>
 <body>
 <script>
@@ -19,39 +26,45 @@
     {% endwith %}
     <div class="brand">
       <span class="logo">假</span>
-      <div><strong>線上請假系統</strong><small>Leave Management System</small></div>
+      <div><strong>Leave Management System</strong><small>線上請假系統</small></div>
     </div>
 
     <div class="card">
-      <h3>帳號登入</h3>
+      <h3>Account Login / 帳號登入</h3>
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label>帳號（學號 / 教工號）</label>
+        <label>
+          <span class="en-label">Account (student / staff ID)</span>
+          <span class="zh-label">帳號（學號 / 教工號）</span>
+        </label>
         <input name="username" placeholder="2024001" required autofocus>
-        <label>密碼</label>
+        <label>
+          <span class="en-label">Password</span>
+          <span class="zh-label">密碼</span>
+        </label>
         <input name="password" type="password" placeholder="••••••" required>
-        <div class="actions"><button class="btn" type="submit">登入</button></div>
+        <div class="actions"><button class="btn" type="submit">Login / 登入</button></div>
       </form>
 
       <p class="muted" style="margin:8px 0 0; text-align:right">
-        <a href="{{ url_for('forgot_password') }}">忘記密碼？</a>
+        <a href="{{ url_for('forgot_password') }}">Forgot password? / 忘記密碼？</a>
       </p>
 
       {% if sso_enabled %}
       <div class="sso-row">
-        <div class="sso-divider"><span>或</span></div>
-        <a class="btn btn-sso" href="{{ url_for('login_sso') }}">使用學校帳號登入</a>
+        <div class="sso-divider"><span>or / 或</span></div>
+        <a class="btn btn-sso" href="{{ url_for('login_sso') }}">Login with school account / 使用學校帳號登入</a>
       </div>
       {% endif %}
 
       <div class="demo">
-        <strong>演示帳號</strong>（統一密碼 <span class="mono">Demo@2026</span>）
+        <strong>Demo accounts / 演示帳號</strong>（<span class="mono">Demo@2026</span>）
         <table>
-          <tr><th>角色</th><th>帳號</th><th>姓名</th></tr>
-          <tr><td>學生</td><td class="mono">2024001</td><td>李政霖</td></tr>
-          <tr><td>導師</td><td class="mono">T001</td><td>陳導師</td></tr>
-          <tr><td>院系</td><td class="mono">F001</td><td>王院辦</td></tr>
-          <tr><td>管理員</td><td class="mono">admin</td><td>系統管理員</td></tr>
+          <tr><th>Role / 角色</th><th>Account / 帳號</th><th>Name / 姓名</th></tr>
+          <tr><td>Student / 學生</td><td class="mono">2024001</td><td>李政霖</td></tr>
+          <tr><td>Advisor / 導師</td><td class="mono">T001</td><td>陳導師</td></tr>
+          <tr><td>Faculty / 院系</td><td class="mono">F001</td><td>王院辦</td></tr>
+          <tr><td>Admin / 管理員</td><td class="mono">admin</td><td>系統管理員</td></tr>
         </table>
       </div>
     </div>
